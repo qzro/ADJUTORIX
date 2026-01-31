@@ -207,6 +207,28 @@ class CrashRecoveryManager:
         return "abort"
 
 
+class RecoveryManager:
+    """
+    Recovery facade used by RPC. Wraps CrashRecoveryManager and accepts
+    state_machine + job_ledger for future use.
+    """
+
+    def __init__(
+        self,
+        repo_root: str,
+        state_machine: Any = None,
+        job_ledger: Any = None,
+    ) -> None:
+        self.repo_root = repo_root
+        self.state_machine = state_machine
+        self.job_ledger = job_ledger
+        self._crash_recovery = CrashRecoveryManager(workspace_root=repo_root)
+
+    def recover(self) -> Optional[Dict[str, Any]]:
+        """Delegate to crash recovery."""
+        return self._crash_recovery.recover()
+
+
 # -------------------------
 # Utilities
 # -------------------------

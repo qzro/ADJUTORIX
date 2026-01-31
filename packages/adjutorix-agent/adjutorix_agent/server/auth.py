@@ -42,9 +42,25 @@ def get_local_token() -> str:
     return LOCAL_TOKEN
 
 
-def _extract_token(request: Request) -> Optional[str]:
+def require_local_token(token: str) -> None:
     """
-    Extract token from header or query param
+    Validate token string (e.g. from RPC params). Raises HTTPException if invalid.
+    """
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing token",
+        )
+    if not secrets.compare_digest(token, LOCAL_TOKEN):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+
+def extract_token(request: Request) -> Optional[str]:
+    """
+    Extract token from header or query param. Public for use in RPC dispatch.
     """
 
     auth = request.headers.get("Authorization")
@@ -77,7 +93,7 @@ def verify_local_request(request: Request) -> None:
             detail="Remote connections forbidden",
         )
 
-    token = _extract_token(request)
+    token = extract_token(request)
 
     if not token:
         raise HTTPException(

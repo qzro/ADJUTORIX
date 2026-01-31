@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from .auth import verify_local_request
+from .auth import extract_token, verify_local_request
 from .rpc import RPCDispatcher
 
 
@@ -60,12 +60,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-rpc_dispatcher = RPCDispatcher()
+_repo_root = os.getenv("ADJUTORIX_ROOT", os.getcwd())
+rpc_dispatcher = RPCDispatcher(repo_root=_repo_root)
 ws_manager = WebSocketManager()
 
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
+    # Allow /health without auth for load balancers and health checks
+    if request.url.path == "/health":
+        return await call_next(request)
     try:
         verify_local_request(request)
     except Exception as exc:
@@ -84,14 +88,15 @@ async def health() -> Dict[str, str]:
 
 
 @app.post("/rpc")
-async def rpc_endpoint(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def rpc_endpoint(request: Request, payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    JSON-RPC over HTTP
+    JSON-RPC over HTTP. Token from Authorization header or ?token= (already verified by middleware).
     """
     logger.debug("RPC request: %s", payload)
 
+    token = extract_token(request) or ""
     try:
-        response = await rpc_dispatcher.dispatch(payload)
+        response = rpc_dispatcher.dispatch(payload, token=token)
         return response
 
     except Exception as exc:
@@ -122,8 +127,9 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
 
             logger.debug("WS RPC from %s: %s", client_id, payload)
 
+            token = (payload.get("params") or {}).get("token") or payload.get("token") or ""
             try:
-                response = await rpc_dispatcher.dispatch(payload)
+                response = rpc_dispatcher.dispatch(payload, token=token)
             except Exception as exc:
                 logger.exception("WS RPC error")
 

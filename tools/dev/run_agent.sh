@@ -65,6 +65,14 @@ export ADJUTORIX_PORT="$PORT"
 export ADJUTORIX_PROFILE="$PROFILE"
 export ADJUTORIX_ROOT="$ROOT_DIR"
 
+# -------- port in use --------
+
+if lsof -i ":$PORT" -t >/dev/null 2>&1; then
+  echo "Port $PORT is in use. Stopping existing process..."
+  lsof -i ":$PORT" -t | xargs kill 2>/dev/null || true
+  sleep 1
+fi
+
 # -------- run --------
 
 cd "$AGENT_DIR"

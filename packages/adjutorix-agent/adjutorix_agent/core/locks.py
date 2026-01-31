@@ -1,3 +1,4 @@
+import hashlib
 import os
 import time
 import json
@@ -143,6 +144,28 @@ class WorkspaceLock:
             return
         except Exception:
             pass
+
+
+class LockManager:
+    """
+    Provides job-level locking for the agent using the workspace lock.
+    One active job per repo_root at a time.
+    """
+
+    def __init__(self, repo_root: str) -> None:
+        self.repo_root = repo_root
+        workspace_id = hashlib.sha256(repo_root.encode()).hexdigest()[:16]
+        self._workspace_lock = get_workspace_lock(workspace_id)
+
+    @contextmanager
+    def job_lock(self):
+        """Context manager: acquire exclusive job lock for this repo."""
+        with self._workspace_lock.hold(
+            job_id="job",
+            owner="adjutorix-agent",
+            timeout=30,
+        ):
+            yield
 
 
 # -------------------------
