@@ -1,0 +1,128 @@
+{
+  "name": "adjutorix-vscode",
+  "displayName": "ADJUTORIX",
+  "description": "Zero-cost local AI coding agent with governance, diff control, and offline execution.",
+  "version": "0.1.0",
+  "publisher": "adjutorix",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages",
+    "Debuggers"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:adjutorix.open",
+    "onCommand:adjutorix.check",
+    "onCommand:adjutorix.fix",
+    "onCommand:adjutorix.verify",
+    "onCommand:adjutorix.deploy"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "adjutorix.open",
+        "title": "ADJUTORIX: Open Panel"
+      },
+      {
+        "command": "adjutorix.check",
+        "title": "ADJUTORIX: Check"
+      },
+      {
+        "command": "adjutorix.fix",
+        "title": "ADJUTORIX: Fix"
+      },
+      {
+        "command": "adjutorix.verify",
+        "title": "ADJUTORIX: Verify"
+      },
+      {
+        "command": "adjutorix.deploy",
+        "title": "ADJUTORIX: Deploy"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "ADJUTORIX",
+      "properties": {
+        "adjutorix.agentHost": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Local agent host"
+        },
+        "adjutorix.agentPort": {
+          "type": "number",
+          "default": 17654,
+          "description": "Local agent port"
+        },
+        "adjutorix.autoStartAgent": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start local agent"
+        },
+        "adjutorix.logLevel": {
+          "type": "string",
+          "enum": ["debug", "info", "warn", "error"],
+          "default": "info",
+          "description": "Extension log level"
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "adjutorix",
+          "title": "ADJUTORIX",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "adjutorix": [
+        {
+          "id": "adjutorix.panel",
+          "name": "Agent Panel"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "clean": "rimraf dist",
+    "build": "npm run clean && webpack --mode production",
+    "watch": "webpack --watch --mode development",
+    "lint": "eslint src --ext ts",
+    "test": "vitest",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/uuid": "^9.0.7",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "rimraf": "^5.0.5",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.4",
+    "vsce": "^2.22.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adjutorix/adjutorix"
+  },
+  "bugs": {
+    "url": "https://github.com/adjutorix/adjutorix/issues"
+  },
+  "homepage": "https://github.com/adjutorix/adjutorix#readme"
+}

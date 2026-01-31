@@ -1,0 +1,89 @@
+name: Adjutorix CI (Verify Parity)
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  verify:
+    name: Verify (CI Parity)
+    runs-on: ubuntu-latest
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep universal-ctags jq
+
+      - name: Install Python dependencies (Agent)
+        run: |
+          cd packages/adjutorix-agent
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Install Node dependencies (VSCode Extension + Shared)
+        run: |
+          npm install
+        working-directory: packages/shared
+
+      - name: Build Shared Package
+        run: npm run build
+        working-directory: packages/shared
+
+      - name: Install VSCode Extension Dependencies
+        run: npm install
+        working-directory: packages/adjutorix-vscode
+
+      - name: Build VSCode Extension
+        run: npm run build
+        working-directory: packages/adjutorix-vscode
+
+      - name: Run Agent Tests
+        run: |
+          cd packages/adjutorix-agent
+          pytest -v
+
+      - name: Run Shared Package Tests
+        run: npm test
+        working-directory: packages/shared
+
+      - name: Run Lint / Type / Format Checks
+        run: |
+          ./configs/ci/scripts/check.sh
+
+      - name: Run Verify Script (Parity Check)
+        run: |
+          ./configs/ci/scripts/verify.sh
+
+      - name: Upload Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adjutorix-logs
+          path: runtime/logs
+
+      - name: Upload Test Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adjutorix-test-reports
+          path: |
+            packages/adjutorix-agent/.pytest_cache
+            packages/shared/coverage
