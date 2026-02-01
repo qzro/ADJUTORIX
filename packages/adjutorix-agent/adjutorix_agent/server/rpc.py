@@ -6,6 +6,8 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from ..actions.safe_runner import PolicyError, run_action as safe_run_action
+from ..chat.router import ChatRouter
 from ..core.context_budget import ContextBudget
 from ..core.executor import Executor
 from ..core.job_ledger import JobLedger
@@ -15,6 +17,7 @@ from ..core.rollback import RollbackManager
 from ..core.state_machine import StateMachine
 from ..core.taxonomy import ErrorTaxonomy
 from ..governance.policy import PolicyManager
+from ..llm.ollama_chat import OllamaChat
 from ..tools.registry import ToolRegistry
 from .auth import require_local_token
 
@@ -64,6 +67,13 @@ class RPCDispatcher:
             context_budget=self.context_budget,
         )
 
+        # Chat: UI → ChatRouter → LLM → Transcript. NEVER touches executor/actions/git/tools.
+        try:
+            ollama = OllamaChat(model="mistral", base_url="http://127.0.0.1:11434")
+            self.chat_router = ChatRouter(llm=ollama)
+        except Exception:
+            self.chat_router = ChatRouter(llm=None)
+
     # -----------------------
     # JSON-RPC entrypoint
     # -----------------------
@@ -100,7 +110,7 @@ class RPCDispatcher:
                 },
             }
 
-    def handle(self, token: str, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def handle(self, token: str, method: str, params: Dict[str, Any]) -> Any:
         try:
             require_local_token(token)
         except Exception as e:
@@ -125,31 +135,41 @@ class RPCDispatcher:
             "repo_root": self.repo_root,
         }
 
+    def rpc_chat(self, params: Dict[str, Any]) -> str:
+        """
+        Chat RPC: messages in, assistant text out.
+        STRICT: no executor, no actions.json, no git, no tools, no ContextBudget.
+        """
+        messages = params.get("messages") or []
+        if not isinstance(messages, list):
+            messages = []
+        return self.chat_router.chat(messages)
+
     def rpc_run(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         params:
-          - job_name: str
-          - action: str (check|fix|verify|deploy_preview|deploy_prod)
-          - allow_override: bool (optional)
+          - job_name: str (optional)
+          - action: str (check|fix|verify|deploy). NOT chat.
+          - confirm: bool (required for deploy when requireConfirm)
         """
-        job_name = str(params.get("job_name") or "job")
         action = str(params.get("action") or "check")
-        allow_override = bool(params.get("allow_override", False))
+        confirm = bool(params.get("confirm", False))
 
-        with self.locks.job_lock():
-            self.job_ledger.start(job_name=job_name, action=action)
-            try:
-                result = self.executor.run_action(
-                    job_name=job_name,
-                    action=action,
-                    allow_override=allow_override,
-                    ledger=self.job_ledger,
-                )
-                self.job_ledger.finish(result=result)
-                return {"ok": True, "result": result}
-            except Exception as e:
-                self.job_ledger.finish(result={"status": "failed", "error": str(e)})
-                raise
+        if action == "chat":
+            raise RPCError(
+                "INVALID_REQUEST",
+                "chat must use rpc method 'chat' (not 'run')",
+                {"hint": "Use method: 'chat', params: { messages: [...] }"},
+            )
+
+        try:
+            result = safe_run_action(self.repo_root, action, require_confirm=confirm)
+            return {"ok": True, "result": result}
+        except PolicyError as e:
+            return {
+                "ok": True,
+                "result": {"status": "blocked", "message": str(e), "results": [], "duration": 0.0},
+            }
 
     def rpc_recover(self, _: Dict[str, Any]) -> Dict[str, Any]:
         with self.locks.job_lock():

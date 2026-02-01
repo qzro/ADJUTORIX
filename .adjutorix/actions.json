@@ -1,18 +1,19 @@
 {
   "check": {
     "commands": ["npm test"],
-    "pass_condition": ""
+    "allowWrite": false
   },
   "fix": {
     "commands": ["npm run lint -- --fix"],
-    "pass_condition": ""
+    "allowWrite": true
   },
   "verify": {
     "commands": ["npm test"],
-    "pass_condition": ""
+    "allowWrite": false
   },
   "deploy": {
     "commands": ["echo \"deploy not configured\""],
-    "pass_condition": ""
+    "allowWrite": false,
+    "requireConfirm": true
   }
 }

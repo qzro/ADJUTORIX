@@ -95,9 +95,13 @@ export class AdjutorixViewProvider implements vscode.WebviewViewProvider {
           }
           this.safeSendTranscript();
           break;
-        case "action":
-          await this.runAction(webviewView, msg.payload as string, undefined);
+        case "action": {
+          const p = msg.payload as { action?: string; confirm?: boolean };
+          const action = typeof p === "string" ? p : (p?.action ?? "check");
+          const confirm = typeof p === "object" && p?.confirm === true;
+          await this.runAction(webviewView, action, { confirm });
           break;
+        }
         case "chat":
           await this.runChat(webviewView, msg.payload as { message: string; context?: unknown });
           break;
@@ -261,8 +265,8 @@ export class AdjutorixViewProvider implements vscode.WebviewViewProvider {
       const res = await this.rpcClient.call<{ ok: boolean; result?: { status?: string; duration?: number; results?: { return_code?: number }[]; message?: string } }>("run", {
         job_name: "sidebar",
         action,
+        confirm: (context as { confirm?: boolean })?.confirm === true,
         allow_override: false,
-        ...(context ? { context } : {}),
       });
       const report = res?.result;
       const duration = typeof report?.duration === "number" ? report.duration : 0;
@@ -296,24 +300,23 @@ export class AdjutorixViewProvider implements vscode.WebviewViewProvider {
     webviewView: vscode.WebviewView,
     payload: { message: string; context?: unknown }
   ): Promise<void> {
-    const { message, context } = payload;
+    const { message } = payload;
     this.out.appendLine(`[chat] ${message.slice(0, 80)}…`);
     await this.appendToTranscript("user", message);
     this.safeSendTranscript();
     try {
-      const result = await this.rpcClient.call("run", {
-        job_name: "sidebar",
-        action: "chat",
-        allow_override: false,
-        message,
-        ...(context ? { context } : {}),
+      // Bounded context: last 20 user+assistant pairs (no explosions)
+      const transcript = this.getTranscript()
+        .filter((e) => e.role === "user" || e.role === "assistant")
+        .slice(-20)
+        .map((e) => ({ role: e.role, content: e.text }));
+      const result = await this.rpcClient.call<string | { message?: string }>("chat", {
+        messages: transcript,
       });
       const assistantText =
         typeof result === "string"
           ? result
-          : (result as { message?: string; text?: string })?.message ??
-            (result as { message?: string; text?: string })?.text ??
-            JSON.stringify(result);
+          : (result as { message?: string })?.message ?? JSON.stringify(result);
       webviewView.webview.postMessage({ type: "chatResult", result });
       this.out.appendLine("[chat] ok");
       await this.appendToTranscript("assistant", assistantText);
@@ -477,7 +480,7 @@ export class AdjutorixViewProvider implements vscode.WebviewViewProvider {
 
     function setConnected(c) {
       connected = c;
-      actionBtns.forEach(b => b.disabled = !c);
+      actionBtns.forEach(b => b.disabled = (!c) || (currentMode !== 'managed'));
       composerInput.disabled = !c;
     }
 
@@ -487,6 +490,7 @@ export class AdjutorixViewProvider implements vscode.WebviewViewProvider {
         b.classList.toggle('active', b.dataset.mode === mode);
       });
       composerModeLabel.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+      actionBtns.forEach(b => b.disabled = (!connected) || (currentMode !== 'managed'));
     }
 
     function formatDetail(m) {
@@ -547,11 +551,18 @@ export class AdjutorixViewProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    // Actions
+    // Actions (Managed mode only); deploy requires confirm
     document.querySelectorAll('.actions button').forEach(b => {
       b.addEventListener('click', () => {
         if (b.disabled) return;
-        vscode.postMessage({ type: 'action', payload: b.dataset.action });
+        const action = b.dataset.action || 'check';
+        if (action === 'deploy') {
+          const ok = confirm('Deploy is blocked by default. Proceed?');
+          if (!ok) return;
+          vscode.postMessage({ type: 'action', payload: { action: 'deploy', confirm: true } });
+          return;
+        }
+        vscode.postMessage({ type: 'action', payload: { action, confirm: false } });
       });
     });
 

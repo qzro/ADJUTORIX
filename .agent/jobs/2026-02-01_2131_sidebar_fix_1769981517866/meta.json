@@ -1,0 +1,15 @@
+{
+  "action": "fix",
+  "created_at": "2026-02-01T21:31:57.868328",
+  "job_name": "sidebar",
+  "repo": "/Users/midiakiasat/Downloads/Apps/midiakiasat/ADJUTORIX/ADJUTORIX",
+  "result": {
+    "category": "UNKNOWN",
+    "duration": 0.1990981101989746,
+    "message": "'ToolRegistry' object has no attribute 'is_registered'",
+    "results": [],
+    "status": "failed"
+  },
+  "slug": "sidebar_fix_1769981517866",
+  "status": "finished"
+}

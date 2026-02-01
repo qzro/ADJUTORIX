@@ -1,0 +1,15 @@
+{
+  "action": "deploy",
+  "created_at": "2026-02-01T20:41:04.092118",
+  "job_name": "sidebar",
+  "repo": "/Users/midiakiasat/Downloads/Apps/midiakiasat/ADJUTORIX/ADJUTORIX",
+  "result": {
+    "category": "DEPLOY",
+    "duration": 0.18807029724121094,
+    "message": "Command blocked by policy: echo \"deploy not configured\"",
+    "results": [],
+    "status": "failed"
+  },
+  "slug": "sidebar_deploy_1769978464086",
+  "status": "finished"
+}

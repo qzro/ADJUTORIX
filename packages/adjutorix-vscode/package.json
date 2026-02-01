@@ -44,43 +44,145 @@
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
-      { "command": "adjutorix.smoke", "title": "Adjutorix: Smoke Test", "category": "Adjutorix" },
-      { "command": "adjutorix.whereAmI", "title": "Adjutorix: Where Am I?", "category": "Adjutorix" },
-      { "command": "adjutorix.showSidebar", "title": "Adjutorix: Show Sidebar", "category": "Adjutorix" },
-      { "command": "adjutorix.open", "title": "Adjutorix: Open", "category": "Adjutorix" },
-      { "command": "adjutorix.startAgent", "title": "Adjutorix: Start Agent", "category": "Adjutorix" },
-      { "command": "adjutorix.stopAgent", "title": "Adjutorix: Stop Agent", "category": "Adjutorix" },
-      { "command": "adjutorix.restartAgent", "title": "Adjutorix: Restart Agent", "category": "Adjutorix" },
-      { "command": "adjutorix.diagnostics", "title": "Adjutorix: Diagnostics", "category": "Adjutorix" },
-      { "command": "adjutorix.copyDiagnostics", "title": "Adjutorix: Copy Diagnostics", "category": "Adjutorix" },
-      { "command": "adjutorix.setAgentModeAuto", "title": "Adjutorix: Set Agent Mode — Auto", "category": "Adjutorix" },
-      { "command": "adjutorix.setAgentModeManaged", "title": "Adjutorix: Set Agent Mode — Managed", "category": "Adjutorix" },
-      { "command": "adjutorix.setAgentModeExternal", "title": "Adjutorix: Set Agent Mode — External", "category": "Adjutorix" },
-      { "command": "adjutorix.check", "title": "Adjutorix: Check", "category": "Adjutorix" },
-      { "command": "adjutorix.fix", "title": "Adjutorix: Fix", "category": "Adjutorix" },
-      { "command": "adjutorix.verify", "title": "Adjutorix: Verify", "category": "Adjutorix" },
-      { "command": "adjutorix.deploy", "title": "Adjutorix: Deploy", "category": "Adjutorix" },
-      { "command": "adjutorix.openWorkspaceFolder", "title": "Adjutorix: Open Workspace Folder", "category": "Adjutorix" }
+      {
+        "command": "adjutorix.smoke",
+        "title": "Adjutorix: Smoke Test",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.whereAmI",
+        "title": "Adjutorix: Where Am I?",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.showSidebar",
+        "title": "Adjutorix: Show Sidebar",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.open",
+        "title": "Adjutorix: Open",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.startAgent",
+        "title": "Adjutorix: Start Agent",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.stopAgent",
+        "title": "Adjutorix: Stop Agent",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.restartAgent",
+        "title": "Adjutorix: Restart Agent",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.diagnostics",
+        "title": "Adjutorix: Diagnostics",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.copyDiagnostics",
+        "title": "Adjutorix: Copy Diagnostics",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.setAgentModeAuto",
+        "title": "Adjutorix: Set Agent Mode — Auto",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.setAgentModeManaged",
+        "title": "Adjutorix: Set Agent Mode — Managed",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.setAgentModeExternal",
+        "title": "Adjutorix: Set Agent Mode — External",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.check",
+        "title": "Adjutorix: Check",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.fix",
+        "title": "Adjutorix: Fix",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.verify",
+        "title": "Adjutorix: Verify",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.deploy",
+        "title": "Adjutorix: Deploy",
+        "category": "Adjutorix"
+      },
+      {
+        "command": "adjutorix.openWorkspaceFolder",
+        "title": "Adjutorix: Open Workspace Folder",
+        "category": "Adjutorix"
+      }
     ],
     "menus": {
       "commandPalette": [
-        { "command": "adjutorix.smoke" },
-        { "command": "adjutorix.whereAmI" },
-        { "command": "adjutorix.showSidebar" },
-        { "command": "adjutorix.open" },
-        { "command": "adjutorix.startAgent" },
-        { "command": "adjutorix.stopAgent" },
-        { "command": "adjutorix.restartAgent" },
-        { "command": "adjutorix.diagnostics" },
-        { "command": "adjutorix.copyDiagnostics" },
-        { "command": "adjutorix.setAgentModeAuto" },
-        { "command": "adjutorix.setAgentModeManaged" },
-        { "command": "adjutorix.setAgentModeExternal" },
-        { "command": "adjutorix.check" },
-        { "command": "adjutorix.fix" },
-        { "command": "adjutorix.verify" },
-        { "command": "adjutorix.deploy" },
-        { "command": "adjutorix.openWorkspaceFolder" }
+        {
+          "command": "adjutorix.smoke"
+        },
+        {
+          "command": "adjutorix.whereAmI"
+        },
+        {
+          "command": "adjutorix.showSidebar"
+        },
+        {
+          "command": "adjutorix.open"
+        },
+        {
+          "command": "adjutorix.startAgent"
+        },
+        {
+          "command": "adjutorix.stopAgent"
+        },
+        {
+          "command": "adjutorix.restartAgent"
+        },
+        {
+          "command": "adjutorix.diagnostics"
+        },
+        {
+          "command": "adjutorix.copyDiagnostics"
+        },
+        {
+          "command": "adjutorix.setAgentModeAuto"
+        },
+        {
+          "command": "adjutorix.setAgentModeManaged"
+        },
+        {
+          "command": "adjutorix.setAgentModeExternal"
+        },
+        {
+          "command": "adjutorix.check"
+        },
+        {
+          "command": "adjutorix.fix"
+        },
+        {
+          "command": "adjutorix.verify"
+        },
+        {
+          "command": "adjutorix.deploy"
+        },
+        {
+          "command": "adjutorix.openWorkspaceFolder"
+        }
       ]
     },
     "configuration": {
@@ -103,7 +205,11 @@
         },
         "adjutorix.agentMode": {
           "type": "string",
-          "enum": ["auto", "managed", "external"],
+          "enum": [
+            "auto",
+            "managed",
+            "external"
+          ],
           "default": "auto",
           "description": "Agent control: auto (try managed, allow external), managed (spawn/kill only), external (health-check only)."
         },
@@ -114,7 +220,12 @@
         },
         "adjutorix.logLevel": {
           "type": "string",
-          "enum": ["debug", "info", "warn", "error"],
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
           "default": "info",
           "description": "Extension log level"
         },
@@ -149,8 +260,10 @@
     "watch": "webpack --watch --mode development",
     "lint": "eslint src --ext ts",
     "test": "vitest",
-    "vsix": "vsce package",
-    "publish": "vsce publish"
+    "vsix": "node scripts/patch-secretlint-concurrency.js && vsce package --no-dependencies",
+    "vsix:install-vscode": "npm run vsix && \"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code\" --install-extension \"$(pwd)/adjutorix-vscode-1.0.0-unified.vsix\" --force",
+    "publish": "vsce publish",
+    "postinstall": "node scripts/patch-secretlint-concurrency.js 2>/dev/null || true"
   },
   "dependencies": {
     "node-fetch": "^2.7.0",
@@ -162,14 +275,14 @@
     "@types/uuid": "^9.0.7",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
+    "@vscode/vsce": "^2.26.1",
     "eslint": "^8.56.0",
     "rimraf": "^5.0.5",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",
     "vitest": "^1.2.1",
     "webpack": "^5.90.0",
-    "webpack-cli": "^5.1.4",
-    "@vscode/vsce": "^3.0.0"
+    "webpack-cli": "^5.1.4"
   },
   "repository": {
     "type": "git",

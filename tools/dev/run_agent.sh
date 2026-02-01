@@ -65,6 +65,11 @@ export ADJUTORIX_PORT="$PORT"
 export ADJUTORIX_PROFILE="$PROFILE"
 export ADJUTORIX_ROOT="$ROOT_DIR"
 
+# Production hardening: safe defaults (no git stash, no surprise cloud cost)
+export ADJUTORIX_ACTIONS_DISABLED="${ADJUTORIX_ACTIONS_DISABLED:-0}"
+export ADJUTORIX_DISABLE_GIT_SNAPSHOT="${ADJUTORIX_DISABLE_GIT_SNAPSHOT:-1}"
+export ADJUTORIX_ALLOW_CLOUD="${ADJUTORIX_ALLOW_CLOUD:-0}"
+
 # -------- port in use --------
 
 if lsof -i ":$PORT" -t >/dev/null 2>&1; then

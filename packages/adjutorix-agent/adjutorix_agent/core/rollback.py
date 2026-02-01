@@ -1,6 +1,9 @@
+import os
 import subprocess
 from pathlib import Path
 from typing import List, Optional
+
+DISABLE_GIT_SNAPSHOT = os.getenv("ADJUTORIX_DISABLE_GIT_SNAPSHOT", "1") == "1"
 
 
 class RollbackError(Exception):
@@ -53,10 +56,15 @@ class RollbackManager:
     def snapshot(self, label: str) -> None:
         """
         Create lightweight snapshot using git stash.
+        No-op when ADJUTORIX_DISABLE_GIT_SNAPSHOT=1 (default). Never mutates repo by default.
         """
-
+        if DISABLE_GIT_SNAPSHOT:
+            return
         cmd = ["git", "stash", "push", "-u", "-m", f"adjutorix:{label}"]
-        self._run(cmd)
+        try:
+            self._run(cmd)
+        except RollbackError:
+            return
 
     def restore_snapshot(self, label: Optional[str] = None) -> None:
         """

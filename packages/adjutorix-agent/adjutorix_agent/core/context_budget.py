@@ -27,6 +27,19 @@ class ContextBudget:
     # Public API
     # -------------------------
 
+    def reset(self) -> None:
+        """
+        Back-compat shim.
+        Legacy paths call reset(); make it a safe no-op or minimal reset.
+        """
+        try:
+            if hasattr(self, "used_tokens"):
+                self.used_tokens = 0
+            if hasattr(self, "messages"):
+                self.messages = []
+        except Exception:
+            pass
+
     def enforce(
         self,
         files: List[Dict[str, Any]],

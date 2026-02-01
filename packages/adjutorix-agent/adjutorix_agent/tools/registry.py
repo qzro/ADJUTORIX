@@ -123,6 +123,17 @@ class ToolRegistry:
         with self._lock:
             return sorted(self._tools.keys())
 
+    def is_registered(self, name: str) -> bool:
+        """
+        Back-compat shim.
+        Legacy code expects is_registered(); map to internal _tools.
+        """
+        try:
+            with self._lock:
+                return name in self._tools
+        except Exception:
+            return False
+
     def get_metadata(self, name: str) -> Dict[str, Any]:
         with self._lock:
             if name not in self._metadata:

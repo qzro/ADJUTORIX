@@ -1,0 +1,15 @@
+{
+  "action": "deploy",
+  "created_at": "2026-02-01T20:33:42.289104",
+  "job_name": "sidebar",
+  "repo": "/Users/midiakiasat/Downloads/Apps/midiakiasat/ADJUTORIX/ADJUTORIX",
+  "result": {
+    "category": "DEPLOY",
+    "duration": 0.08512210845947266,
+    "message": "Command failed: git stash push -u -m adjutorix:deploy_sidebar_1769978022\nNone",
+    "results": [],
+    "status": "failed"
+  },
+  "slug": "sidebar_deploy_1769978022287",
+  "status": "finished"
+}
