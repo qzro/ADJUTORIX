@@ -101,7 +101,8 @@ class Executor:
             )
 
         try:
-            report = self.execute_plan(plan)
+            label = f"{action}_{job_name}_{int(time.time())}"
+            report = self.execute_plan(plan, label=label)
         except ExecutionError as e:
             duration = time.time() - start_time
             report = {
@@ -133,14 +134,16 @@ class Executor:
 
         return report
 
-    def execute_plan(self, plan: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_plan(self, plan: Dict[str, Any], label: Optional[str] = None) -> Dict[str, Any]:
         """
         Execute full plan lifecycle.
         Returns execution report.
         """
+        if label is None:
+            label = f"plan_{int(time.time())}"
 
         with self._lock:
-            self.rollback.snapshot()
+            self.rollback.snapshot(label)
 
             start_time = time.time()
             results: List[CommandResult] = []
@@ -163,7 +166,10 @@ class Executor:
                 category = ErrorCategory.NONE.value
 
             except Exception as exc:
-                self.rollback.rollback()
+                try:
+                    self.rollback.restore_snapshot(label)
+                except Exception:
+                    self.rollback.rollback_hard()
 
                 status = "failed"
                 category = self._classify_error(exc)

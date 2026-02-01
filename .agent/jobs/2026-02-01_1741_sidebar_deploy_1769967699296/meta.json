@@ -1,0 +1,15 @@
+{
+  "action": "deploy",
+  "created_at": "2026-02-01T17:41:39.298081",
+  "job_name": "sidebar",
+  "repo": "/Users/midiakiasat/Downloads/Apps/midiakiasat/ADJUTORIX/ADJUTORIX",
+  "result": {
+    "category": "UNKNOWN",
+    "duration": 0.000179290771484375,
+    "message": "RollbackManager.snapshot() missing 1 required positional argument: 'label'",
+    "results": [],
+    "status": "failed"
+  },
+  "slug": "sidebar_deploy_1769967699296",
+  "status": "finished"
+}

@@ -6,6 +6,31 @@ Adjutorix does **not** run in Cursor or other hosts. If installed there, it will
 
 ---
 
+## Unified reset (final procedure – do once)
+
+One procedure. No branching. No retries. Result: one codebase, one build, VS Code fully enabled, Cursor safely inert.
+
+1. **Quit VS Code and Cursor.**
+2. From **repo root** (the directory that contains `packages/` and `tools/`), run:
+
+   ```bash
+   ./tools/dev/unified_reset.sh
+   ```
+
+   This: kills Code/Cursor processes, nuclear-cleans VS Code + Cursor caches and extensions, builds the extension, and prints the exact command for step 4.
+3. **Install once (dev mode):** From repo root, run the command the script printed (use the **full path** to VS Code’s `code` on macOS so Cursor is not opened):
+
+   ```bash
+   /Applications/Visual\ Studio\ Code.app/Contents/Resources/app/bin/code --extensionDevelopmentPath=packages/adjutorix-vscode
+   ```
+
+   No VSIX. No Marketplace. No duplication.
+4. **Verify in VS Code:** Command Palette → **Adjutorix: Show Sidebar** → ADJUTORIX SURFACE v2, actions work. In Cursor: extension may appear; no commands, no sidebar, no activation. That is correct.
+
+Do **not**: reinstall from Marketplace, generate VSIX, duplicate launch configs, or touch Cursor extensions again.
+
+---
+
 ## Build and package
 
 From the extension package directory:

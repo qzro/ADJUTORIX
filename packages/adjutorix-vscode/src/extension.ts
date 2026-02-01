@@ -1,3 +1,5 @@
+import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
 import { RpcClient } from "./client/rpc";
 import { Settings } from "./config/settings";
@@ -12,44 +14,36 @@ let rpcClient: RpcClient | null = null;
 let agentProcessManager: AgentProcessManager | null = null;
 
 /**
- * Block non–VS Code hosts (e.g. Cursor). Allow VS Code by scheme or name to avoid false negatives (Insiders, OSS).
- */
-function assertVsCodeOnly(out: vscode.OutputChannel): boolean {
-  const app = (vscode.env.appName ?? "").toLowerCase();
-  const scheme = (vscode.env.uriScheme ?? "").toLowerCase();
-
-  const isCursor = scheme === "cursor" || app.includes("cursor");
-  const isVsCode = scheme === "vscode" || app.includes("visual studio code");
-
-  if (isCursor || !isVsCode) {
-    out.appendLine(`[guard] blocked host: appName="${app}" scheme="${scheme}"`);
-    vscode.window.showWarningMessage(
-      "Adjutorix is VS Code–only. This host is not supported."
-    );
-    return false;
-  }
-
-  out.appendLine(`[guard] ok host: appName="${app}" scheme="${scheme}"`);
-  return true;
-}
-
-/**
- * Extension entry point. VS Code only; Cursor is blocked at runtime.
+ * Extension entry point. Runs in VS Code and Cursor.
  */
 export async function activate(context: vscode.ExtensionContext) {
   const out = vscode.window.createOutputChannel("Adjutorix");
   context.subscriptions.push({ dispose: () => out.dispose() });
 
-  if (!assertVsCodeOnly(out)) return;
+  out.appendLine("Adjutorix activated.");
+  out.show(true);
 
-  out.appendLine("activate()");
-  console.log("[adjutorix] activate");
+  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+
+  // When no folder is open, auto-open adjutorix.workspacePath so the agent can start (force fix for "Open a folder").
+  if (!workspaceRoot) {
+    const fallbackPath = Settings.getWorkspacePath();
+    if (fallbackPath) {
+      const resolved = path.isAbsolute(fallbackPath) ? fallbackPath : path.resolve(process.env.HOME || "", fallbackPath);
+      if (fs.existsSync(resolved)) {
+        out.appendLine(`[extension] No workspace folder; opening adjutorix.workspacePath: ${resolved}`);
+        await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(resolved));
+        return;
+      }
+    }
+    out.appendLine("→ Open a folder (File → Open Folder) or run 'Adjutorix: Open Workspace Folder' so the agent can start.");
+    out.appendLine("→ Click the ADJUTORIX icon in the left sidebar, or run: Adjutorix: Show Sidebar");
+  }
 
   const endpoint = Settings.getAgentEndpoint();
   rpcClient = new RpcClient(`${endpoint}/rpc`);
   const state = new AgentState();
 
-  const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
   if (workspaceRoot) {
     const initialMode = Settings.get().agentMode;
     agentProcessManager = new AgentProcessManager({
@@ -75,7 +69,7 @@ export async function activate(context: vscode.ExtensionContext) {
   // Sidebar: Chat + Actions webview (replaces placeholder tree)
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
-      "adjutorix.panel",
+      "adjutorix.surface",
       new AdjutorixViewProvider(
         context.extensionUri,
         rpcClient,
@@ -83,7 +77,7 @@ export async function activate(context: vscode.ExtensionContext) {
         agentProcessManager,
         context.workspaceState
       ),
-      { webviewOptions: { retainContextWhenHidden: true } }
+      { webviewOptions: { retainContextWhenHidden: false } }
     )
   );
 
@@ -96,11 +90,35 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Prove which extension instance is running (no guessing)
+  context.subscriptions.push(
+    vscode.commands.registerCommand("adjutorix.whereAmI", async () => {
+      out.show(true);
+      out.appendLine(`[whereAmI] ${context.extensionPath}`);
+      vscode.window.showInformationMessage(`Adjutorix running from: ${context.extensionPath}`);
+    })
+  );
+
   // Reveal sidebar view (removes "where is it?" ambiguity)
   context.subscriptions.push(
     vscode.commands.registerCommand("adjutorix.showSidebar", async () => {
       await vscode.commands.executeCommand("workbench.view.extension.adjutorix");
-      await vscode.commands.executeCommand("adjutorix.panel.focus");
+      await vscode.commands.executeCommand("adjutorix.surface.focus");
+    })
+  );
+
+  // Open a folder so the agent can start (fixes "no workspace" state).
+  context.subscriptions.push(
+    vscode.commands.registerCommand("adjutorix.openWorkspaceFolder", async () => {
+      const uri = await vscode.window.showOpenDialog({
+        canSelectFolders: true,
+        canSelectMany: false,
+        title: "Select folder for Adjutorix agent (e.g. your ADJUTORIX repo)",
+      });
+      if (uri?.[0]) {
+        await vscode.commands.executeCommand("vscode.openFolder", uri[0]);
+        out.appendLine(`[extension] Opening workspace folder: ${uri[0].fsPath}`);
+      }
     })
   );
 

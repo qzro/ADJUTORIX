@@ -81,6 +81,13 @@ export class Settings {
    * Utilities
    * ------------------------- */
 
+  /** When set and no workspace folder is open, extension can open this path so the agent can start. */
+  static getWorkspacePath(): string | undefined {
+    const config = vscode.workspace.getConfiguration(SECTION);
+    const path = config.get<string>("workspacePath");
+    return path?.trim() || undefined;
+  }
+
   static getAgentEndpoint(): string {
     const s = this.get();
     const raw = s.agentUrl?.trim();

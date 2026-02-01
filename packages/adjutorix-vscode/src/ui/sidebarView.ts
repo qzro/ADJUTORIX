@@ -340,173 +340,243 @@ export class AdjutorixViewProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline' ${webview.cspSource};">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; script-src 'nonce-${nonce}'; style-src 'unsafe-inline' ${webview.cspSource};">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Adjutorix</title>
   <style>
-    body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); padding: 8px; margin: 0; color: var(--vscode-foreground); box-sizing: border-box; }
+    :root { --r: 12px; }
+    body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); padding: 10px; margin: 0; color: var(--vscode-foreground); }
     * { box-sizing: border-box; }
-    .status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-bottom: 6px; }
+
+    .row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .status { display:inline-block; padding:2px 8px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; }
     .status.connected { background: var(--vscode-inputValidation-infoBackground); color: var(--vscode-inputValidation-infoBorder); }
     .status.starting, .status.stopping { background: var(--vscode-editorWarning-foreground); color: var(--vscode-editor-background); }
     .status.failed, .status.disconnected { background: var(--vscode-inputValidation-errorBackground); color: var(--vscode-inputValidation-errorBorder); }
-    .status-detail { font-size: 11px; color: var(--vscode-descriptionForeground); margin-bottom: 6px; }
-    .mode-selector { display: flex; gap: 0; margin-bottom: 8px; border: 1px solid var(--vscode-input-border); border-radius: 4px; overflow: hidden; font-size: 11px; }
-    .mode-selector button { flex: 1; padding: 4px 6px; border: none; background: var(--vscode-input-background); color: var(--vscode-foreground); cursor: pointer; }
+    .status-detail { font-size: 11px; color: var(--vscode-descriptionForeground); margin: 0 0 10px; }
+
+    .indicators { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+    .indicator { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; }
+    .indicator .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--vscode-inputValidation-errorBackground); }
+    .indicator.green .dot { background: #16825d; box-shadow: 0 0 6px rgba(22,130,93,0.6); }
+    .indicator.green { color: #16825d; }
+    .indicator:not(.green) { color: var(--vscode-descriptionForeground); }
+
+    .mode-selector { display:flex; border: 1px solid var(--vscode-input-border); border-radius: 8px; overflow:hidden; margin-bottom: 10px; }
+    .mode-selector button { flex:1; padding: 6px 8px; border:none; background: var(--vscode-input-background); color: var(--vscode-foreground); cursor:pointer; font-size: 11px; }
     .mode-selector button.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
-    .mode-selector button:hover:not(.active) { background: var(--vscode-input-background); }
-    .status-actions { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
-    .status-actions button { padding: 4px 8px; font-size: 11px; cursor: pointer; }
-    .transcript-section { margin-bottom: 8px; }
-    .transcript { min-height: 60px; max-height: 180px; overflow-y: auto; border: 1px solid var(--vscode-input-border); border-radius: 6px; padding: 6px; background: var(--vscode-input-background); font-size: 12px; }
-    .transcript-entry { margin: 4px 0; }
+
+    .transcript-wrap { margin-bottom: 10px; }
+    .transcript { min-height: 72px; max-height: 200px; overflow:auto; border: 1px solid var(--vscode-input-border); border-radius: var(--r); padding: 8px; background: var(--vscode-input-background); font-size: 12px; }
+    .transcript-entry { margin: 6px 0; white-space: pre-wrap; word-break: break-word; }
     .transcript-entry.user { color: var(--vscode-textLink-foreground); }
     .transcript-entry.assistant { color: var(--vscode-foreground); }
     .transcript-entry.system { color: var(--vscode-descriptionForeground); font-style: italic; }
-    .transcript-section .clear-btn { margin-top: 4px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
-    .composer { border: 1px solid var(--vscode-input-border); border-radius: 12px; background: var(--vscode-input-background); overflow: hidden; margin-bottom: 8px; }
-    .composer-input { width: 100%; min-height: 72px; padding: 10px 12px; border: none; background: transparent; color: var(--vscode-foreground); font: inherit; resize: none; outline: none; }
-    .composer-input::placeholder { color: var(--vscode-input-placeholderForeground); }
-    .composer-footer { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--vscode-input-border); }
-    .composer-footer-left { display: flex; align-items: center; gap: 6px; }
-    .composer-attach, .composer-mode, .composer-mic { padding: 4px 8px; font-size: 11px; border: none; background: transparent; color: var(--vscode-foreground); cursor: pointer; border-radius: 4px; }
-    .composer-attach:hover, .composer-mode:hover, .composer-mic:hover { background: var(--vscode-toolbar-hoverBackground); }
-    .composer-mode { display: flex; align-items: center; gap: 4px; }
-    .context-line { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 4px; }
-    .context-line select, .context-line button { background: transparent; border: none; color: inherit; cursor: pointer; padding: 0 4px; }
-    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-    .actions button { padding: 6px 10px; cursor: pointer; font-size: 12px; }
-    .actions button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .clear-btn { margin-top: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; }
+
+    /* --- SURFACE COMPOSER --- */
+    .composer { border: 1px solid var(--vscode-input-border); border-radius: 14px; background: var(--vscode-input-background); overflow:hidden; margin-bottom: 8px; }
+    .composer textarea {
+      width: 100%;
+      min-height: 72px;
+      padding: 10px 12px;
+      border: none;
+      outline: none;
+      resize: none;
+      background: transparent;
+      color: var(--vscode-foreground);
+      font: inherit;
+    }
+    .composer textarea::placeholder { color: var(--vscode-input-placeholderForeground); }
+    .composer-footer {
+      display:flex;
+      align-items:center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-top: 1px solid var(--vscode-input-border);
+    }
+    .composer-left { display:flex; align-items:center; gap: 8px; }
+    .icon-btn {
+      border:none;
+      background: transparent;
+      color: var(--vscode-foreground);
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .icon-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
+    .mode-pill { display:flex; align-items:center; gap: 6px; }
+
+    .context-line { display:flex; align-items:center; gap: 6px; font-size: 11px; color: var(--vscode-descriptionForeground); margin: 4px 0 10px; }
+    .context-line .pill { padding: 2px 8px; border: 1px solid var(--vscode-input-border); border-radius: 999px; }
+
+    .actions { display:flex; flex-wrap: wrap; gap: 6px; }
+    .actions button { padding: 6px 10px; font-size: 12px; cursor:pointer; }
+    .actions button:disabled { opacity: .6; cursor:not-allowed; }
   </style>
 </head>
 <body>
+  <div style="font-weight:700; font-size:12px; opacity:.8; margin-bottom:8px;">ADJUTORIX SURFACE v2</div>
+  <div class="indicators">
+    <div id="indicatorSystem" class="indicator green"><span class="dot"></span><span>System</span></div>
+    <div id="indicatorEngine" class="indicator"><span class="dot"></span><span>Engine</span></div>
+    <div id="indicatorChat" class="indicator"><span class="dot"></span><span>Chat</span></div>
+  </div>
   <div id="status" class="status disconnected">Checking…</div>
-  <div class="mode-selector" id="modeSelector">
-    <button type="button" data-mode="auto" title="Try managed, allow external">Auto</button>
-    <button type="button" data-mode="managed" title="Extension spawns/kills process">Managed</button>
-    <button type="button" data-mode="external" title="Health-check only, no spawn">External</button>
-  </div>
   <div id="statusDetail" class="status-detail"></div>
-  <div id="statusActions" class="status-actions" style="display:none;"></div>
-  <div class="transcript-section">
-    <div class="transcript" id="transcript"></div>
-    <button id="clearTranscript" class="clear-btn" title="Clear transcript">Clear</button>
+
+  <div class="mode-selector" id="modeSelector">
+    <button type="button" data-mode="auto">Auto</button>
+    <button type="button" data-mode="managed">Managed</button>
+    <button type="button" data-mode="external">External</button>
   </div>
+
+  <div class="transcript-wrap">
+    <div class="transcript" id="transcript"></div>
+    <button id="clearTranscript" class="clear-btn">Clear</button>
+  </div>
+
   <div class="composer">
-    <textarea id="composerInput" class="composer-input" placeholder="Plan, @ for context, / for commands" rows="3"></textarea>
+    <textarea id="composerInput" placeholder="Plan, @ for context, / for commands" rows="3"></textarea>
     <div class="composer-footer">
-      <div class="composer-footer-left">
-        <button type="button" id="composerAttach" class="composer-attach" title="Attach">&#8734;</button>
-        <button type="button" id="composerMode" class="composer-mode" title="Mode">Auto &#9660;</button>
+      <div class="composer-left">
+        <button type="button" id="composerAttach" class="icon-btn" title="Attach">∞</button>
+        <button type="button" id="composerMode" class="icon-btn mode-pill" title="Mode">
+          <span id="composerModeLabel">Auto</span><span>▾</span>
+        </button>
       </div>
-      <button type="button" id="composerMic" class="composer-mic" title="Voice">&#127908;</button>
+      <button type="button" id="composerMic" class="icon-btn" title="Voice">🎙</button>
     </div>
   </div>
-  <div class="context-line"><span id="contextLabel">Local</span> &#9660;</div>
+
+  <div class="context-line">
+    <span class="pill" id="contextLabel">Local</span><span>▾</span>
+  </div>
+
   <div class="actions">
     <button data-action="check">Check</button>
     <button data-action="fix">Fix</button>
     <button data-action="verify">Verify</button>
     <button data-action="deploy">Deploy</button>
   </div>
+
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    vscode.postMessage({ type: "log", payload: "webview boot" });
+
     const statusEl = document.getElementById('status');
     const statusDetailEl = document.getElementById('statusDetail');
-    const statusActionsEl = document.getElementById('statusActions');
     const transcriptEl = document.getElementById('transcript');
-    const composerInput = document.getElementById('composerInput');
     const modeSelectorEl = document.getElementById('modeSelector');
+    const composerInput = document.getElementById('composerInput');
+    const composerModeLabel = document.getElementById('composerModeLabel');
     const actionBtns = document.querySelectorAll('.actions button');
+
     let connected = false;
+    let currentMode = 'auto';
+
+    function setConnected(c) {
+      connected = c;
+      actionBtns.forEach(b => b.disabled = !c);
+      composerInput.disabled = !c;
+    }
 
     function setModeActive(mode) {
-      modeSelectorEl.querySelectorAll('button').forEach(function(b) {
+      currentMode = mode;
+      modeSelectorEl.querySelectorAll('button').forEach(b => {
         b.classList.toggle('active', b.dataset.mode === mode);
       });
+      composerModeLabel.textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
     }
 
     function formatDetail(m) {
-      var parts = [];
-      if (m.mode) parts.push('Mode: ' + m.mode.charAt(0).toUpperCase() + m.mode.slice(1));
+      const parts = [];
+      if (m.mode) parts.push('Mode: ' + (m.mode.charAt(0).toUpperCase() + m.mode.slice(1)));
       if (m.ownership) parts.push('Ownership: ' + (m.ownership === 'unknown' ? 'Unknown' : m.ownership.charAt(0).toUpperCase() + m.ownership.slice(1)));
       if (m.baseUrl && (m.status === 'connected' || m.status === 'failed')) parts.push('Endpoint: ' + m.baseUrl);
       if (m.version) parts.push('v' + m.version);
       if (m.error) parts.push(m.error);
-      return parts.length ? parts.join(' · ') : '';
-    }
-
-    function setConnected(c) {
-      connected = c;
-      actionBtns.forEach(b => { b.disabled = !c; });
-      composerInput.disabled = !c;
-    }
-
-    function renderStatusActions(status) {
-      if (status !== 'failed' && status !== 'disconnected' && status !== 'stopping') {
-        statusActionsEl.style.display = 'none';
-        statusActionsEl.innerHTML = '';
-        return;
-      }
-      statusActionsEl.style.display = 'flex';
-      var retryDisabled = status === 'stopping';
-      statusActionsEl.innerHTML = '<button id="btnRetry" ' + (retryDisabled ? 'disabled' : '') + '>Retry</button><button id="btnOpenLogs">Open Logs</button>';
-      document.getElementById('btnRetry').onclick = () => { if (!retryDisabled) vscode.postMessage({ type: 'retry' }); };
-      document.getElementById('btnOpenLogs').onclick = () => vscode.postMessage({ type: 'openLogs' });
+      return parts.join(' · ');
     }
 
     function setTranscript(entries) {
       transcriptEl.innerHTML = '';
-      (entries || []).forEach(function(entry) {
-        var el = document.createElement('div');
+      (entries || []).forEach(entry => {
+        const el = document.createElement('div');
         el.className = 'transcript-entry ' + entry.role;
-        el.textContent = (entry.role === 'user' ? 'You: ' : entry.role === 'assistant' ? 'Agent: ' : entry.role === 'system' ? 'System: ' : '') + entry.text;
+        const prefix = entry.role === 'user' ? 'You: ' : entry.role === 'assistant' ? 'Agent: ' : 'System: ';
+        el.textContent = prefix + entry.text;
         transcriptEl.appendChild(el);
       });
       transcriptEl.scrollTop = transcriptEl.scrollHeight;
     }
 
+    function setIndicators(engineGreen, chatGreen) {
+      document.getElementById('indicatorSystem').classList.toggle('green', true);
+      document.getElementById('indicatorEngine').classList.toggle('green', engineGreen);
+      document.getElementById('indicatorChat').classList.toggle('green', chatGreen);
+    }
+
     window.addEventListener('message', e => {
       const m = e.data;
       if (m.type === 'status') {
-        statusEl.textContent = m.status === 'connected' ? 'Connected' : m.status === 'starting' ? 'Starting…' : m.status === 'stopping' ? 'Stopping…' : m.status === 'failed' ? 'Failed' : 'Disconnected';
-        statusEl.className = 'status ' + m.status;
-        setConnected(m.status === 'connected');
+        const s = m.status;
+        statusEl.textContent =
+          s === 'connected' ? 'Connected' :
+          s === 'starting' ? 'Starting…' :
+          s === 'stopping' ? 'Stopping…' :
+          s === 'failed' ? 'Failed' : 'Disconnected';
+        statusEl.className = 'status ' + s;
+        setConnected(s === 'connected');
+        setIndicators(s === 'connected', s === 'connected');
         if (m.mode) setModeActive(m.mode);
         statusDetailEl.textContent = formatDetail(m);
-        renderStatusActions(m.status);
       } else if (m.type === 'transcript') {
         setTranscript(m.payload || []);
-      } else if (m.type === 'actionResult' || m.type === 'chatResult') {
-        /* Summary shown in transcript from host */
       }
     });
 
-    composerInput.addEventListener('keydown', function(e) {
+    // Send chat on Enter (like the screenshot UX)
+    composerInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        var msg = composerInput.value.trim();
-        if (msg && connected) {
-          composerInput.value = '';
-          vscode.postMessage({ type: 'chat', payload: { message: msg } });
-        }
+        const msg = composerInput.value.trim();
+        if (!msg || !connected) return;
+        composerInput.value = '';
+        vscode.postMessage({ type: 'chat', payload: { message: msg } });
       }
     });
 
-    document.getElementById('composerAttach').addEventListener('click', () => { /* attach */ });
-    document.getElementById('composerMode').addEventListener('click', () => { modeSelectorEl.querySelector('[data-mode="auto"]').click(); });
-    document.getElementById('composerMic').addEventListener('click', () => { /* voice */ });
-
+    // Actions
     document.querySelectorAll('.actions button').forEach(b => {
-      b.addEventListener('click', () => { if (!b.disabled) vscode.postMessage({ type: 'action', payload: b.dataset.action }); });
-    });
-    document.getElementById('clearTranscript').addEventListener('click', () => vscode.postMessage({ type: 'clearTranscript' }));
-    modeSelectorEl.querySelectorAll('button').forEach(function(b) {
-      b.addEventListener('click', function() {
-        var mode = b.dataset.mode;
-        if (mode) vscode.postMessage({ type: 'setMode', payload: mode });
+      b.addEventListener('click', () => {
+        if (b.disabled) return;
+        vscode.postMessage({ type: 'action', payload: b.dataset.action });
       });
+    });
+
+    // Mode selector
+    modeSelectorEl.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        const mode = b.dataset.mode;
+        if (!mode) return;
+        setModeActive(mode);
+        vscode.postMessage({ type: 'setMode', payload: mode });
+      });
+    });
+
+    // Cosmetic buttons (no-op for now)
+    document.getElementById('composerAttach').addEventListener('click', () => {});
+    document.getElementById('composerMic').addEventListener('click', () => {});
+    document.getElementById('composerMode').addEventListener('click', () => {
+      // cycles modes for quick UX
+      const order = ['auto','managed','external'];
+      const next = order[(order.indexOf(currentMode) + 1) % order.length];
+      modeSelectorEl.querySelector(\`button[data-mode="\${next}"]\`).click();
+    });
+
+    document.getElementById('clearTranscript').addEventListener('click', () => {
+      vscode.postMessage({ type: 'clearTranscript' });
     });
 
     vscode.postMessage({ type: 'ready' });
