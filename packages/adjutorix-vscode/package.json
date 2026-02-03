@@ -258,7 +258,7 @@
     "clean": "rimraf dist",
     "build": "npm run clean && webpack --mode production",
     "watch": "webpack --watch --mode development",
-    "lint": "eslint src --ext ts",
+    "lint": "ESLINT_USE_FLAT_CONFIG=true eslint src",
     "test": "vitest",
     "vsix": "node scripts/patch-secretlint-concurrency.js && vsce package --no-dependencies",
     "vsix:install-vscode": "npm run vsix && \"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code\" --install-extension \"$(pwd)/adjutorix-vscode-1.0.0-unified.vsix\" --force",
@@ -286,10 +286,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/adjutorix/adjutorix"
+    "url": "https://github.com/midiakiasat/ADJUTORIX"
   },
   "bugs": {
-    "url": "https://github.com/adjutorix/adjutorix/issues"
+    "url": "https://github.com/midiakiasat/ADJUTORIX/issues"
   },
-  "homepage": "https://github.com/adjutorix/adjutorix#readme"
+  "homepage": "https://github.com/midiakiasat/ADJUTORIX/adjutorix#readme"
 }

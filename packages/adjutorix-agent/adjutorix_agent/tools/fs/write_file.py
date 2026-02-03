@@ -76,53 +76,14 @@ def write_file(
     """
     Write file content safely.
 
-    Args:
-        path: Target file path
-        content: File content
-        workspace_root: Optional workspace root
-        create_dirs: Create parent dirs if missing
-        overwrite: Allow overwrite
-
-    Returns:
-        {
-            "path": str,
-            "bytes_written": int,
-            "created": bool
-        }
+    Hard gate: direct writes are disabled. Use patch.propose then patch.accept
+    then patch.apply (RPC) for governed edits. No write reaches disk without
+    a recorded patch.
     """
-
-    if not isinstance(content, str):
-        raise WriteFileError("Content must be string")
-
-    size = len(content.encode("utf-8"))
-
-    if size > MAX_FILE_SIZE:
-        raise WriteFileError(
-            f"Content too large ({size} bytes > {MAX_FILE_SIZE})"
-        )
-
-    abs_path = _validate_path(path, workspace_root)
-
-    exists = os.path.exists(abs_path)
-
-    if exists and not overwrite:
-        raise WriteFileError("File exists and overwrite disabled")
-
-    parent = os.path.dirname(abs_path)
-
-    if parent and not os.path.exists(parent):
-        if create_dirs:
-            os.makedirs(parent, exist_ok=True)
-        else:
-            raise WriteFileError("Parent directory does not exist")
-
-    _atomic_write(abs_path, content)
-
-    return {
-        "path": abs_path,
-        "bytes_written": size,
-        "created": not exists,
-    }
+    raise WriteFileError(
+        "Direct write disabled. Use patch.propose (file_ops) then patch.accept "
+        "then patch.apply for governed edits."
+    )
 
 
 # ----------------------------------------------------------------------

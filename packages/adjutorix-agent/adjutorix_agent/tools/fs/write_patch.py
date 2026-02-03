@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from typing import Optional, Dict, Any, List
 
 from adjutorix_agent.tools.registry import register_tool
-from adjutorix_agent.core.patch_gate import PatchGate, PatchGateError
 
 
 class PatchApplyError(Exception):
@@ -130,18 +129,27 @@ def write_patch(
     if not isinstance(patch, str) or not patch.strip():
         raise PatchApplyError("patch must be a non-empty string")
 
+    # Hard gate: apply (write) disabled. Only dry_run allowed for preview.
+    if not dry_run:
+        raise PatchApplyError(
+            "Direct apply disabled. Use patch.propose then patch.accept "
+            "then patch.apply (RPC) for governed edits. This tool allows dry_run=True only."
+        )
+
     repo_root = _validate_root(workspace_root)
 
     repo_dirty_before = _git_has_changes(repo_root)
 
-    # Gate: parse patch, extract touched files, enforce constraints
-    gate = PatchGate(repo_root=repo_root, max_files_touched=max_files_touched)
-    try:
-        touched_files: List[str] = gate.inspect_patch(patch)
-    except PatchGateError as exc:
-        raise PatchApplyError(f"Patch gate rejected patch: {exc}") from exc
+    def _extract_touched(patch_text: str) -> List[str]:
+        out: List[str] = []
+        for line in patch_text.splitlines():
+            if line.startswith("+++ b/"):
+                out.append(line.replace("+++ b/", "").strip())
+        return out
 
-    # Dry-run check first (even when applying)
+    touched_files = _extract_touched(patch)
+
+    # Dry-run check first
     precheck = _run_git_apply(repo_root, patch, dry_run=True, whitespace=whitespace)
     if not precheck.ok:
         return {

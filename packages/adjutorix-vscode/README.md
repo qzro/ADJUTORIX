@@ -4,6 +4,8 @@
 
 Adjutorix does **not** run in Cursor or other hosts. If installed there, it will show a single warning and refuse to activate (no commands, no view).
 
+**Invariant:** Every runnable package must contain its own lint configuration. `/check` assumes the package is self-describing (e.g. `packages/adjutorix-vscode/eslint.config.mjs`). Do not rely on root configs or CLI overrides for v1.
+
 ---
 
 ## Unified reset (final procedure – do once)

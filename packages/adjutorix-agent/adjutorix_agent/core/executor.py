@@ -80,8 +80,18 @@ class Executor:
         Run a single action (check/fix/verify/deploy).
         Loads .adjutorix/actions.json if present; executes configured commands.
         Always returns a structured report (never leaves system ambiguous).
+        Note: Normal execution goes through safe_runner.run_action (RPC choke point).
+        fix is blocked here too so no code path can run fix outside the governed flow.
         """
         start_time = time.time()
+        if action == "fix":
+            return {
+                "status": "blocked",
+                "message": "fix is propose-only; use patch.propose (file_ops) then patch.accept then patch.apply.",
+                "category": "policy_blocked",
+                "duration": 0.0,
+                "results": [],
+            }
         actions_path = self.workspace / ".adjutorix" / "actions.json"
         plan: Dict[str, Any] = {"commands": [], "pass_condition": ""}
 

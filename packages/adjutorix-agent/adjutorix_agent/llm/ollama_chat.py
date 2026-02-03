@@ -49,8 +49,12 @@ class OllamaChat:
             raise RuntimeError(f"Ollama chat failed: {e}") from e
 
     def is_available(self) -> bool:
+        """Verify Ollama is up and the configured model exists."""
         try:
-            r = requests.get(f"{self.base_url}/api/tags", timeout=5)
-            return r.status_code == 200
+            r = requests.get(f"{self.base_url}/api/tags", timeout=3)
+            r.raise_for_status()
+            data = r.json()
+            models = [m.get("name") for m in (data.get("models") or [])]
+            return any((name or "").startswith(self.model) for name in models)
         except Exception:
             return False

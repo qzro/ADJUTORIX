@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 
 class ContextBudgetError(Exception):
@@ -20,7 +22,7 @@ class ContextBudget:
     Prevents prompt bloat and model collapse.
     """
 
-    def __init__(self, limits: BudgetLimits | None = None) -> None:
+    def __init__(self, limits: Optional[BudgetLimits] = None) -> None:
         self.limits = limits or BudgetLimits()
 
     # -------------------------

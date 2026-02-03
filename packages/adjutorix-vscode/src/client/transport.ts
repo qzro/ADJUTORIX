@@ -52,6 +52,13 @@ export async function postJsonRpc<T = any>(
 }
 
 /**
+ * Normalize endpoint to always post to /rpc (avoids posting to / or /health).
+ */
+function normalizeEndpoint(e: string): string {
+  return e.endsWith("/rpc") ? e : e.replace(/\/+$/, "") + "/rpc";
+}
+
+/**
  * Transport layer for JSON-RPC over HTTP.
  * Uses keep-alive and attaches Authorization on every request.
  * Returns the JSON-RPC envelope; RpcClient.call() is the single decoder.
@@ -61,11 +68,11 @@ export class Transport {
   private controller: AbortController | null = null;
 
   constructor(endpoint: string) {
-    this.endpoint = endpoint;
+    this.endpoint = normalizeEndpoint(endpoint);
   }
 
   setEndpoint(endpoint: string) {
-    this.endpoint = endpoint;
+    this.endpoint = normalizeEndpoint(endpoint);
   }
 
   close() {

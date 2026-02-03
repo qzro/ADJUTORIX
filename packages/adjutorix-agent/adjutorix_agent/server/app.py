@@ -132,7 +132,7 @@ async def rpc_endpoint(request: Request) -> Dict[str, Any]:
     logger.debug("RPC request: %s", payload)
     token = extract_token(request) or ""
     try:
-        return rpc_dispatcher.dispatch(payload, token=token)
+        return await rpc_dispatcher.dispatch(payload, token=token)
     except Exception as exc:
         logger.exception("RPC endpoint error")
         return {
@@ -162,7 +162,7 @@ async def websocket_endpoint(ws: WebSocket, client_id: str):
 
             token = (payload.get("params") or {}).get("token") or payload.get("token") or ""
             try:
-                response = rpc_dispatcher.dispatch(payload, token=token)
+                response = await rpc_dispatcher.dispatch(payload, token=token)
             except Exception as exc:
                 logger.exception("WS RPC error")
                 response = {

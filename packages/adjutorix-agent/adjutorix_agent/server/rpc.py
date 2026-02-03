@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import os
+import secrets
+import time
 import traceback
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from ..actions.safe_runner import PolicyError, run_action as safe_run_action
+from ..chat.controller import Controller
 from ..chat.router import ChatRouter
 from ..core.context_budget import ContextBudget
 from ..core.executor import Executor
@@ -20,6 +25,38 @@ from ..governance.policy import PolicyManager
 from ..llm.ollama_chat import OllamaChat
 from ..tools.registry import ToolRegistry
 from .auth import require_local_token
+from ..core.sqlite_ledger import SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
+from ..core.sqlite_ledger import LedgerError, SqliteLedger
+
+
+PROTOCOL_VERSION = 1
+BUILD_FINGERPRINT = "job_v1"
+# Advertised RPC methods (engine never lies). debug.snapshot is debug-only but advertised.
+JOB_METHODS = [
+    "ping",
+    "capabilities",
+    "job.run",
+    "job.status",
+    "job.logs",
+    "job.cancel",
+    "job.list_recent",
+    "patch.propose",
+    "patch.list",
+    "patch.get",
+    "patch.accept",
+    "patch.reject",
+    "patch.apply",
+    "debug.snapshot",
+]
+
+
+def _reject(code: str, message: str, trace_id: Optional[str] = None) -> Dict[str, Any]:
+    return {
+        "type": "reject",
+        "trace_id": trace_id or "no_trace",
+        "engine": "none",
+        "payload": {"code": code, "message": message},
+    }
 
 
 class RPCError(Exception):
@@ -28,6 +65,202 @@ class RPCError(Exception):
         self.code = code
         self.message = message
         self.data = data or {}
+
+
+class JobEngine:
+    """
+    SQLite-backed job engine: one worker, durable queue, job.run returns job_id immediately.
+    State lives in DB. Restart marks running jobs aborted (engine_restart).
+    """
+
+    def __init__(self, repo_root: str, ledger: SqliteLedger) -> None:
+        self.repo_root = Path(repo_root).resolve()
+        self.ledger = ledger
+        self._current_job_id: Optional[str] = None
+        self._lock = asyncio.Lock()
+        self._worker_task: Optional[asyncio.Task] = None
+
+    def _resolve_cwd(self, cwd: Optional[str]) -> Path:
+        if not cwd or not cwd.strip():
+            return self.repo_root
+        p = Path(cwd).resolve()
+        if not p.exists():
+            raise RPCError("INVALID_CWD", f"cwd does not exist: {cwd}")
+        if not p.is_dir():
+            raise RPCError("INVALID_CWD", f"cwd is not a directory: {cwd}")
+        try:
+            p.relative_to(self.repo_root)
+        except ValueError:
+            if p != self.repo_root:
+                raise RPCError("INVALID_CWD", f"cwd must be under repo_root: {self.repo_root}")
+        return p
+
+    def create_job(self, kind: str, cwd: Optional[str], confirm: bool) -> str:
+        cwd_path = self._resolve_cwd(cwd)
+        job_id = secrets.token_hex(8)
+        self.ledger.create_job(
+            job_id=job_id,
+            kind=kind,
+            repo_root=str(self.repo_root),
+            cwd=str(cwd_path),
+            confirm=confirm,
+        )
+        return job_id
+
+    def get_status(self, job_id: str) -> Optional[Dict[str, Any]]:
+        job = self.ledger.get_job(job_id)
+        if not job:
+            return None
+        return {
+            "id": job["job_id"],
+            "kind": job["kind"],
+            "state": job["state"],
+            "created_at": job["created_at_ms"] / 1000.0,
+            "started_at": job["started_at_ms"] / 1000.0 if job["started_at_ms"] is not None else None,
+            "finished_at": job["finished_at_ms"] / 1000.0 if job["finished_at_ms"] is not None else None,
+            "cwd": job["cwd"],
+            "exit_code": 0 if job["state"] == "success" else (1 if job["state"] in ("failed", "aborted") else None),
+            "summary": job["summary"] or job["error"] or "",
+            "report": {},
+            "logs_cursor": self.ledger.next_seq(job_id),
+        }
+
+    def get_logs(self, job_id: str, since_seq: int = 0) -> Dict[str, Any]:
+        return self.ledger.get_logs(job_id, since_seq=since_seq)
+
+    def cancel(self, job_id: str) -> bool:
+        """Cancel queued or running job via DB only. Returns True if state was updated."""
+        return self.ledger.cancel_job(job_id)
+
+    def _finish_job_safe(
+        self, job_id: str, *, state: str, summary: str = "", error: str = ""
+    ) -> None:
+        """Call ledger.finish_job; if LedgerError and job is already terminal, swallow."""
+        try:
+            self.ledger.finish_job(
+                job_id, state=state, summary=summary, error=error
+            )
+        except LedgerError:
+            job = self.ledger.get_job(job_id)
+            if job and job["state"] in ("success", "failed", "canceled", "aborted"):
+                return
+            raise
+
+    async def _run_one(self, job_id: str, repo_root: str) -> None:
+        job = self.ledger.get_job(job_id)
+        if not job or job["state"] != "queued":
+            return
+
+        try:
+            self.ledger.start_job(job_id)
+        except LedgerError:
+            return
+
+        kind = job["kind"]
+        confirm = bool(job.get("confirm", 0))
+        cwd = job["cwd"]
+
+        def append_log(line: str) -> None:
+            self.ledger.append_log(job_id, line, stream="system")
+
+        try:
+            result = await asyncio.to_thread(
+                safe_run_action,
+                repo_root,
+                kind,
+                require_confirm=confirm,
+                cwd=cwd,
+            )
+            status = result.get("status", "failed")
+            if status == "success":
+                self._finish_job_safe(
+                    job_id, state="success", summary=result.get("message", "success")
+                )
+            else:
+                self._finish_job_safe(
+                    job_id,
+                    state="failed",
+                    summary=result.get("message", status),
+                    error="nonzero",
+                )
+            results = result.get("results") or []
+            # When lint fails due to config/tooling, prepend one contextual line
+            for r in results:
+                cmd = (r.get("command") or "").lower()
+                stderr = (r.get("stderr") or "").lower()
+                if "lint" in cmd and (
+                    "configuration" in stderr
+                    or "no eslint" in stderr
+                    or "no config" in stderr
+                ):
+                    append_log(
+                        "lint failed: ESLint configuration missing or invalid"
+                    )
+                    break
+            for r in results:
+                append_log(
+                    f"[{r.get('command', '')}] return_code={r.get('return_code', '')}"
+                )
+                if r.get("stdout"):
+                    for line in (r["stdout"] or "").strip().split("\n")[:50]:
+                        append_log(line)
+                if r.get("stderr"):
+                    for line in (r["stderr"] or "").strip().split("\n")[:50]:
+                        append_log(f"stderr: {line}")
+        except PolicyError as e:
+            self.ledger.append_log(job_id, f"blocked: {e}", stream="system")
+            self._finish_job_safe(
+                job_id, state="failed", summary=str(e), error="policy_blocked"
+            )
+        except Exception as e:
+            self.ledger.append_log(job_id, f"error: {e}", stream="system")
+            self._finish_job_safe(
+                job_id, state="failed", summary=str(e), error="exception"
+            )
+
+    async def _worker(self, repo_root: str) -> None:
+        try:
+            while True:
+                async with self._lock:
+                    queued = self.ledger.list_queued_job_ids()
+                    if not queued:
+                        self._current_job_id = None
+                        return
+                    job_id = queued[0]
+                    self._current_job_id = job_id
+                await self._run_one(job_id, repo_root)
+                async with self._lock:
+                    self._current_job_id = None
+        finally:
+            async with self._lock:
+                self._worker_task = None
+                self._current_job_id = None
+
+    async def ensure_worker(self, repo_root: str) -> None:
+        async with self._lock:
+            queued = self.ledger.list_queued_job_ids()
+            if not queued:
+                return
+            if self._worker_task is not None and not self._worker_task.done():
+                return
+            self._worker_task = asyncio.create_task(self._worker(repo_root))
+
+    def snapshot(self, last_n_logs: int = 20) -> Dict[str, Any]:
+        jobs_out: List[Dict[str, Any]] = []
+        for j in self.ledger.list_recent_jobs(50):
+            jid = j["job_id"]
+            data = self.ledger.get_logs(jid, since_seq=0, limit=last_n_logs * 2)
+            lines = data["lines"][-last_n_logs:] if data["lines"] else []
+            jobs_out.append({
+                "job_id": jid,
+                "state": j["state"],
+                "last_logs": [x["line"] for x in lines],
+            })
+        return {
+            "queue_length": self.ledger.count_queued(),
+            "current_job_id": self._current_job_id,
+            "jobs": jobs_out,
+        }
 
 
 class RPCDispatcher:
@@ -67,19 +300,42 @@ class RPCDispatcher:
             context_budget=self.context_budget,
         )
 
-        # Chat: UI → ChatRouter → LLM → Transcript. NEVER touches executor/actions/git/tools.
         try:
             ollama = OllamaChat(model="mistral", base_url="http://127.0.0.1:11434")
             self.chat_router = ChatRouter(llm=ollama)
         except Exception:
             self.chat_router = ChatRouter(llm=None)
+        self.controller = Controller()
+
+        agent_root = Path(self.repo_root) / ".agent"
+        db_path = agent_root / "ledger.sqlite"
+        self.ledger = SqliteLedger(db_path=db_path)
+        recovered = self.ledger.recover_on_startup(reason="engine_restart")
+        self._recovered_on_startup = recovered
+        self._db_path = db_path
+        self.job_engine = JobEngine(repo_root=self.repo_root, ledger=self.ledger)
+        self._started_at_ms = int(time.time() * 1000)
+
+    def _engine_identity(self) -> Dict[str, Any]:
+        """Return EngineIdentity shape for ping/capabilities (TS contract)."""
+        return {
+            "name": "adjutorix-engine",
+            "version": "v1.0.0",
+            "fingerprint": BUILD_FINGERPRINT,
+            "mode": "unknown",
+            "pid": os.getpid(),
+            "started_at": self._started_at_ms,
+            "workspace_root": self.repo_root,
+            "db_path": str(self._db_path),
+        }
 
     # -----------------------
     # JSON-RPC entrypoint
     # -----------------------
-    def dispatch(self, payload: Dict[str, Any], token: str) -> Dict[str, Any]:
+    async def dispatch(self, payload: Dict[str, Any], token: str) -> Dict[str, Any]:
         """
         Parse JSON-RPC 2.0 payload, call handle(token, method, params), return JSON-RPC response.
+        Supports async RPC methods (e.g. chat) so blocking LLM calls don't starve health/ping.
         """
         req_id = payload.get("id")
         method = payload.get("method")
@@ -91,7 +347,7 @@ class RPCDispatcher:
                 "error": {"code": -32600, "message": "Invalid Request", "data": "missing method"},
             }
         try:
-            result = self.handle(token, method, params or {})
+            result = await self.handle(token, method, params or {})
             return {"jsonrpc": "2.0", "id": req_id, "result": result}
         except RPCError as e:
             return {
@@ -110,23 +366,28 @@ class RPCDispatcher:
                 },
             }
 
-    def handle(self, token: str, method: str, params: Dict[str, Any]) -> Any:
+    async def handle(self, token: str, method: str, params: Dict[str, Any]) -> Any:
         try:
             require_local_token(token)
         except Exception as e:
             raise RPCError("UNAUTHORIZED", "Invalid or missing token", {"raw": str(e)})
 
-        fn = getattr(self, f"rpc_{method}", None)
+        method_key = method.replace(".", "_")
+        fn = getattr(self, f"rpc_{method_key}", None)
         if fn is None:
             raise RPCError("METHOD_NOT_FOUND", f"Unknown method: {method}")
 
-        return fn(params or {})
+        result = fn(params or {})
+        if asyncio.iscoroutine(result):
+            return await result
+        return result
 
     # -----------------------
     # RPC methods (minimal set)
     # -----------------------
     def rpc_ping(self, _: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": True, "name": "adjutorix-agent"}
+        """PingResult: { ok: true, engine: EngineIdentity }."""
+        return {"ok": True, "engine": self._engine_identity()}
 
     def rpc_status(self, _: Dict[str, Any]) -> Dict[str, Any]:
         return {
@@ -135,15 +396,208 @@ class RPCDispatcher:
             "repo_root": self.repo_root,
         }
 
-    def rpc_chat(self, params: Dict[str, Any]) -> str:
+    def rpc_capabilities(self, _: Dict[str, Any]) -> Dict[str, Any]:
+        """EngineCapabilities: ok, engine, features, actions[], drivers[], limits?, protocol?, methods?."""
+        return {
+            "ok": True,
+            "engine": self._engine_identity(),
+            "features": {"chat": True, "actions": True, "streaming": False},
+            "actions": [
+                {"name": "check"},
+                {"name": "fix"},
+                {"name": "verify"},
+                {"name": "deploy", "requires_confirm": True},
+            ],
+            "drivers": ["shell"],
+            "protocol": PROTOCOL_VERSION,
+            "methods": list(JOB_METHODS),
+        }
+
+    async def rpc_chat(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Chat RPC: messages in, assistant text out.
-        STRICT: no executor, no actions.json, no git, no tools, no ContextBudget.
+        Chat RPC: always returns envelope {type, trace_id, engine, payload}. No freeform text.
         """
+        trace_id = secrets.token_hex(8)
+
         messages = params.get("messages") or []
         if not isinstance(messages, list):
             messages = []
-        return self.chat_router.chat(messages)
+
+        try:
+            env = await asyncio.to_thread(self.controller.handle, messages)
+            if isinstance(env, dict) and "type" in env:
+                env.setdefault("trace_id", trace_id)
+                env.setdefault("engine", "none")
+                env.setdefault("payload", {})
+                return env
+            return _reject("INVALID_CHAT_RESULT", "chat returned non-envelope", trace_id=trace_id)
+        except Exception as e:
+            return _reject("RPC_CHAT_FAILED", str(e), trace_id=trace_id)
+
+    async def rpc_job_run(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        kind = str(params.get("kind") or "check")
+        if kind not in ("check", "fix", "verify", "deploy"):
+            raise RPCError("INVALID_REQUEST", f"kind must be check|fix|verify|deploy, got: {kind}")
+        cwd = params.get("cwd")
+        confirm = bool(params.get("confirm", False))
+        job_id = self.job_engine.create_job(kind=kind, cwd=cwd, confirm=confirm)
+        await self.job_engine.ensure_worker(self.repo_root)
+        return {"job_id": job_id}
+
+    def rpc_job_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        job_id = params.get("id") or params.get("job_id")
+        if not job_id:
+            raise RPCError("INVALID_REQUEST", "id or job_id required")
+        status = self.job_engine.get_status(str(job_id))
+        if status is None:
+            raise RPCError("NOT_FOUND", f"Job not found: {job_id}")
+        return status
+
+    def rpc_job_logs(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        job_id = params.get("id") or params.get("job_id")
+        if not job_id:
+            raise RPCError("INVALID_REQUEST", "id or job_id required")
+        since_seq = int(params.get("since_seq", 0))
+        return self.job_engine.get_logs(str(job_id), since_seq=since_seq)
+
+    def rpc_job_cancel(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        job_id = params.get("id") or params.get("job_id")
+        if not job_id:
+            raise RPCError("INVALID_REQUEST", "id or job_id required")
+        ok = self.job_engine.cancel(str(job_id))
+        return {"ok": ok}
+
+    def rpc_job_list_recent(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Return recent jobs for truth UI without scraping snapshot. Keys: job_id, state, created_at_ms, started_at_ms, finished_at_ms, kind, summary."""
+        limit = int(params.get("limit", 50))
+        limit = min(max(limit, 1), 200)
+        rows = self.ledger.list_recent_jobs(limit=limit)
+        jobs = [
+            {
+                "job_id": r["job_id"],
+                "state": r["state"],
+                "created_at_ms": r["created_at_ms"],
+                "started_at_ms": r["started_at_ms"],
+                "finished_at_ms": r["finished_at_ms"],
+                "kind": r["kind"],
+                "summary": r.get("summary") or "",
+            }
+            for r in rows
+        ]
+        return {"jobs": jobs}
+
+    def rpc_patch_propose(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Propose a patch. Engine computes base_rev from file_ops when patch_format is file_ops."""
+        job_id = str(params.get("job_id") or "none")
+        summary = str(params.get("summary") or "")
+        patch_format = str(params.get("patch_format") or "file_ops")
+        patch_text = params.get("patch_text")
+        if patch_text is None:
+            raise RPCError("INVALID_REQUEST", "patch_text required")
+        patch_text = str(patch_text)
+        author = str(params.get("author") or "engine")
+        if patch_format == "file_ops":
+            base_rev = self.ledger.compute_base_rev_from_file_ops(patch_text)
+        else:
+            base_rev = str(params.get("base_rev") or "")
+        patch_id = secrets.token_hex(8)
+        try:
+            self.ledger.propose_patch(
+                patch_id=patch_id,
+                job_id=job_id,
+                author=author,
+                summary=summary,
+                base_rev=base_rev,
+                patch_format=patch_format,
+                patch_text=patch_text,
+            )
+        except LedgerError as e:
+            raise RPCError("INVALID_REQUEST", str(e))
+        return {"patch_id": patch_id}
+
+    def rpc_patch_list(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        job_id = params.get("job_id")
+        status = params.get("status")
+        limit = int(params.get("limit", 50))
+        limit = min(max(limit, 1), 200)
+        rows = self.ledger.list_patches(job_id=job_id, status=status, limit=limit)
+        patches = [
+            {
+                "patch_id": r["patch_id"],
+                "job_id": r["job_id"],
+                "status": r["status"],
+                "created_at_ms": r["created_at_ms"],
+                "summary": r.get("summary") or "",
+            }
+            for r in rows
+        ]
+        return {"patches": patches}
+
+    def rpc_patch_get(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        patch_id = params.get("patch_id")
+        if not patch_id:
+            raise RPCError("INVALID_REQUEST", "patch_id required")
+        p = self.ledger.get_patch(str(patch_id))
+        if not p:
+            raise RPCError("NOT_FOUND", f"Patch not found: {patch_id}")
+        out = {
+            "patch_id": p["patch_id"],
+            "job_id": p["job_id"],
+            "created_at_ms": p["created_at_ms"],
+            "author": p["author"],
+            "status": p["status"],
+            "summary": p.get("summary") or "",
+            "base_rev": p["base_rev"],
+            "patch_format": p["patch_format"],
+            "patch_text": p["patch_text"],
+            "error": p.get("error") or "",
+        }
+        if params.get("include_review"):
+            review = self.ledger.get_patch_review(str(patch_id), Path(self.repo_root))
+            if review is not None:
+                out["review_ops"] = review
+        return out
+
+    def rpc_patch_accept(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        patch_id = params.get("patch_id")
+        if not patch_id:
+            raise RPCError("INVALID_REQUEST", "patch_id required")
+        ok = self.ledger.accept_patch(str(patch_id))
+        return {"ok": ok}
+
+    def rpc_patch_reject(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        patch_id = params.get("patch_id")
+        if not patch_id:
+            raise RPCError("INVALID_REQUEST", "patch_id required")
+        ok = self.ledger.reject_patch(str(patch_id))
+        return {"ok": ok}
+
+    def rpc_patch_apply(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply patch (file_ops only). Requires status=accepted. Atomic per file."""
+        patch_id = params.get("patch_id")
+        if not patch_id:
+            raise RPCError("INVALID_REQUEST", "patch_id required")
+        result = self.ledger.apply_patch(
+            str(patch_id), Path(self.repo_root)
+        )
+        return result
+
+    def rpc_debug_snapshot(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Observability: engine identity, db path, schema version, recovered count, queue, jobs, last N logs."""
+        last_n_logs = int(params.get("last_n_logs", 20))
+        last_n_logs = min(max(last_n_logs, 0), 200)
+        job_snapshot = self.job_engine.snapshot(last_n_logs=last_n_logs)
+        return {
+            "engine": self._engine_identity(),
+            "protocol": PROTOCOL_VERSION,
+            "methods": list(JOB_METHODS),
+            "db_path": str(self._db_path),
+            "schema_version": LEDGER_SCHEMA_VERSION,
+            "recovered_jobs_on_startup": self._recovered_on_startup,
+            "queue_length": job_snapshot["queue_length"],
+            "current_job_id": job_snapshot["current_job_id"],
+            "jobs": job_snapshot["jobs"],
+        }
 
     def rpc_run(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -151,25 +605,35 @@ class RPCDispatcher:
           - job_name: str (optional)
           - action: str (check|fix|verify|deploy). NOT chat.
           - confirm: bool (required for deploy when requireConfirm)
+        Returns envelope {type: "report", trace_id, engine, payload}.
         """
+        trace_id = secrets.token_hex(8)
         action = str(params.get("action") or "check")
         confirm = bool(params.get("confirm", False))
 
         if action == "chat":
-            raise RPCError(
-                "INVALID_REQUEST",
-                "chat must use rpc method 'chat' (not 'run')",
-                {"hint": "Use method: 'chat', params: { messages: [...] }"},
-            )
+            return _reject("INVALID_REQUEST", "chat must use rpc method 'chat'", trace_id=trace_id)
 
         try:
             result = safe_run_action(self.repo_root, action, require_confirm=confirm)
-            return {"ok": True, "result": result}
+            payload = {"action": action, "result": result}
+            if action == "fix":
+                payload["next_required"] = "verify"
+            return {
+                "type": "report",
+                "trace_id": trace_id,
+                "engine": "tooling",
+                "payload": payload,
+            }
         except PolicyError as e:
             return {
-                "ok": True,
-                "result": {"status": "blocked", "message": str(e), "results": [], "duration": 0.0},
+                "type": "report",
+                "trace_id": trace_id,
+                "engine": "policy",
+                "payload": {"action": action, "blocked": True, "message": str(e)},
             }
+        except Exception as e:
+            return _reject("RUN_FAILED", str(e), trace_id=trace_id)
 
     def rpc_recover(self, _: Dict[str, Any]) -> Dict[str, Any]:
         with self.locks.job_lock():

@@ -4,9 +4,11 @@
  */
 
 import * as child_process from "child_process";
+import { execSync } from "child_process";
 import * as path from "path";
 import * as vscode from "vscode";
 import fetch from "node-fetch";
+import { postJsonRpc } from "../client/transport";
 
 export type AgentProcessState =
   | "stopped"
@@ -134,6 +136,8 @@ export class AgentProcessManager {
   /** Only start() and invalidateStartLatch() may advance this. Monotonic attempt epoch; finally clears startInFlight only when epoch still matches (so Stop→Start doesn't let old finally clobber new run). */
   private startAttemptEpoch = 0;
   private startInFlightAttemptEpoch = 0;
+  private lastHealthLoggedAt = 0;
+  private lastHealthSig: string | undefined;
 
   constructor(options: {
     baseUrl: string;
@@ -164,8 +168,7 @@ export class AgentProcessManager {
 
     if (mode === "external") {
       if (this.hasManagedProcess()) this.stop();
-      void this.start();
-      return;
+      // No auto start: mode change ≠ lifecycle. User clicks Retry → start().
     }
     if (mode === "managed") {
       this.setState("stopped");
@@ -244,7 +247,14 @@ export class AgentProcessManager {
     if (rawError !== undefined) this.lastErrorRaw = rawError;
     if (state === "connected") this.lastPingAt = Date.now();
     if (state === "failed" && !wasFailed && rawError !== undefined) {
-      this.out.appendLine(`[health] failed: ${userError ?? this.lastError} (raw: ${rawError})`);
+      const now = Date.now();
+      const sig = rawError;
+      const shouldLog = sig !== this.lastHealthSig || now - this.lastHealthLoggedAt > 30_000;
+      if (shouldLog) {
+        this.out.appendLine(`[health] failed: ${userError ?? this.lastError} (raw: ${rawError})`);
+        this.lastHealthSig = sig;
+        this.lastHealthLoggedAt = now;
+      }
     }
     this.emitStatus();
   }
@@ -324,14 +334,55 @@ export class AgentProcessManager {
     const pre = await this.waitForHealth();
     if (g !== this.gen) return;
     if (pre.ok) {
-      const msg =
-        `Agent is running externally at ${this.baseUrl}; managed mode requires spawning a process. ` +
-        "Switch mode to Auto/External or stop the external agent.";
-      this.setState("failed", msg, `mode mismatch (managed) baseUrl=${this.baseUrl}`);
-      return;
+      const port = this.portFromBaseUrl(this.baseUrl);
+      this.out.appendLine(
+        `[managed] takeover: port ${port} in use; killing external agent`
+      );
+      this.killProcessOnPort(port);
+      await new Promise((r) => setTimeout(r, 1500));
+
+      const pre2 = await this.waitForHealth();
+      if (g !== this.gen) return;
+      if (pre2.ok) {
+        const msg = `Managed takeover failed: agent still reachable at ${this.baseUrl}`;
+        this.setState("failed", msg, `takeover failed baseUrl=${this.baseUrl}`);
+        return;
+      }
+      return this.startSpawn(false);
     }
 
     return this.startSpawn(false);
+  }
+
+  private killProcessOnPort(port: string): void {
+    try {
+      const out = execSync(`lsof -t -i :${port} 2>/dev/null || true`, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+        .trim();
+      if (!out) return;
+      const pids = Array.from(new Set(out.split(/\s+/).filter(Boolean)));
+      for (const pid of pids) {
+        try {
+          execSync(`kill ${pid}`, { stdio: "ignore" });
+        } catch {}
+      }
+      // Grace then hard kill if still present
+      try {
+        const out2 = execSync(`lsof -t -i :${port} 2>/dev/null || true`, {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        })
+          .trim();
+        const pids2 = Array.from(new Set(out2.split(/\s+/).filter(Boolean)));
+        for (const pid of pids2) {
+          try {
+            execSync(`kill -9 ${pid}`, { stdio: "ignore" });
+          } catch {}
+        }
+      } catch {}
+    } catch {}
   }
 
   private async startAuto(g: number): Promise<void> {
@@ -354,7 +405,7 @@ export class AgentProcessManager {
       if (g !== this.gen) return;
       if (res.ok) {
         this.version = res.version;
-        this.ownership = this.process != null ? "managed" : "external";
+        this.ownership = this.hasManagedProcess() ? "managed" : "external";
         this.setState("connected");
       }
       return;
@@ -363,11 +414,20 @@ export class AgentProcessManager {
     if (g !== this.gen) return;
     if (res.ok) {
       this.version = res.version;
-      this.ownership = "external";
+      this.ownership = this.hasManagedProcess() ? "managed" : "external";
       this.setState("connected");
       return;
     }
     return this.startSpawn(true);
+  }
+
+  private isLoopback(baseUrl: string): boolean {
+    try {
+      const h = new URL(baseUrl).hostname;
+      return h === "127.0.0.1" || h === "localhost" || h === "::1";
+    } catch {
+      return false;
+    }
   }
 
   private async startSpawn(allowDaemon: boolean): Promise<void> {
@@ -487,8 +547,10 @@ export class AgentProcessManager {
               }
               this.ownership = "external";
               const port = this.portFromBaseUrl(this.baseUrl);
-              this.out.appendLine("[AgentProcessManager] agent reachable without process → external ownership");
-              this.out.appendLine(`[AgentProcessManager] external at ${this.baseUrl} (port ${port})`);
+              this.out.appendLine(
+                `[AgentProcessManager] agent reachable without process → ownership=${this.ownership}`
+              );
+              this.out.appendLine(`[AgentProcessManager] reachable at ${this.baseUrl} (port ${port})`);
               this.setState("connected");
               doneOk();
               return;
@@ -612,25 +674,43 @@ export class AgentProcessManager {
   }
 
   /**
-   * Ping /health; update lastPingAt and state. Any 2xx + JSON = alive.
+   * Ping via authenticated RPC (POST /rpc, method "ping"). Connected = RPC ping OK.
+   * No /health for liveness; if RPC ping fails → disconnected/failed.
    */
   async ping(): Promise<boolean> {
+    const rpcUrl = `${this.baseUrl}/rpc`;
     try {
-      const data = await fetchHealth(this.baseUrl);
-      this.lastPingAt = Date.now();
-      this.version = data.version;
-      if (this.mode === "managed" && !this.hasManagedProcess()) {
+      const res = await postJsonRpc(rpcUrl, {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "ping",
+        params: {},
+      });
+      const result = res.result as { ok?: boolean; engine?: { fingerprint?: string; version?: string } } | undefined;
+      if (!result || !result.ok) {
         if (this.state === "connected") {
-          this.setState("failed", "Managed mode requires a spawned process.", "mode mismatch");
-        } else {
-          this.emitStatus();
+          this.setState("failed", "Agent RPC ping failed", "ping result not ok");
         }
-        return true;
+        return false;
+      }
+      this.lastPingAt = Date.now();
+      this.version = result.engine?.fingerprint ?? result.engine?.version ?? "";
+      if (this.mode === "managed" && !this.hasManagedProcess()) {
+        this.ownership = "external";
+        this.setState(
+          "failed",
+          "Managed requires extension-spawned agent; stop external agent or switch to Auto.",
+          "managed policy: no child process"
+        );
+        return false;
       }
       if (this.mode === "external") this.ownership = "external";
       else if (this.hasManagedProcess()) this.ownership = "managed";
+      else this.ownership = "external";
       const canClaimConnected =
-        this.mode === "external" || this.hasManagedProcess() || this.mode === "auto";
+        this.mode === "external" ||
+        this.mode === "auto" ||
+        (this.mode === "managed" && this.hasManagedProcess());
       if (canClaimConnected && (this.state === "failed" || this.state === "stopped")) {
         this.setState("connected");
       } else {

@@ -69,3 +69,6 @@ ignore_missing_imports = true
 minversion = "8.0"
 addopts = "-ra -q"
 testpaths = ["tests"]
+# Run pytest with the same interpreter that has the package installed (avoids skip due to
+# pip install -e . in Python 3.9 vs pytest under 3.14). Prefer: python -m venv .venv &&
+# source .venv/bin/activate && pip install -e ".[dev]" && python -m pytest tests/ -v

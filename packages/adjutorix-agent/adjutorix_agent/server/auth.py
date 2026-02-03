@@ -60,8 +60,12 @@ def require_local_token(token: str) -> None:
 
 def extract_token(request: Request) -> Optional[str]:
     """
-    Extract token from header or query param. Public for use in RPC dispatch.
+    Extract token from header or query param.
+    Accepts: x-adjutorix-token, Authorization: Bearer <token>, ?token=<token>
     """
+    tok = request.headers.get("x-adjutorix-token")
+    if tok:
+        return tok.strip()
 
     auth = request.headers.get("Authorization")
     if auth and auth.startswith("Bearer "):

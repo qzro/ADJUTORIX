@@ -1,6 +1,6 @@
-# Chat pipeline: UI → ChatRouter → LLM → Transcript
-# STRICT: no tools, no actions, no repo access, no git, no ContextBudget, no ToolRegistry
+# Chat pipeline: controller → envelope only. No freeform prose.
 
-from .router import ChatRouter
+from .controller import Controller
+from .router import ChatRejectedError, ChatRouter
 
-__all__ = ["ChatRouter"]
+__all__ = ["Controller", "ChatRejectedError", "ChatRouter"]
