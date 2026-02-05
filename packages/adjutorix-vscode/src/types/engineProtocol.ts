@@ -152,6 +152,7 @@ export interface CancelResult {
 export type EngineRpcMethod =
   | "ping"
   | "capabilities"
+  | "authority"
   | "job.run"
   | "job.status"
   | "job.logs"

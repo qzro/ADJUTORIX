@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class LedgerError(RuntimeError):
@@ -76,6 +76,8 @@ class SqliteLedger:
                 (str(SCHEMA_VERSION),),
             )
             self._create_schema_v1(c)
+            if SCHEMA_VERSION >= 4:
+                self._migrate_v3_to_v4(c)
             self._conn.commit()
             return
 
@@ -85,6 +87,8 @@ class SqliteLedger:
                 self._migrate_v1_to_v2(c)
             if v < 3:
                 self._migrate_v2_to_v3(c)
+            if v < 4:
+                self._migrate_v3_to_v4(c)
             return
         if v > SCHEMA_VERSION:
             raise RuntimeError(
@@ -144,6 +148,26 @@ class SqliteLedger:
             """
         )
         c.execute("UPDATE meta SET value=? WHERE key='schema_version';", (str(SCHEMA_VERSION),))
+        self._conn.commit()
+
+    def _migrate_v3_to_v4(self, c: sqlite3.Cursor) -> None:
+        """Add workflow_events table for session-scoped event log (tail/replay)."""
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS workflow_events (
+              session_id TEXT NOT NULL,
+              seq INTEGER NOT NULL,
+              kind TEXT NOT NULL,
+              payload TEXT NOT NULL DEFAULT '{}',
+              created_at_ms INTEGER NOT NULL,
+              PRIMARY KEY (session_id, seq)
+            );
+            """
+        )
+        c.execute(
+            "CREATE INDEX IF NOT EXISTS idx_workflow_events_session_seq ON workflow_events(session_id, seq);"
+        )
+        c.execute("UPDATE meta SET value=? WHERE key='schema_version';", ("4",))
         self._conn.commit()
 
     def _create_schema_v1(self, c: sqlite3.Cursor) -> None:
@@ -312,6 +336,71 @@ class SqliteLedger:
             "SELECT COUNT(1) AS n FROM jobs WHERE state='queued';"
         ).fetchone()
         return int(r["n"]) if r else 0
+
+    # ---------------------------
+    # Workflow events (session-scoped tail/replay)
+    # ---------------------------
+    def append_workflow_event(
+        self, session_id: str, kind: str, payload: Optional[Dict[str, Any]] = None
+    ) -> int:
+        """Append one workflow event for session. Returns seq (1-based per session)."""
+        if not session_id:
+            raise LedgerError("append_workflow_event: session_id required")
+        now = _utc_ms()
+        payload_json = json.dumps(payload if payload is not None else {})
+        r = self._conn.execute(
+            "SELECT COALESCE(MAX(seq), 0) AS m FROM workflow_events WHERE session_id=?;",
+            (session_id,),
+        ).fetchone()
+        seq = int(r["m"]) + 1 if r else 1
+        self._conn.execute(
+            "INSERT INTO workflow_events(session_id, seq, kind, payload, created_at_ms) VALUES(?,?,?,?,?);",
+            (session_id, seq, kind, payload_json, now),
+        )
+        self._conn.commit()
+        return seq
+
+    def list_workflow_events(
+        self,
+        session_id: str,
+        since_seq: int = 0,
+        limit: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """List workflow events for session, ordered by seq ASC. since_seq inclusive. limit=0 means no limit."""
+        if not session_id:
+            return []
+        q = "SELECT session_id, seq, kind, payload, created_at_ms FROM workflow_events WHERE session_id=? AND seq>=?"
+        params: List[Any] = [session_id, since_seq]
+        q += " ORDER BY seq ASC"
+        if limit > 0:
+            q += " LIMIT ?"
+            params.append(limit)
+        rows = self._conn.execute(q, params).fetchall()
+        out = []
+        for r in rows:
+            row = dict(r)
+            try:
+                row["payload"] = json.loads(row["payload"]) if row.get("payload") else {}
+            except (json.JSONDecodeError, TypeError):
+                row["payload"] = {}
+            out.append(row)
+        return out
+
+    def tail_workflow_events(
+        self, session_id: str, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """Last N workflow events for session (chronological order)."""
+        if not session_id or limit <= 0:
+            return []
+        r = self._conn.execute(
+            "SELECT COALESCE(MAX(seq), 0) AS m FROM workflow_events WHERE session_id=?;",
+            (session_id,),
+        ).fetchone()
+        max_seq = int(r["m"]) if r else 0
+        if max_seq == 0:
+            return []
+        since = max(1, max_seq - limit + 1)
+        return self.list_workflow_events(session_id, since_seq=since, limit=limit)
 
     def recover_on_startup(self, *, reason: str = "engine_restart") -> int:
         """

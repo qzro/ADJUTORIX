@@ -16,6 +16,10 @@ export class RpcClient {
     this.transport.setEndpoint(endpoint);
   }
 
+  getEndpoint(): string {
+    return this.transport.getEndpoint();
+  }
+
   close() {
     this.transport.close();
   }

@@ -148,6 +148,7 @@ See: `docs/security.md`
 
 * `docs/architecture.md` — system design
 * `docs/protocol.md` — execution protocol & state machine
+* `docs/NO_MERCY_CHECKLIST.md` — **state machine · wire protocol · patch flow** (Definition of Done, Level Up roadmap)
 * `docs/security.md` — governance & safety model
 * `docs/troubleshooting.md` — common failures and fixes
 

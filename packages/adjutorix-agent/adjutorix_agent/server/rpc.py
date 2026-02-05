@@ -27,6 +27,12 @@ from ..tools.registry import ToolRegistry
 from .auth import require_local_token
 from ..core.sqlite_ledger import SCHEMA_VERSION as LEDGER_SCHEMA_VERSION
 from ..core.sqlite_ledger import LedgerError, SqliteLedger
+from ..core.workflow import (
+    WorkflowError,
+    apply_intent,
+    allowed_intents,
+    _empty_snapshot,
+)
 
 
 PROTOCOL_VERSION = 1
@@ -35,6 +41,7 @@ BUILD_FINGERPRINT = "job_v1"
 JOB_METHODS = [
     "ping",
     "capabilities",
+    "authority",
     "job.run",
     "job.status",
     "job.logs",
@@ -46,6 +53,10 @@ JOB_METHODS = [
     "patch.accept",
     "patch.reject",
     "patch.apply",
+    "workflow.get",
+    "workflow.intent",
+    "ledger.tail",
+    "ledger.replay",
     "debug.snapshot",
 ]
 
@@ -315,6 +326,7 @@ class RPCDispatcher:
         self._db_path = db_path
         self.job_engine = JobEngine(repo_root=self.repo_root, ledger=self.ledger)
         self._started_at_ms = int(time.time() * 1000)
+        self._workflow_snapshots: Dict[str, Dict[str, Any]] = {}
 
     def _engine_identity(self) -> Dict[str, Any]:
         """Return EngineIdentity shape for ping/capabilities (TS contract)."""
@@ -354,6 +366,16 @@ class RPCDispatcher:
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "error": {"code": e.code, "message": e.message, "data": e.data},
+            }
+        except WorkflowError as e:
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "error": {
+                    "code": e.code,
+                    "message": e.message,
+                    "data": {"detail": e.detail},
+                },
             }
         except Exception as e:
             return {
@@ -413,9 +435,45 @@ class RPCDispatcher:
             "methods": list(JOB_METHODS),
         }
 
+    def rpc_authority(self, _: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Live authority snapshot: what the engine can do right now.
+        Derived from safe_runner gates, ledger state, env. UI must show this.
+        writes_allowed: set ADJUTORIX_WRITES_ALLOWED=1 to enable apply path (default: patch-only).
+        """
+        import os
+
+        sandbox_enforced = os.getenv("ADJUTORIX_SANDBOX_ACTIONS", "1") != "0"
+        writes_allowed = os.getenv("ADJUTORIX_WRITES_ALLOWED", "0").strip().lower() in ("1", "true", "yes")
+        queued = self.ledger.list_queued_job_ids()
+        proposed = self.ledger.list_patches(status="proposed", limit=500)
+        accepted = self.ledger.list_patches(status="accepted", limit=500)
+        pending_patches = len(proposed) + len(accepted)
+        pending_jobs = len(queued)
+        running = [
+            j for j in (self.job_engine.snapshot(last_n_logs=0).get("jobs") or [])
+            if j.get("state") == "running"
+        ]
+        ledger_state = "clean" if (not running and pending_jobs == 0) else "active"
+        actions = ["check", "verify"]
+        if writes_allowed:
+            actions.append("fix")
+        if writes_allowed and os.getenv("ADJUTORIX_DEPLOY_ALLOWED", "0").strip().lower() in ("1", "true", "yes"):
+            actions.append("deploy")
+        return {
+            "writes_allowed": writes_allowed,
+            "writes_note": "patch-only" if not writes_allowed else "apply-enabled",
+            "actions_allowed": actions,
+            "sandbox_enforced": sandbox_enforced,
+            "ledger_state": ledger_state,
+            "pending_patches": pending_patches,
+            "pending_jobs": pending_jobs,
+        }
+
     async def rpc_chat(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Chat RPC: always returns envelope {type, trace_id, engine, payload}. No freeform text.
+        Chat RPC: returns envelope only. intent is one of: no_action, propose_patch, propose_job.
+        Chat is advisory; no freeform text pretending to act.
         """
         trace_id = secrets.token_hex(8)
 
@@ -429,6 +487,8 @@ class RPCDispatcher:
                 env.setdefault("trace_id", trace_id)
                 env.setdefault("engine", "none")
                 env.setdefault("payload", {})
+                env.setdefault("intent", "no_action")
+                env.setdefault("analysis", "")
                 return env
             return _reject("INVALID_CHAT_RESULT", "chat returned non-envelope", trace_id=trace_id)
         except Exception as e:
@@ -438,6 +498,25 @@ class RPCDispatcher:
         kind = str(params.get("kind") or "check")
         if kind not in ("check", "fix", "verify", "deploy"):
             raise RPCError("INVALID_REQUEST", f"kind must be check|fix|verify|deploy, got: {kind}")
+        workflow_session_id = params.get("workflow_session_id") or params.get("session_id")
+        if kind == "deploy":
+            if not workflow_session_id:
+                raise RPCError(
+                    "error.precondition_failed",
+                    "deploy requires workflow_session_id for gate (result.regression must be pass)",
+                )
+            snap = self._workflow_snapshots.get(workflow_session_id)
+            if not snap:
+                raise RPCError("error.precondition_failed", "workflow session not found for deploy gate")
+            if (snap.get("result") or {}).get("regression") != "pass":
+                raise RPCError(
+                    "error.precondition_failed",
+                    "Deploy blocked: no passing verify result (result.regression must be 'pass')",
+                )
+            authority = self._workflow_authority()
+            actions = authority.get("actions_allowed") or []
+            if "deploy" not in actions:
+                raise RPCError("error.permission_denied", "deploy not in actions_allowed")
         cwd = params.get("cwd")
         confirm = bool(params.get("confirm", False))
         job_id = self.job_engine.create_job(kind=kind, cwd=cwd, confirm=confirm)
@@ -573,14 +652,153 @@ class RPCDispatcher:
         return {"ok": ok}
 
     def rpc_patch_apply(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply patch (file_ops only). Requires status=accepted. Atomic per file."""
+        """Apply patch (file_ops only). Requires status=accepted. Atomic per file.
+        If workflow_session_id + consent_token provided, requires workflow state APPLY_ARMED and token match.
+        """
         patch_id = params.get("patch_id")
         if not patch_id:
             raise RPCError("INVALID_REQUEST", "patch_id required")
+        workflow_session_id = params.get("workflow_session_id") or params.get("session_id")
+        consent_token = params.get("consent_token")
+        if workflow_session_id and consent_token is not None:
+            snap = self._workflow_snapshots.get(workflow_session_id)
+            if not snap:
+                raise RPCError("error.precondition_failed", "workflow session not found")
+            if snap.get("state") != "APPLY_ARMED":
+                raise RPCError(
+                    "error.invalid_transition",
+                    f"patch.apply not allowed: workflow state is {snap.get('state')}, expected APPLY_ARMED",
+                    {"from_state": snap.get("state"), "allowed_from": ["APPLY_ARMED"]},
+                )
+            armed = snap.get("armed") or {}
+            if armed.get("consent_token") != consent_token:
+                raise RPCError("error.permission_denied", "consent_token mismatch")
+            patch = snap.get("patch") or {}
+            if patch.get("patch_id") != patch_id:
+                raise RPCError("error.invalid_argument", "patch_id does not match workflow patch")
+            authority = self._workflow_authority()
+            if not authority.get("writes_allowed"):
+                raise RPCError("error.permission_denied", "writes not allowed")
         result = self.ledger.apply_patch(
             str(patch_id), Path(self.repo_root)
         )
         return result
+
+    def _workflow_authority(self) -> Dict[str, Any]:
+        """Authority snapshot for workflow context (writes_allowed, actions_allowed)."""
+        auth = self.rpc_authority({})
+        return {
+            "writes_allowed": bool(auth.get("writes_allowed")),
+            "writes_note": auth.get("writes_note"),
+            "actions_allowed": list(auth.get("actions_allowed") or ["check", "verify"]),
+        }
+
+    def rpc_workflow_get(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Returns authoritative snapshot + allowed_intents for session. Protocol 3."""
+        session_id = params.get("session_id") or params.get("workflow_id")
+        if session_id and session_id in self._workflow_snapshots:
+            snap = self._workflow_snapshots[session_id]
+        else:
+            snap = _empty_snapshot()
+            if session_id:
+                snap["workflow_id"] = session_id
+        authority = self._workflow_authority()
+        state = snap.get("state", "IDLE")
+        return {
+            "snapshot": snap,
+            "allowed_intents": allowed_intents(state, authority),
+        }
+
+    async def rpc_workflow_intent(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply one intent; transition table + effects. Returns new snapshot or raises WorkflowError."""
+        session_id = params.get("session_id") or params.get("workflow_id")
+        intent = params.get("intent")
+        if not intent or not isinstance(intent, dict):
+            raise RPCError("INVALID_REQUEST", "intent required (object)")
+        if not session_id:
+            session_id = intent.get("workflow_id") or (params.get("workflow_id"))
+        snap = self._workflow_snapshots.get(session_id) if session_id else None
+        if snap is None:
+            snap = _empty_snapshot(workflow_id=session_id)
+            if session_id:
+                self._workflow_snapshots[session_id] = snap
+        authority = self._workflow_authority()
+        context = {
+            "authority": authority,
+            "cwd": self.repo_root,
+        }
+        try:
+            new_snap, effects = apply_intent(snap, intent, context)
+        except WorkflowError:
+            raise
+        session_id = new_snap.get("workflow_id")
+        if session_id:
+            self._workflow_snapshots[session_id] = new_snap
+        for eff in effects:
+            if eff.get("type") == "ledger_append" and session_id:
+                self.ledger.append_workflow_event(
+                    session_id, eff.get("event", ""), payload={"intent_kind": intent.get("kind")}
+                )
+        for eff in effects:
+            if eff.get("type") == "patch_apply":
+                patch_id = eff.get("patch_id")
+                if patch_id:
+                    try:
+                        self.ledger.apply_patch(patch_id, Path(self.repo_root))
+                    except LedgerError as e:
+                        new_snap = dict(new_snap)
+                        new_snap["state"] = "FAILED"
+                        new_snap["failure"] = {
+                            "code": "APPLY_FAILED",
+                            "message": str(e),
+                            "at_state": new_snap.get("state", "APPLIED"),
+                        }
+                        if session_id:
+                            self._workflow_snapshots[session_id] = new_snap
+                        raise RPCError("APPLY_FAILED", str(e))
+            elif eff.get("type") == "job_run":
+                kind = eff.get("kind", "check")
+                cwd = eff.get("cwd") or self.repo_root
+                confirm = bool(eff.get("confirm", False))
+                try:
+                    job_id = self.job_engine.create_job(kind=kind, cwd=cwd, confirm=confirm)
+                    await self.job_engine.ensure_worker(self.repo_root)
+                    jobs = list(new_snap.get("jobs") or [])
+                    jobs.append({"job_id": job_id, "kind": kind, "state": "running", "summary": None})
+                    new_snap = dict(new_snap)
+                    new_snap["jobs"] = jobs
+                    if session_id:
+                        self._workflow_snapshots[session_id] = new_snap
+                except Exception as e:
+                    new_snap = dict(new_snap)
+                    new_snap["state"] = "FAILED"
+                    new_snap["failure"] = {
+                        "code": "JOB_RUN_FAILED",
+                        "message": str(e),
+                        "at_state": new_snap.get("state", "RUNNING"),
+                    }
+                    if session_id:
+                        self._workflow_snapshots[session_id] = new_snap
+                    raise RPCError("JOB_RUN_FAILED", str(e))
+        return {"snapshot": new_snap}
+
+    def rpc_ledger_tail(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Last N workflow events for session (chronological). Keys: session_id, events[]."""
+        session_id = params.get("session_id") or params.get("workflow_id")
+        if not session_id:
+            raise RPCError("INVALID_REQUEST", "session_id or workflow_id required")
+        limit = int(params.get("limit", 50))
+        limit = min(max(limit, 1), 500)
+        events = self.ledger.tail_workflow_events(session_id, limit=limit)
+        return {"session_id": session_id, "events": events}
+
+    def rpc_ledger_replay(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Full workflow event stream for session (replay). Keys: session_id, events[]."""
+        session_id = params.get("session_id") or params.get("workflow_id")
+        if not session_id:
+            raise RPCError("INVALID_REQUEST", "session_id or workflow_id required")
+        events = self.ledger.list_workflow_events(session_id, since_seq=0, limit=0)
+        return {"session_id": session_id, "events": events}
 
     def rpc_debug_snapshot(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Observability: engine identity, db path, schema version, recovered count, queue, jobs, last N logs."""

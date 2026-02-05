@@ -707,11 +707,16 @@ export class AgentProcessManager {
       if (this.mode === "external") this.ownership = "external";
       else if (this.hasManagedProcess()) this.ownership = "managed";
       else this.ownership = "external";
-      const canClaimConnected =
-        this.mode === "external" ||
-        this.mode === "auto" ||
-        (this.mode === "managed" && this.hasManagedProcess());
-      if (canClaimConnected && (this.state === "failed" || this.state === "stopped")) {
+      // Recovery policy:
+      // - FAILED stays sticky in managed/auto (requires explicit Retry).
+      // - STOPPED is not sticky: if ping succeeds, we can show connected (especially in auto, where we don't own lifecycle).
+      const canRecoverFromStopped =
+        this.state === "stopped" && (this.mode === "external" || this.mode === "auto");
+
+      const canRecoverFromFailed =
+        this.state === "failed" && this.mode === "external"; // only external may clear FAILED via ping
+
+      if (canRecoverFromStopped || canRecoverFromFailed) {
         this.setState("connected");
       } else {
         this.emitStatus();

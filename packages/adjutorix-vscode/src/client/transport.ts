@@ -75,6 +75,10 @@ export class Transport {
     this.endpoint = normalizeEndpoint(endpoint);
   }
 
+  getEndpoint(): string {
+    return this.endpoint;
+  }
+
   close() {
     if (this.controller) {
       this.controller.abort();

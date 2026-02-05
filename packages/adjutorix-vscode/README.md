@@ -1,5 +1,7 @@
 # ADJUTORIX VS Code Extension
 
+**ADJUTORIX is a governed execution engine. Nothing touches disk, runs code, or changes state without being recorded, reviewed, and replayable.**
+
 **VS Code–only.** Local AI coding agent with governance, diff control, and offline execution.
 
 Adjutorix does **not** run in Cursor or other hosts. If installed there, it will show a single warning and refuse to activate (no commands, no view).
