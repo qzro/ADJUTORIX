@@ -1,70 +1,41 @@
-# === OS / Editor ===
-.DS_Store
-Thumbs.db
-*.swp
-*.swo
-*.tmp
-*.bak
-.idea/
-.vscode/
-*.log
-
-# === Node / JS ===
-node_modules/
+# Node / JS
+**/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-lock.yaml
+pnpm-debug.log*
+**/.npmrc
 
-# === Python ===
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.egg-info/
-.eggs/
-.venv/
-venv/
-env/
-ENV/
+# Builds
+**/dist/
+**/build/
+**/.turbo/
+**/.parcel-cache/
+**/.vite/
+**/coverage/
 
-# === Build / Dist ===
-dist/
-build/
-out/
-coverage/
-*.vsix
+# Python
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
 
-# === Agent Runtime ===
-runtime/logs/
-runtime/cache/
-.agent/jobs/**/results.log
-.agent/jobs/**/commands.log
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
 
-# === Models / Weights (never commit) ===
-*.bin
-*.gguf
-*.safetensors
-models/
+# Adjutorix runtime (generated)
+runtime/
+**/runtime/
+.agent/
+**/.agent/
 
-# === Secrets ===
-.env
-.env.*
-*.key
-*.pem
-*.crt
-secrets/
-credentials/
-
-# === Temporary / Cache ===
-.cache/
-.tmp/
-.temp/
-
-# === Git ===
-*.orig
-*.rej
-
-# === CI Artifacts ===
-artifacts/
-reports/
+# === Recursive ignores for monorepo ===
+**/*.vsix
+**/*.egg-info/
+**/.agent/
+**/runtime/
