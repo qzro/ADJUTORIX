@@ -28,18 +28,26 @@ pnpm-debug.log*
 .vscode/
 *.swp
 
-# Adjutorix runtime (generated)
-runtime/
-**/runtime/
-.agent/
-**/.agent/
+# Adjutorix runtime (generated) — ignore everything, keep sentinel files
+runtime/*
+!runtime/.keep
+runtime/sessions/*
+!runtime/sessions/.keep
+runtime/sessions/ui/*
+!runtime/sessions/ui/.keep
+runtime/sessions/agent/*
+!runtime/sessions/agent/.keep
+
+# Never allow package-local runtimes (generated)
+packages/**/runtime/
 
 # === Recursive ignores for monorepo ===
 **/*.vsix
 **/*.egg-info/
 **/.agent/
-**/runtime/
 
-# ADJUTORIX generated/runtime artifacts
-.agent/
-runtime/
+# deps
+node_modules/
+
+# Never allow package-local runtimes (generated)
+packages/**/runtime/
