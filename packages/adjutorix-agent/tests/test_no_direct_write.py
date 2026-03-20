@@ -18,4 +18,5 @@ def test_write_guard_is_single_choke_point():
 def test_no_module_package_shadowing():
     import importlib
     mod = importlib.import_module("adjutorix_agent.core.locks")
-    assert hasattr(mod, "__path__")
+    assert mod.__spec__.submodule_search_locations is not None
+    assert not mod.__file__.endswith("locks.py")
