@@ -13,3 +13,10 @@ def test_write_guard_is_single_choke_point():
 
     # minimal invariant: must reference guard logic
     assert "deny" in src or "guard" in src.lower()
+
+
+def test_no_module_package_shadowing():
+    import importlib
+    mod = importlib.import_module("adjutorix_agent.core.locks")
+    assert mod.__spec__.submodule_search_locations is not None
+    assert not mod.__file__.endswith("locks.py")
