@@ -33,6 +33,10 @@ AdjutorixEvent = Literal[
 
 TRANSITIONS: Dict[Tuple[AdjutorixState, AdjutorixEvent], AdjutorixState] = {
     ("IDLE", "PROMPT"): "PROMPTED",
+    ("IDLE", "PLAN_CREATED"): "PLANNED",
+    ("PLANNED", "PATCH_GENERATED"): "PATCHED",
+    ("PATCHED", "PATCH_APPLIED"): "APPLIED",
+    ("APPLIED", "RUN_COMPLETED"): "RESULT",
 
     ("PROMPTED", "PLAN_OK"): "PLANNED",
     ("PROMPTED", "PLAN_FAIL"): "FAILED",
@@ -89,3 +93,8 @@ class StateMachine:
 
     def restore(self, snap: MachineSnapshot) -> None:
         self._state = snap.state
+
+
+# Backward-compatibility aliases
+AgentState = AdjutorixState
+AgentEvent = AdjutorixEvent

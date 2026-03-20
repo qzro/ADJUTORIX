@@ -24,3 +24,7 @@ def explain() -> Dict[str, Any]:
         "ok": False,
         "error": "Direct file writes are disabled. Use tools/fs/apply_patch.py with a vetted patch payload."
     }
+
+
+def guarded_write(*_: Any, **__: Any) -> None:
+    Guardrails(workspace_root=__import__("pathlib").Path(".")).deny_direct_write()  # type: ignore
