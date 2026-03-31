@@ -259,7 +259,7 @@ function deriveAppRoots(): Pick<MainEnvPaths, "appRoot" | "distRoot" | "renderer
   const distRoot = normalizePath(path.resolve(appRoot, ".."));
   const rendererRoot = normalizePath(path.join(distRoot, "renderer"));
   const rendererIndex = ensureAbsoluteExistingFile(path.join(rendererRoot, "index.html"), "renderer_index");
-  const preloadEntry = ensureAbsoluteExistingFile(path.join(distRoot, "preload.js"), "preload_entry");
+  const preloadEntry = ensureAbsoluteExistingFile(path.join(distRoot, "preload.mjs"), "preload_entry");
   const mainEntry = ensureAbsoluteExistingFile(path.join(distRoot, "main.js"), "main_entry");
   const packageJson = ensureAbsoluteExistingFile(path.resolve(appRoot, "..", "package.json"), "package_json");
   const rendererManifest = ensureAbsoluteExistingFile(path.join(rendererRoot, "manifest.json"), "renderer_manifest");

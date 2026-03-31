@@ -625,19 +625,6 @@ export function verifyStateReducer(state: VerifyState, action: VerifyStateAction
 // INTERNAL UPDATE HELPERS
 // -----------------------------------------------------------------------------
 
-function withCheck(existing: VerifyCheckRecord, patch: Partial<Omit<VerifyCheckRecord, "hash">>): VerifyCheckRecord {
-  const core: Omit<VerifyCheckRecord, "hash"> = {
-    checkId: patch.checkId ?? existing.checkId,
-    name: patch.name ?? existing.name,
-    status: patch.status ?? existing.status,
-    severity: patch.severity ?? existing.severity,
-    message: patch.message ?? existing.message,
-    startedAtMs: patch.startedAtMs ?? existing.startedAtMs,
-    endedAtMs: patch.endedAtMs ?? existing.endedAtMs,
-    detail: patch.detail ?? existing.detail,
-  };
-  return { ...core, hash: computeCheckHash(core) };
-}
 
 // -----------------------------------------------------------------------------
 // SELECTORS
@@ -646,7 +633,7 @@ function withCheck(existing: VerifyCheckRecord, patch: Partial<Omit<VerifyCheckR
 export const selectVerifyPhase: VerifySelector<VerifyPhase> = (state) => state.phase;
 export const selectVerifyOutcome: VerifySelector<VerifyOutcome> = (state) => state.outcome;
 export const selectVerifyTargets: VerifySelector<string[]> = (state) => state.targets;
-export const selectVerifyChecks = (state: VerifyState): VerifyCheckRecord[] => state.checkOrder.map((id) => state.checks[id]).filter(Boolean);
+export const selectVerifyChecks = (state: VerifyState): VerifyCheckRecord[] => state.checkOrder.map((id) => state.checks[id]).filter((check): check is VerifyCheckRecord => !!check);
 export const selectSelectedVerifyCheck: VerifySelector<VerifyCheckRecord | null> = (state) =>
   state.navigation.selectedCheckId ? state.checks[state.navigation.selectedCheckId] ?? null : null;
 export const selectVerifyCanBindToPatch: VerifySelector<boolean> = (state) =>
@@ -731,7 +718,10 @@ export function validateVerifyState(state: VerifyState): void {
   }
 
   for (let i = 1; i < state.logs.length; i += 1) {
-    if (state.logs[i - 1].seq > state.logs[i].seq) {
+    const prev = state.logs[i - 1];
+    const curr = state.logs[i];
+    if (!prev || !curr) continue;
+    if (prev.seq > curr.seq) {
       throw new Error("verify_state_logs_not_sorted");
     }
   }

@@ -539,7 +539,7 @@ function choosePreferredDiagnostic(a: NormalizedDiagnostic, b: NormalizedDiagnos
     if (item.filePath) n += 10;
     if (item.range) n += 6;
     if (item.code) n += 4;
-    if (item.relatedPaths.length > 0) n += 2;
+    if ((item.relatedPaths?.length ?? 0) > 0) n += 2;
     return n;
   };
 
@@ -676,7 +676,7 @@ export function filterDiagnostics(
         item.sourceLabel,
         item.producer,
         item.category,
-        ...item.tags,
+        ...(item.tags ?? []),
       ]
         .join(" ")
         .toLowerCase();
@@ -693,11 +693,12 @@ export function groupDiagnosticsByFile(diagnostics: NormalizedDiagnostic[]): Rec
   for (const item of diagnostics) {
     const key = item.filePath ?? "__unbound__";
     if (!result[key]) result[key] = [];
-    result[key].push(item);
+    (result[key])?.push(item);
   }
 
   for (const key of Object.keys(result)) {
-    result[key].sort(compareDiagnostics);
+    const bucket = result[key];
+    if (bucket) bucket.sort(compareDiagnostics);
   }
 
   return result;
@@ -719,7 +720,7 @@ export function buildDiagnosticDisplayModel(diagnostic: NormalizedDiagnostic): {
   subtitle: string;
   badges: string[];
 } {
-  const badges = [diagnostic.severity, diagnostic.producer, diagnostic.category];
+  const badges: string[] = [diagnostic.severity, diagnostic.producer, diagnostic.category];
   if (diagnostic.code) badges.push(diagnostic.code);
   if (diagnostic.filePath) badges.push(formatDiagnosticLocation(diagnostic));
 

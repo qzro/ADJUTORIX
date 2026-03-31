@@ -1,4 +1,4 @@
-import type { RuntimeCapabilityProfile } from "../../shared/src/runtime/capabilities.js";
+import type { RuntimeCapabilityProfile } from "../../shared/dist/runtime/capabilities.js";
 
 export interface CapabilityNegotiationRequest {
   readonly required: readonly string[];
@@ -26,12 +26,12 @@ export function negotiateCapabilities(
   const missingRequired: string[] = [];
 
   for (const capability of request.required) {
-    if (deniedByRuntime.has(capability) || forbidden.has(capability)) {
+    if (deniedByRuntime.has(capability as (typeof request.available.required)[number]) || forbidden.has(capability as (typeof request.available.required)[number])) {
       denied.push(capability);
       missingRequired.push(capability);
       continue;
     }
-    if (available.has(capability) || request.available.required.includes(capability)) {
+    if (available.has(capability as (typeof request.available.required)[number]) || request.available.required.includes(capability as (typeof request.available.required)[number])) {
       granted.push(capability);
     } else {
       missingRequired.push(capability);
@@ -42,11 +42,11 @@ export function negotiateCapabilities(
     if (granted.includes(capability) || denied.includes(capability)) {
       continue;
     }
-    if (deniedByRuntime.has(capability) || forbidden.has(capability)) {
+    if (deniedByRuntime.has(capability as (typeof request.available.required)[number]) || forbidden.has(capability as (typeof request.available.required)[number])) {
       denied.push(capability);
       continue;
     }
-    if (available.has(capability) || request.available.required.includes(capability)) {
+    if (available.has(capability as (typeof request.available.required)[number]) || request.available.required.includes(capability as (typeof request.available.required)[number])) {
       granted.push(capability);
     }
   }

@@ -271,7 +271,9 @@ function countStatuses(checks: StartupCheckResult[]) {
 
 function parseHtmlForPreloadMarkers(html: string): { hasRootNode: boolean; scriptRefs: string[] } {
   const hasRootNode = /id=["']root["']/.test(html);
-  const scriptRefs = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map((m) => m[1]);
+  const scriptRefs = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)]
+    .map((m) => m[1])
+    .filter((v): v is string => typeof v === "string");
   return { hasRootNode, scriptRefs };
 }
 
@@ -388,7 +390,7 @@ function checkBuildArtifacts(config: RuntimeConfig): StartupCheckResult[] {
       "build.renderer_manifest.hash",
       "build",
       "error",
-      existsFile(config.paths.rendererManifest) && fileSha256(config.paths.rendererManifest) === config.build.renderer.counts.files >= 0 ? "pass" : "pass",
+      existsFile(config.paths.rendererManifest) ? "pass" : "fail",
       false,
       "Renderer manifest is readable",
       { filePath: config.paths.rendererManifest },

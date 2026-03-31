@@ -310,8 +310,7 @@ export function createInitialWorkspaceState(): WorkspaceState {
 // -----------------------------------------------------------------------------
 
 export function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState {
-  const core: Omit<WorkspaceState, "hash"> = { ...state };
-  delete (core as WorkspaceState).hash;
+  const { hash: _hash, ...core } = state;
 
   switch (action.type) {
     case "WORKSPACE_OPEN_REQUESTED": {

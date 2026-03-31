@@ -596,7 +596,10 @@ export function validateDiagnosticsLogStream(stream: DiagnosticsLogStream): void
     throw new Error(`diagnostics_log_stream_hash_drift:${stream.target}`);
   }
   for (let i = 1; i < stream.entries.length; i += 1) {
-    if (stream.entries[i - 1].seq > stream.entries[i].seq) throw new Error(`diagnostics_log_stream_unsorted:${stream.target}`);
+    const prev = stream.entries[i - 1];
+    const curr = stream.entries[i];
+    if (!prev || !curr) continue;
+    if (prev.seq > curr.seq) throw new Error(`diagnostics_log_stream_unsorted:${stream.target}`);
   }
   stream.entries.forEach(validateDiagnosticsLogEntry);
 }

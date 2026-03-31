@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Adjutorix Desktop Application — Deterministic Patch-Oriented Workspace",
+  "description": "Adjutorix Desktop Application \u2014 Deterministic Patch-Oriented Workspace",
   "license": "MIT",
   "author": "Adjutorix",
   "engines": {
@@ -11,20 +11,22 @@
     "npm": ">=10.0.0"
   },
   "scripts": {
-    "dev": "NODE_ENV=development node --enable-source-maps ./dist/main.js",
-    "build": "npm run clean && npm run build:ts && npm run build:assets",
-    "build:ts": "tsc -p tsconfig.json",
-    "build:assets": "node ./scripts/build-assets.mjs",
-    "clean": "rimraf dist",
+    "dev": "NODE_ENV=development node --enable-source-maps ./dist/main/index.js",
+    "build": "npm run clean && npm run build:ts && npm run build:preload-entry && npm run build:renderer && npm run build:assets",
+    "build:ts": "tsc -p tsconfig.json --incremental false",
+    "build:renderer": "node ./scripts/build-renderer.mjs",
+    "build:assets": "node ./scripts/prepare-renderer-assets.js",
+    "clean": "rimraf dist node_modules/.cache/tsbuildinfo .adjutorix.renderer.entry.html .adjutorix.vite.renderer.config.mjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,json,css,md}\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "verify": "npm run build && npm run typecheck && npm run lint && npm run test",
-    "start": "node ./dist/main.js",
+    "start": "node ./dist/main/index.js",
     "package": "electron-builder",
-    "postinstall": "node ./scripts/postinstall.mjs"
+    "postinstall": "node ./scripts/postinstall.mjs",
+    "build:preload-entry": "node -e \"const fs=require('node:fs');fs.mkdirSync('dist/preload',{recursive:true});fs.copyFileSync('dist/preload/preload.js','dist/preload/preload.mjs')\""
   },
   "dependencies": {
     "electron": "^30.0.0",
@@ -55,7 +57,7 @@
     "electron-builder": "^24.13.3",
     "concurrently": "^8.2.2"
   },
-  "main": "dist/main.js",
+  "main": "dist/main/index.js",
   "files": [
     "dist/**/*",
     "package.json"
@@ -71,14 +73,20 @@
       "dist/**/*"
     ],
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.developer-tools"
     },
     "win": {
-      "target": ["nsis"]
+      "target": [
+        "nsis"
+      ]
     },
     "linux": {
-      "target": ["AppImage"]
+      "target": [
+        "AppImage"
+      ]
     }
   }
 }

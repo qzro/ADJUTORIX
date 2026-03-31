@@ -1,4 +1,4 @@
-import type { SystemInvariantReport } from "../../shared/src/invariants/system_invariants.js";
+import type { SystemInvariantReport } from "../../shared/dist/invariants/system_invariants.js";
 
 export interface RuntimeGuardDecision {
   readonly allowed: boolean;

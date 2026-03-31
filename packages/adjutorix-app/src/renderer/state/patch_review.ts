@@ -642,7 +642,7 @@ export function patchReviewReducer(state: PatchReviewState, action: PatchReviewA
 // -----------------------------------------------------------------------------
 
 export const selectPatchReviewPhase: PatchReviewSelector<PatchReviewPhase> = (state) => state.phase;
-export const selectPatchFiles = (state: PatchReviewState): PatchFileEntry[] => state.fileOrder.map((path) => state.files[path]).filter(Boolean);
+export const selectPatchFiles = (state: PatchReviewState): PatchFileEntry[] => state.fileOrder.map((path) => state.files[path]).filter((file): file is PatchFileEntry => !!file);
 export const selectSelectedPatchFile: PatchReviewSelector<PatchFileEntry | null> = (state) =>
   state.navigation.selectedPath ? state.files[state.navigation.selectedPath] ?? null : null;
 export const selectPatchCanApprove: PatchReviewSelector<boolean> = (state) => !!state.lineage.previewHash && state.fileOrder.length > 0 && !state.applied;

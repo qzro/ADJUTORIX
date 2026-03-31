@@ -218,7 +218,7 @@ function longestCommonPrefixSegmentCount(paths: string[][]): number {
   const minLen = Math.min(...paths.map((parts) => parts.length));
   let count = 0;
   for (let i = 0; i < minLen; i += 1) {
-    const token = paths[0][i];
+    const token = paths[0]![i]!;
     if (paths.every((parts) => parts[i] === token)) count += 1;
     else break;
   }
@@ -403,7 +403,7 @@ export function disambiguatePathLabels(
       groups.push({
         basename,
         normalizedPaths,
-        labels: { [items[0].normalized]: items[0].basename },
+        labels: { [items[0]!.normalized]: items[0]!.basename },
       });
       continue;
     }
@@ -416,7 +416,7 @@ export function disambiguatePathLabels(
       const uniqueTail = item.segments.slice(commonPrefix, -1);
       const scopedTail = uniqueTail.length > 0
         ? uniqueTail.join("/")
-        : computeDisambiguator(item, resolved.disambiguationDepth) ?? item.dirname || item.root || ".";
+        : (computeDisambiguator(item, resolved.disambiguationDepth) ?? item.dirname ?? item.root ?? ".");
 
       const label = scopedTail && scopedTail !== "."
         ? `${item.basename} — ${preferredSeparator(scopedTail, resolved.preferredSeparator)}`
@@ -480,7 +480,7 @@ export function summarizePathGroup(rawPaths: string[], context?: PathLabelContex
   const allSegments = parsed.map((item) => [item.root, ...item.segments].filter(Boolean));
   const prefixCount = longestCommonPrefixSegmentCount(allSegments);
   const commonPrefix = allSegments.length > 0
-    ? preferredSeparator(allSegments[0].slice(0, prefixCount).join("/"), resolved.preferredSeparator)
+    ? preferredSeparator(allSegments[0]!.slice(0, prefixCount).join("/"), resolved.preferredSeparator)
     : "";
 
   const labels = Object.values(labelPathSet(rawPaths, resolved))

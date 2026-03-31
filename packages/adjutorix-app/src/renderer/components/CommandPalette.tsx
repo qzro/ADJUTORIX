@@ -1,28 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  AlertTriangle,
-  ArrowRight,
-  Bot,
-  CheckCircle2,
-  ChevronRight,
-  Command,
-  FileCode2,
-  Filter,
-  FolderTree,
-  GitBranch,
-  Hammer,
-  Layers3,
-  PlayCircle,
-  Search,
-  ShieldAlert,
-  ShieldCheck,
-  ShieldX,
-  Sparkles,
-  TerminalSquare,
-  Wrench,
-  XCircle,
-} from "lucide-react";
+import { AlertTriangle, ArrowRight, Bot, CheckCircle2, ChevronRight, Command, FileCode2, Filter, FolderTree, GitBranch, Hammer, Layers3, Loader2, PlayCircle, Search, ShieldAlert, ShieldCheck, ShieldX, Sparkles, TerminalSquare, Wrench, XCircle } from "lucide-react";
 
 /**
  * ADJUTORIX APP — RENDERER / COMPONENTS / CommandPalette.tsx
@@ -307,7 +285,7 @@ function scoreCommand(command: CommandPaletteItem, query: string): number {
 // MAIN COMPONENT
 // -----------------------------------------------------------------------------
 
-export default function CommandPalette(props: CommandPaletteProps): JSX.Element {
+export default function CommandPalette(props: CommandPaletteProps): JSX.Element | null {
   const title = props.title ?? "Command palette";
   const subtitle =
     props.subtitle ??

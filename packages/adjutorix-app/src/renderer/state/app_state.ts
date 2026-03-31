@@ -336,8 +336,7 @@ export function createInitialAppState(): AppState {
 // -----------------------------------------------------------------------------
 
 export function appReducer(state: AppState, action: AppAction): AppState {
-  const core: Omit<AppState, "appHash"> = { ...state };
-  delete (core as AppState).appHash;
+  const { appHash: _appHash, ...core } = state;
 
   switch (action.type) {
     case "BOOTSTRAP_STARTED": {

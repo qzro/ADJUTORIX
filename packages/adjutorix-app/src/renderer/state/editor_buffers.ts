@@ -742,7 +742,7 @@ export function editorBuffersReducer(state: EditorBuffersState, action: EditorBu
       if (action.keepPinned) {
         const keepPaths = core.tabOrder.filter((path) => core.byPath[path]?.pinned);
         const nextByPath: Record<string, EditorBuffer> = {};
-        for (const path of keepPaths) nextByPath[path] = core.byPath[path];
+        for (const path of keepPaths) nextByPath[path] = core.byPath[path]!;
         core.byPath = nextByPath;
         core.tabOrder = keepPaths;
         core.activePath = keepPaths[0] ?? null;
@@ -773,7 +773,7 @@ export function editorBuffersReducer(state: EditorBuffersState, action: EditorBu
 
 export const selectActiveBufferPath: EditorBuffersSelector<string | null> = (state) => state.activePath;
 export const selectActiveBuffer: EditorBuffersSelector<EditorBuffer | null> = (state) => (state.activePath ? state.byPath[state.activePath] ?? null : null);
-export const selectOpenBuffers: EditorBuffersSelector<EditorBuffer[]> = (state) => state.tabOrder.map((path) => state.byPath[path]).filter(Boolean);
+export const selectOpenBuffers: EditorBuffersSelector<EditorBuffer[]> = (state) => state.tabOrder.map((path) => state.byPath[path]).filter((buffer): buffer is EditorBuffer => !!buffer);
 export const selectDirtyBuffers: EditorBuffersSelector<EditorBuffer[]> = (state) => selectOpenBuffers(state).filter((buffer) => dirty(buffer));
 export const selectPreviewVisibleBuffers: EditorBuffersSelector<EditorBuffer[]> = (state) =>
   selectOpenBuffers(state).filter((buffer) => buffer.content.preview.visible && !!buffer.content.preview.previewHash);
@@ -858,7 +858,9 @@ export function validateEditorBuffersState(state: EditorBuffersState): void {
     if (!state.tabOrder.includes(path)) {
       throw new Error(`editor_buffers_orphan_buffer:${path}`);
     }
-    validateEditorBuffer(state.byPath[path]);
+    const buffer = state.byPath[path];
+    if (!buffer) throw new Error(`editor_buffers_missing_buffer:${path}`);
+    validateEditorBuffer(buffer);
   }
 
   if (state.activePath && !state.byPath[state.activePath]) {

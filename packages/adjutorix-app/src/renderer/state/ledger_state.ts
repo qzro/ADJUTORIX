@@ -324,6 +324,7 @@ function normalizeTimeline(entryIds: string[], entriesById: Record<string, Ledge
   return [...new Set(entryIds.filter((id) => !!entriesById[id]))].sort((a, b) => {
     const ea = entriesById[a];
     const eb = entriesById[b];
+    if (!ea || !eb) return a.localeCompare(b);
     return direction === "forward" ? ea.seq - eb.seq : eb.seq - ea.seq;
   });
 }
@@ -589,7 +590,7 @@ export const selectLedgerStats: LedgerSelector<LedgerStats> = (state) => state.s
 export const selectSelectedLedgerEntry: LedgerSelector<LedgerEntry | null> = (state) =>
   state.ui.selectedEntryId ? state.entriesById[state.ui.selectedEntryId] ?? null : null;
 export const selectTimelineEntries: LedgerSelector<LedgerEntry[]> = (state) =>
-  state.timelineEntryIds.map((id) => state.entriesById[id]).filter(Boolean);
+  state.timelineEntryIds.map((id) => state.entriesById[id]).filter((entry): entry is LedgerEntry => !!entry);
 export const selectFilteredTimelineEntries: LedgerSelector<LedgerEntry[]> = (state) => {
   const query = state.filters.query.trim().toLowerCase();
   return selectTimelineEntries(state).filter((entry) => {

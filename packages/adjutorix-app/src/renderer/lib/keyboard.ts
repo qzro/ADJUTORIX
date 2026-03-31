@@ -442,7 +442,7 @@ export function matchKeyboardBinding(
     const expectedStroke = binding.chord.strokes[expectedIndex];
     if (!expectedStroke) continue;
 
-    const prefixValid = prior.every((stroke, index) => strokeEquals(stroke, binding.chord.strokes[index]));
+    const prefixValid = prior.every((stroke, index) => strokeEquals(stroke, binding.chord.strokes[index]!));
     if (!prefixValid) continue;
     if (!strokeEquals(normalized.stroke, expectedStroke)) continue;
 
@@ -549,11 +549,11 @@ export function detectBindingConflicts(bindings: KeyboardBinding[]): Array<{
 export function formatStrokeDisplay(stroke: KeyboardStroke): string {
   const parts: string[] = [];
   for (const mod of asSortedUniqueModifiers(stroke.modifiers)) {
-    parts.push(DISPLAY_KEY_LABELS[mod] ?? mod[0].toUpperCase() + mod.slice(1));
+    parts.push(DISPLAY_KEY_LABELS[mod]! ?? mod[0]!.toUpperCase() + mod.slice(1));
   }
 
   const key = normalizeKey(stroke.key);
-  parts.push(DISPLAY_KEY_LABELS[key] ?? (key.length === 1 ? key.toUpperCase() : key[0].toUpperCase() + key.slice(1)));
+  parts.push(DISPLAY_KEY_LABELS[key]! ?? (key.length === 1 ? key.toUpperCase() : key[0]!.toUpperCase() + key.slice(1)));
   return parts.join(" + ");
 }
 
