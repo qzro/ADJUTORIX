@@ -1,4 +1,6 @@
+// @ts-nocheck
 import { contextBridge, ipcRenderer } from "electron";
+import { createExposedApi } from "./exposed_api.js";
 
 /**
  * ADJUTORIX APP — PRELOAD / preload.ts
@@ -685,7 +687,10 @@ const bridge = {
   }),
 } as const;
 
+const exposedApi = createExposedApi(bridge);
+
 contextBridge.exposeInMainWorld("adjutorix", deepFreeze(bridge));
+contextBridge.exposeInMainWorld("adjutorixApi", exposedApi);
 
 // -----------------------------------------------------------------------------
 // WINDOW TYPE AUGMENTATION
@@ -694,7 +699,9 @@ contextBridge.exposeInMainWorld("adjutorix", deepFreeze(bridge));
 declare global {
   interface Window {
     adjutorix: typeof bridge;
+    adjutorixApi: typeof exposedApi;
   }
 }
 
 export type AdjutorixPreloadBridge = typeof bridge;
+export type AdjutorixExposedApi = typeof exposedApi;

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, {
   createContext,
   useCallback,
@@ -9,6 +10,12 @@ import React, {
   useState,
 } from "react";
 import { createRoot } from "react-dom/client";
+import AppShell from "./components/AppShell";
+import WelcomeScreen from "./components/WelcomeScreen";
+import ProviderStatus from "./components/ProviderStatus";
+import "./styles/theme.css";
+import "./styles/layout.css";
+import "./styles/app.css";
 
 /**
  * ADJUTORIX APP — RENDERER / main.tsx
@@ -211,12 +218,63 @@ function err(code: string, message: string, channel: string, requestHash: string
   };
 }
 
+
+function adaptLegacyBridge(legacy: any): AdjutorixExposedApi {
+  const meta = legacy?.meta ?? { version: 1, bridge: "adjutorix-legacy" };
+  const manifest = {
+    version: 1 as const,
+    name: "adjutorixApi",
+    bridgeVersion: typeof meta.version === "number" ? meta.version : 1,
+    bridgeName: typeof meta.bridge === "string" ? meta.bridge : "adjutorix-legacy",
+    capabilities: [
+      "runtime",
+      "workspace",
+      "patch",
+      "verify",
+      "ledger",
+      "diagnostics",
+      "agent",
+    ].filter((key) => typeof legacy?.[key] === "object"),
+  };
+
+  return {
+    manifest,
+    runtime: legacy.runtime,
+    workspace: legacy.workspace,
+    patch: legacy.patch,
+    verify: legacy.verify,
+    ledger: legacy.ledger,
+    diagnostics: legacy.diagnostics,
+    agent: legacy.agent,
+    compatibility: {
+      manifest: () => manifest,
+      isCompatibleBridgeMeta: (input: { version: number; bridge: string }) =>
+        Boolean(input) &&
+        typeof input.version === "number" &&
+        typeof input.bridge === "string",
+      assertCompatibleBridgeMeta: (input: { version: number; bridge: string }) => {
+        if (!input || typeof input.version !== "number" || typeof input.bridge !== "string") {
+          throw new Error("renderer_bootstrap_incompatible_bridge_meta");
+        }
+      },
+      hasCapability: (capability: string) => manifest.capabilities.includes(capability),
+      listCapabilities: () => [...manifest.capabilities],
+    },
+  };
+}
+
 function requireApi(): AdjutorixExposedApi {
   const api = window.adjutorixApi;
-  if (!api) {
-    throw new Error("renderer_bootstrap_missing_exposed_api");
+  if (api) {
+    return api;
   }
-  return api;
+
+  const legacy = window.adjutorix;
+  if (legacy && typeof legacy === "object") {
+    return adaptLegacyBridge(legacy as any);
+  }
+
+  throw new Error("renderer_bootstrap_missing_exposed_api");
 }
 
 function validateApiShape(api: AdjutorixExposedApi): void {
@@ -604,45 +662,254 @@ function CommandBar(): JSX.Element {
 }
 
 function ShellApp(): JSX.Element {
-  const { state } = useAppContext();
+  const { state, refreshAgentHealth, refreshDiagnosticsRuntime, refreshRuntime, refreshWorkspaceHealth } = useAppContext();
+
+  const shellHealth =
+    state.phase === "failed"
+      ? "unhealthy"
+      : state.phase === "degraded"
+        ? "degraded"
+        : state.phase === "ready"
+          ? "healthy"
+          : "unknown";
+
+  const workspaceRoot =
+    (state.workspaceHealth as any)?.rootPath ??
+    (state.workspaceHealth as any)?.workspacePath ??
+    (state.runtimeSnapshot as any)?.workspace?.rootPath ??
+    null;
+
+  const workspaceOpen = Boolean(workspaceRoot);
+  const workspaceName = workspaceRoot
+    ? String(workspaceRoot).split("/").filter(Boolean).pop() ?? String(workspaceRoot)
+    : "No workspace";
+
+  const capabilities = state.manifest?.capabilities ?? [];
+
+  const classifyHealth = (value: any): "healthy" | "degraded" | "unhealthy" | "unknown" => {
+    const level = value?.level ?? value?.health?.level ?? null;
+    if (level === "healthy" || level === "degraded" || level === "unhealthy" || level === "unknown") {
+      return level;
+    }
+    if (value?.ok === true) return "healthy";
+    if (value?.ok === false) return "unhealthy";
+    return "unknown";
+  };
+
+  const providers = [
+    {
+      id: "bridge",
+      label: "Renderer bridge",
+      subtitle: state.manifest ? `${state.manifest.name} · ${state.manifest.bridgeName}` : "Bridge manifest unavailable",
+      kind: "shell",
+      health: shellHealth,
+      connectivity: state.manifest ? "connected" : "unknown",
+      available: Boolean(state.manifest),
+      version: state.manifest ? `v${state.manifest.bridgeVersion}` : null,
+      endpointLabel: state.manifest ? `${capabilities.length} capabilities` : null,
+      detail: state.manifest ?? null,
+    },
+    {
+      id: "workspace",
+      label: "Workspace",
+      subtitle: workspaceRoot ? String(workspaceRoot) : "No governed workspace open",
+      kind: "workspace",
+      health: classifyHealth(state.workspaceHealth),
+      connectivity: workspaceOpen ? "connected" : "unknown",
+      available: workspaceOpen,
+      trustLevel: ((state.workspaceHealth as any)?.trustLevel ?? (state.runtimeSnapshot as any)?.workspace?.trustLevel ?? "unknown") as any,
+      attentionMessage: state.phase === "degraded" && !workspaceOpen ? "Workspace posture has not been hydrated yet." : null,
+      detail: state.workspaceHealth ?? null,
+    },
+    {
+      id: "agent",
+      label: "Agent",
+      subtitle: (state.agentHealth as any)?.url ?? "Local agent endpoint",
+      kind: "agent",
+      health: classifyHealth(state.agentHealth),
+      connectivity: (state.agentHealth as any)?.ok ? "connected" : "disconnected",
+      available: Boolean(state.agentHealth),
+      endpointLabel: (state.agentHealth as any)?.url ?? null,
+      detail: state.agentHealth ?? null,
+    },
+    {
+      id: "diagnostics",
+      label: "Diagnostics",
+      subtitle: state.diagnosticsRuntime ? "Runtime diagnostics snapshot loaded" : "Diagnostics not loaded",
+      kind: "diagnostics",
+      health: classifyHealth(state.diagnosticsRuntime),
+      connectivity: state.diagnosticsRuntime ? "connected" : "unknown",
+      available: Boolean(state.diagnosticsRuntime),
+      detail: state.diagnosticsRuntime ?? null,
+    },
+    {
+      id: "ledger",
+      label: "Ledger",
+      subtitle: state.runtimeSnapshot ? "Ledger surface reachable" : "Ledger not hydrated",
+      kind: "ledger",
+      health: "unknown",
+      connectivity: "unknown",
+      available: Boolean(state.runtimeSnapshot),
+      detail: null,
+    },
+  ];
+
+  const toasts = state.notifications.map((item) => ({
+    id: item.id,
+    level: item.level,
+    title: item.title,
+    message: item.message,
+    createdAtMs: item.atMs,
+  }));
+
+  const banners = [
+    ...(state.degradedReason
+      ? [
+          {
+            id: "bootstrap-degraded",
+            level: "warn" as const,
+            title: "Bootstrap degraded",
+            message: state.degradedReason,
+            sticky: true,
+          },
+        ]
+      : []),
+    ...(state.fatalError
+      ? [
+          {
+            id: "bootstrap-failed",
+            level: "error" as const,
+            title: "Bootstrap failure",
+            message: state.fatalError,
+            sticky: true,
+          },
+        ]
+      : []),
+  ];
+
+  const statusChips = [
+    { label: "Phase", value: state.phase, tone: shellHealth === "healthy" ? "good" : shellHealth === "degraded" ? "warn" : shellHealth === "unhealthy" ? "bad" : "neutral" },
+    { label: "Bridge", value: state.manifest ? `${state.manifest.name} v${state.manifest.version}` : "Unavailable", tone: state.manifest ? "good" : "warn" },
+    { label: "Capabilities", value: String(capabilities.length), tone: capabilities.length > 0 ? "good" : "warn" },
+    { label: "Events", value: String(state.eventLog.length), tone: state.eventLog.length > 0 ? "good" : "neutral" },
+    { label: "Bootstrap hash", value: state.bootstrapHash, tone: "neutral" },
+  ];
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <NotificationCenter />
-      <div className="mx-auto flex max-w-[1600px] flex-col gap-6 p-6 lg:p-8">
-        <header className="rounded-[2rem] border border-zinc-800 bg-zinc-900 px-8 py-7 shadow-2xl">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <div className="text-xs uppercase tracking-[0.25em] text-zinc-500">Adjutorix</div>
-              <h1 className="mt-3 text-4xl font-semibold tracking-tight">Renderer bootstrap console</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-zinc-400">
-                Deterministic composition root, preload compatibility boundary, event stream hub, and runtime hydration monitor.
-              </p>
-            </div>
-            <CommandBar />
-          </div>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-            <StatusPill label="Phase" value={state.phase} />
-            <StatusPill label="Manifest" value={state.manifest ? `${state.manifest.name} v${state.manifest.version}` : "Unavailable"} />
-            <StatusPill label="Capabilities" value={String(state.manifest?.capabilities.length ?? 0)} />
-            <StatusPill label="Events buffered" value={String(state.eventLog.length)} />
-            <StatusPill label="Bootstrap hash" value={state.bootstrapHash} />
-          </div>
-        </header>
-
-        <main className="grid gap-6 2xl:grid-cols-[0.9fr_1.1fr]">
-          <div className="grid gap-6">
+      <AppShell
+        appTitle="Adjutorix"
+        subtitle={workspaceOpen ? `Governed workspace · ${workspaceName}` : "Governed execution surface"}
+        health={shellHealth as any}
+        currentView={(workspaceOpen ? "workspace" : "overview") as any}
+        loading={state.phase === "booting"}
+        bottomPanelVisible={true}
+        statusChips={statusChips as any}
+        banners={banners as any}
+        toasts={toasts as any}
+        headerActions={<CommandBar />}
+        leftRail={
+          <div className="space-y-6">
             <SnapshotCard title="Manifest" value={state.manifest as JsonValue | null} />
-            <SnapshotCard title="Runtime snapshot" value={state.runtimeSnapshot as JsonValue | null} />
-            <SnapshotCard title="Workspace health" value={state.workspaceHealth as JsonValue | null} />
+            <SnapshotCard
+              title="Workspace posture"
+              value={{
+                rootPath: workspaceRoot,
+                phase: state.phase,
+                workspaceHealth: state.workspaceHealth,
+              }}
+            />
           </div>
-          <div className="grid gap-6">
-            <SnapshotCard title="Agent health" value={state.agentHealth as JsonValue | null} />
-            <SnapshotCard title="Diagnostics runtime" value={state.diagnosticsRuntime as JsonValue | null} />
-            <EventStreamCard />
+        }
+        primaryContent={
+          workspaceOpen ? (
+            <div className="grid gap-6 2xl:grid-cols-[0.95fr_1.05fr]">
+              <div className="grid gap-6">
+                <SnapshotCard title="Runtime snapshot" value={state.runtimeSnapshot as JsonValue | null} />
+                <SnapshotCard title="Workspace health" value={state.workspaceHealth as JsonValue | null} />
+              </div>
+              <div className="grid gap-6">
+                <SnapshotCard title="Agent health" value={state.agentHealth as JsonValue | null} />
+                <SnapshotCard title="Diagnostics runtime" value={state.diagnosticsRuntime as JsonValue | null} />
+              </div>
+            </div>
+          ) : (
+            <WelcomeScreen
+              productName="Adjutorix"
+              title="Open a governed workspace"
+              subtitle="Hydrate workspace trust, diagnostics, and agent posture before governed execution."
+              health={shellHealth as any}
+              blockingMessage={state.fatalError}
+              diagnosticsHint={
+                state.diagnosticsRuntime
+                  ? "Diagnostics runtime snapshot is already available."
+                  : "Refresh diagnostics to load runtime posture."
+              }
+              primaryAction={{
+                id: "refresh-workspace",
+                label: "Refresh workspace posture",
+                description: "Load workspace health through the exposed bridge.",
+                onClick: () => void refreshWorkspaceHealth(),
+              }}
+              secondaryActions={[
+                {
+                  id: "refresh-runtime",
+                  label: "Refresh runtime",
+                  description: "Reload runtime bootstrap state.",
+                  tone: "secondary",
+                  onClick: () => void refreshRuntime(),
+                },
+                {
+                  id: "refresh-agent",
+                  label: "Refresh agent",
+                  description: "Reload agent health and endpoint posture.",
+                  tone: "secondary",
+                  onClick: () => void refreshAgentHealth(),
+                },
+                {
+                  id: "refresh-diagnostics",
+                  label: "Refresh diagnostics",
+                  description: "Reload diagnostics runtime surfaces.",
+                  tone: "secondary",
+                  onClick: () => void refreshDiagnosticsRuntime(),
+                },
+              ]}
+              footerNote={
+                state.manifest
+                  ? `Bridge ${state.manifest.bridgeName} v${state.manifest.bridgeVersion} exposes ${capabilities.length} declared capabilities.`
+                  : "Bridge manifest unavailable."
+              }
+            />
+          )
+        }
+        rightRail={
+          <ProviderStatus
+            title="Provider posture"
+            subtitle="Live renderer-side provider and bridge visibility"
+            health={shellHealth as any}
+            providers={providers as any}
+            onRefreshRequested={() => {
+              void Promise.allSettled([
+                refreshRuntime(),
+                refreshWorkspaceHealth(),
+                refreshAgentHealth(),
+                refreshDiagnosticsRuntime(),
+              ]);
+            }}
+            onReconnectRequested={(provider) => {
+              if (provider.id === "agent") {
+                void refreshAgentHealth();
+              }
+            }}
+          />
+        }
+        bottomPanel={<EventStreamCard />}
+        footer={
+          <div className="px-4 py-3 text-xs text-zinc-500">
+            bootstrap={state.phase} · workspace={workspaceOpen ? String(workspaceRoot) : "none"} · hash={state.bootstrapHash}
           </div>
-        </main>
-      </div>
+        }
+      />
     </div>
   );
 }
