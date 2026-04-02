@@ -50,8 +50,8 @@ export type MutationStage = "normalize" | "authorize" | "preview" | "verify" | "
 export type MutationKind =
   | "workspace.open"
   | "workspace.close"
-  | "job.submit"
-  | "job.submit"
+  | "patch.preview"
+  | "patch.apply"
   | "verify.run"
   | "settings.update"
   | "window.state.update"
@@ -147,8 +147,8 @@ export type MutationExecutionHandlers = {
 const ALLOWED_KINDS: readonly MutationKind[] = [
   "workspace.open",
   "workspace.close",
-  "job.submit",
-  "job.submit",
+  "patch.preview",
+  "patch.apply",
   "verify.run",
   "settings.update",
   "window.state.update",
@@ -244,9 +244,9 @@ function executionClassFor(kind: MutationKind): AuthorizedMutation["execution_cl
     case "workspace.open":
     case "workspace.close":
       return "readlike-sideeffect";
-    case "job.submit":
+    case "patch.preview":
       return "preview";
-    case "job.submit":
+    case "patch.apply":
       return "apply";
     case "verify.run":
       return "verify";
@@ -354,7 +354,7 @@ export function authorizeMutation(intent: CanonicalMutationIntent, ctx: Mutation
       break;
     }
 
-    case "job.submit": {
+    case "patch.preview": {
       if (!caps.patchPreview) deny("capability_patch_preview_missing");
       if (!env.workspacePath) deny("workspace_required_for_preview");
       const intentPayload = intent.payload.intent;
@@ -364,7 +364,7 @@ export function authorizeMutation(intent: CanonicalMutationIntent, ctx: Mutation
       break;
     }
 
-    case "job.submit": {
+    case "patch.apply": {
       if (!caps.patchApply) deny("capability_patch_apply_missing");
       if (!env.workspacePath) deny("workspace_required_for_apply");
       if (!env.hasPendingPreview) deny("preview_required_for_apply");
@@ -481,10 +481,10 @@ export async function executeAuthorizedMutation(
       case "workspace.close":
         result = await handlers.workspaceClose(intent.payload);
         break;
-      case "job.submit":
+      case "patch.preview":
         result = await handlers.patchPreview(intent.payload);
         break;
-      case "job.submit":
+      case "patch.apply":
         result = await handlers.patchApply(intent.payload);
         break;
       case "verify.run":

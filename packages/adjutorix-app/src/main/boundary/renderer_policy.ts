@@ -43,11 +43,11 @@ export type RendererCapability =
   | "runtime.read"
   | "workspace.open.request"
   | "workspace.reveal.request"
-  | "job.submit.request"
-  | "job.submit.request"
+  | "patch.preview.request"
+  | "patch.apply.request"
   | "verify.run.request"
-  | "job.status.read"
-  | "job.status.read"
+  | "verify.status.read"
+  | "ledger.current.read"
   | "settings.update.request"
   | "window.state.update.request"
   | "diagnostics.export.request"
@@ -67,9 +67,9 @@ export type RendererForbiddenAuthority =
 export type RendererSurfaceNamespace =
   | "adjutorix.rpc"
   | "adjutorix.workspace"
-  | "adjutorix.jobs"
-  | "adjutorix.jobs"
-  | "adjutorix.jobs"
+  | "adjutorix.patch"
+  | "adjutorix.verify"
+  | "adjutorix.ledger"
   | "adjutorix.runtime"
   | "adjutorix.settings"
   | "adjutorix.window"
@@ -144,11 +144,11 @@ const ALL_CAPABILITIES: readonly RendererCapability[] = [
   "runtime.read",
   "workspace.open.request",
   "workspace.reveal.request",
-  "job.submit.request",
-  "job.submit.request",
+  "patch.preview.request",
+  "patch.apply.request",
   "verify.run.request",
-  "job.status.read",
-  "job.status.read",
+  "verify.status.read",
+  "ledger.current.read",
   "settings.update.request",
   "window.state.update.request",
   "diagnostics.export.request",
@@ -171,11 +171,11 @@ const CAPABILITY_NAMESPACE_MAP: Record<RendererCapability, RendererSurfaceNamesp
   "runtime.read": "adjutorix.runtime",
   "workspace.open.request": "adjutorix.workspace",
   "workspace.reveal.request": "adjutorix.workspace",
-  "job.submit.request": "adjutorix.jobs",
-  "job.submit.request": "adjutorix.jobs",
-  "verify.run.request": "adjutorix.jobs",
-  "job.status.read": "adjutorix.jobs",
-  "job.status.read": "adjutorix.jobs",
+  "patch.preview.request": "adjutorix.patch",
+  "patch.apply.request": "adjutorix.patch",
+  "verify.run.request": "adjutorix.verify",
+  "verify.status.read": "adjutorix.verify",
+  "ledger.current.read": "adjutorix.ledger",
   "settings.update.request": "adjutorix.settings",
   "window.state.update.request": "adjutorix.window",
   "diagnostics.export.request": "adjutorix.diagnostics",
@@ -271,11 +271,11 @@ export function buildRendererPolicy(state: RendererRuntimeState): RendererPolicy
     "runtime.read",
     "workspace.open.request",
     "workspace.reveal.request",
-    "job.submit.request",
-    "job.submit.request",
+    "patch.preview.request",
+    "patch.apply.request",
     "verify.run.request",
-    "job.status.read",
-    "job.status.read",
+    "verify.status.read",
+    "ledger.current.read",
   ];
 
   if (state.settings_mutable) allowed.push("settings.update.request");
@@ -386,9 +386,9 @@ export function preloadExposureContract(policy: RendererPolicy): Record<string, 
     adjutorix: {
       ...(exposed.has("adjutorix.rpc") ? { rpc: { invoke: true } } : {}),
       ...(exposed.has("adjutorix.workspace") ? { workspace: { open: true, revealInShell: true } } : {}),
-      ...(exposed.has("adjutorix.jobs") ? { patch: { preview: true, apply: true } } : {}),
-      ...(exposed.has("adjutorix.jobs") ? { verify: { run: true, status: true } } : {}),
-      ...(exposed.has("adjutorix.jobs") ? { ledger: { current: true } } : {}),
+      ...(exposed.has("adjutorix.patch") ? { patch: { preview: true, apply: true } } : {}),
+      ...(exposed.has("adjutorix.verify") ? { verify: { run: true, status: true } } : {}),
+      ...(exposed.has("adjutorix.ledger") ? { ledger: { current: true } } : {}),
       ...(exposed.has("adjutorix.runtime") ? { runtime: { getSnapshot: true, getRuntimeInfo: true } } : {}),
       ...(exposed.has("adjutorix.settings") ? { settings: { update: true } } : {}),
       ...(exposed.has("adjutorix.window") ? { window: { updateState: true } } : {}),

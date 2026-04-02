@@ -51,9 +51,9 @@ export type ConfirmationSurface =
   | "workspace.open"
   | "workspace.close"
   | "workspace.trust.set"
-  | "job.submit"
+  | "patch.preview"
   | "patch.approve"
-  | "job.submit"
+  | "patch.apply"
   | "patch.clear"
   | "verify.run"
   | "verify.bind"
@@ -165,9 +165,9 @@ const DEFAULT_SURFACE_DEFAULTS: Record<ConfirmationSurface, ConfirmationDecision
   "workspace.open": "skip",
   "workspace.close": "skip",
   "workspace.trust.set": "require",
-  "job.submit": "skip",
+  "patch.preview": "skip",
   "patch.approve": "skip",
-  "job.submit": "require",
+  "patch.apply": "require",
   "patch.clear": "skip",
   "verify.run": "skip",
   "verify.bind": "skip",
@@ -411,7 +411,7 @@ function matchTrustTransition(req: ConfirmationRequest): ConfirmationMatch | nul
 }
 
 function matchDestructiveApply(req: ConfirmationRequest): ConfirmationMatch | null {
-  if (req.surface === "job.submit" && (req.risk === "high" || req.risk === "critical" || req.context.pendingChangeCount > 0)) {
+  if (req.surface === "patch.apply" && (req.risk === "high" || req.risk === "critical" || req.context.pendingChangeCount > 0)) {
     return {
       ruleId: "destructive_patch_apply",
       ruleKind: "destructive",
@@ -466,7 +466,7 @@ function matchSystemExemption(req: ConfirmationRequest, policy: ConfirmationPoli
     policy.systemExemptionEnabled &&
     req.actor === "system" &&
     (req.risk === "none" || req.risk === "low") &&
-    req.surface !== "job.submit" &&
+    req.surface !== "patch.apply" &&
     req.surface !== "diagnostics.export" &&
     req.surface !== "workspace.trust.set"
   ) {
@@ -509,7 +509,7 @@ function matchRecentRepeat(req: ConfirmationRequest, policy: ConfirmationPolicy,
 function matchHealthyPreview(req: ConfirmationRequest, policy: ConfirmationPolicy): ConfirmationMatch | null {
   if (
     policy.previewExemptionEnabled &&
-    req.surface === "job.submit" &&
+    req.surface === "patch.preview" &&
     req.context.previewOnly &&
     req.context.workspaceTrust === "trusted" &&
     req.context.workspaceHealth === "healthy" &&

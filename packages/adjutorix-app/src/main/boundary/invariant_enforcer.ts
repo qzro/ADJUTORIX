@@ -67,11 +67,11 @@ export type Operation =
   | "workspace.open"
   | "workspace.close"
   | "workspace.reveal"
-  | "job.submit"
-  | "job.submit"
+  | "patch.preview"
+  | "patch.apply"
   | "verify.run"
-  | "job.status"
-  | "job.status"
+  | "verify.status"
+  | "ledger.current"
   | "settings.update"
   | "window.state.update"
   | "diagnostics.export"
@@ -187,11 +187,11 @@ const OPERATION_EXPECTED_LANE: Record<Operation, AuthorityLane> = {
   "workspace.open": "workspace-control",
   "workspace.close": "workspace-control",
   "workspace.reveal": "workspace-control",
-  "job.submit": "governed-preview",
-  "job.submit": "governed-apply",
+  "patch.preview": "governed-preview",
+  "patch.apply": "governed-apply",
   "verify.run": "governed-preview",
-  "job.status": "query",
-  "job.status": "query",
+  "verify.status": "query",
+  "ledger.current": "query",
   "settings.update": "local-state",
   "window.state.update": "local-state",
   "diagnostics.export": "service-control",
@@ -302,8 +302,8 @@ function checkWorkspaceCoherence(input: InvariantInput, violations: InvariantVio
     const workspaceRequiredOps: Operation[] = [
       "workspace.close",
       "workspace.reveal",
-      "job.submit",
-      "job.submit",
+      "patch.preview",
+      "patch.apply",
       "verify.run",
     ];
     if (workspaceRequiredOps.includes(input.request.operation)) {
@@ -319,7 +319,7 @@ function checkPreviewVerifyApplyLineage(input: InvariantInput, violations: Invar
   const verified = input.mutation.verified_preview_hash;
   const supplied = input.request.payload.previewHash;
 
-  if (input.request.operation === "job.submit") {
+  if (input.request.operation === "patch.apply") {
     if (!approved) {
       push(violations, "apply.approved_preview_missing", "fatal", "Apply operation requires approved preview lineage", {});
       return;

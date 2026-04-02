@@ -49,11 +49,11 @@ export type CapabilityOperation =
   | "workspace.open"
   | "workspace.close"
   | "workspace.reveal"
-  | "job.submit"
-  | "job.submit"
+  | "patch.preview"
+  | "patch.apply"
   | "verify.run"
-  | "job.status"
-  | "job.status"
+  | "verify.status"
+  | "ledger.current"
   | "settings.update"
   | "window.state.update"
   | "diagnostics.export"
@@ -140,11 +140,11 @@ const OPERATION_CLASS: Record<CapabilityOperation, CapabilityClass> = {
   "workspace.open": "control",
   "workspace.close": "control",
   "workspace.reveal": "control",
-  "job.submit": "governed-preview",
-  "job.submit": "governed-apply",
+  "patch.preview": "governed-preview",
+  "patch.apply": "governed-apply",
   "verify.run": "governed-preview",
-  "job.status": "query",
-  "job.status": "query",
+  "verify.status": "query",
+  "ledger.current": "query",
   "settings.update": "local-state",
   "window.state.update": "local-state",
   "diagnostics.export": "service-control",
@@ -314,7 +314,7 @@ export function evaluateCapability(input: CapabilityInput, ctx?: CapabilityEnfor
       break;
     }
 
-    case "job.submit": {
+    case "patch.preview": {
       if (!p.allowPatchPreview) {
         result = deny(input, "policy_patch_preview_denied");
         break;
@@ -330,7 +330,7 @@ export function evaluateCapability(input: CapabilityInput, ctx?: CapabilityEnfor
       break;
     }
 
-    case "job.submit": {
+    case "patch.apply": {
       if (!p.allowPatchApply) {
         result = deny(input, "policy_patch_apply_denied");
         break;
@@ -382,14 +382,14 @@ export function evaluateCapability(input: CapabilityInput, ctx?: CapabilityEnfor
       break;
     }
 
-    case "job.status": {
+    case "verify.status": {
       result = p.allowVerifyStatus
         ? allow(input, "verify_status_allowed")
         : deny(input, "policy_verify_status_denied");
       break;
     }
 
-    case "job.status": {
+    case "ledger.current": {
       result = p.allowLedgerCurrent
         ? allow(input, "ledger_current_allowed")
         : deny(input, "policy_ledger_current_denied");

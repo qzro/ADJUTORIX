@@ -484,12 +484,12 @@ function registerIpc(state: BootstrapState): void {
 
   safeHandle("adjutorix:patch:preview", async (intent) => {
     assert(typeof intent === "object" && intent !== null, "preview_intent_invalid");
-    return rpcInvokeThroughAgent(state, "job.submit", { intent });
+    return rpcInvokeThroughAgent(state, "patch.preview", { intent });
   });
 
   safeHandle("adjutorix:patch:apply", async (patchId) => {
     assert(typeof patchId === "string" && patchId.length > 0, "patch_id_invalid");
-    return rpcInvokeThroughAgent(state, "job.submit", { patch_id: patchId });
+    return rpcInvokeThroughAgent(state, "patch.apply", { patch_id: patchId });
   });
 
   safeHandle("adjutorix:verify:run", async (targets) => {
@@ -499,11 +499,11 @@ function registerIpc(state: BootstrapState): void {
 
   safeHandle("adjutorix:verify:status", async (verifyId) => {
     assert(typeof verifyId === "string" && verifyId.length > 0, "verify_id_invalid");
-    return rpcInvokeThroughAgent(state, "job.status", { verify_id: verifyId });
+    return rpcInvokeThroughAgent(state, "verify.status", { verify_id: verifyId });
   });
 
   safeHandle("adjutorix:ledger:current", async () => {
-    return rpcInvokeThroughAgent(state, "job.status", {});
+    return rpcInvokeThroughAgent(state, "ledger.current", {});
   });
 
   state.logger?.debug("IPC handlers registered", {
@@ -540,7 +540,7 @@ function createMenuActions(state: BootstrapState): AppMenuActions {
       updateMenuState(state);
     },
     patchPreview: async () => {
-      await rpcInvokeThroughAgent(state, "job.submit", { intent: { op: "noop" } });
+      await rpcInvokeThroughAgent(state, "patch.preview", { intent: { op: "noop" } });
     },
     patchApply: async () => {
       state.logger?.warn("Patch apply invoked without concrete patch id in menu action");

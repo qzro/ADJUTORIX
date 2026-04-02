@@ -753,12 +753,12 @@ function registerIpc(config: RuntimeConfig): void {
   });
 
   safeHandle("adjutorix:patch:preview", async (intent: Record<string, Json>) => {
-    return rpcInvoke("job.submit", { intent });
+    return rpcInvoke("patch.preview", { intent });
   });
 
   safeHandle("adjutorix:patch:apply", async (patchId: string) => {
     assert(typeof patchId === "string" && patchId.length > 0, "invalid_patch_id");
-    return rpcInvoke("job.submit", { patch_id: patchId });
+    return rpcInvoke("patch.apply", { patch_id: patchId });
   });
 
   safeHandle("adjutorix:verify:run", async (targets: string[]) => {
@@ -768,11 +768,11 @@ function registerIpc(config: RuntimeConfig): void {
 
   safeHandle("adjutorix:verify:status", async (verifyId: string) => {
     assert(typeof verifyId === "string" && verifyId.length > 0, "invalid_verify_id");
-    return rpcInvoke("job.status", { verify_id: verifyId });
+    return rpcInvoke("verify.status", { verify_id: verifyId });
   });
 
   safeHandle("adjutorix:ledger:current", async () => {
-    return rpcInvoke("job.status", {});
+    return rpcInvoke("ledger.current", {});
   });
 }
 

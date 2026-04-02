@@ -398,7 +398,7 @@ def verify_status(
 ) -> None:
     runtime = common_options(output, agent_url, token, token_file, timeout_seconds, no_color)
     client = RpcClient(runtime)
-    result = client.call("job.status", {"verify_id": verify_id})
+    result = client.call("verify.status", {"verify_id": verify_id})
     if runtime.output is OutputMode.json:
         emit(runtime, result)
         return
@@ -409,7 +409,7 @@ def verify_status(
         f"Verify {verify.verify_id}",
         ["Field", "Value"],
         [
-            ("Status", job.status),
+            ("Status", verify.status),
             ("Phase", verify.phase),
             ("Replayable", verify.replayable),
             ("Apply Impact", verify.apply_readiness_impact),
@@ -458,7 +458,7 @@ def patch_status(
         [
             ("Title", patch.title),
             ("Status", patch.status),
-            ("Apply Readiness", job.submit_readiness),
+            ("Apply Readiness", patch.apply_readiness),
         ],
     )
 
@@ -477,7 +477,7 @@ def patch_apply(
     runtime = common_options(output, agent_url, token, token_file, timeout_seconds, no_color)
     require_confirmation(confirm, f"apply patch {patch_id}")
     client = RpcClient(runtime)
-    result = client.call("job.submit", {"patch_id": patch_id, "confirmed": True})
+    result = client.call("patch.apply", {"patch_id": patch_id, "confirmed": True})
     emit(runtime, result, title="Patch Applied")
 
 
