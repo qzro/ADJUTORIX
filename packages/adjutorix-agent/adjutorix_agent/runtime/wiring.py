@@ -64,3 +64,41 @@ def build_container(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 __all__ = ["build_container"]
+
+
+# --- authoritative container alias export ---
+def build_container(config: Dict[str, Any]) -> Dict[str, Any]:
+    reg = build_registry(config)
+
+    container: Dict[str, Any] = {
+        "config": reg.get("config"),
+        "clock": reg.get("clock"),
+        "scheduler": reg.get("scheduler"),
+        "job_queue": reg.get("job_queue"),
+        "tx_store": reg.get("transaction_store"),
+        "transaction_store": reg.get("transaction_store"),
+        "ledger": reg.get("ledger_store"),
+        "ledger_store": reg.get("ledger_store"),
+    }
+
+    alias_map = (
+        ("patch_pipeline", ("patch", "patch_pipeline")),
+        ("verify_runner", ("verify", "verify_runner")),
+        ("verify_pipeline", ("verify_pipeline",)),
+        ("snapshot_store", ("snapshot_store",)),
+        ("policy_engine", ("policy_engine",)),
+    )
+
+    for source_name, aliases in alias_map:
+        try:
+            value = reg.get(source_name)
+        except Exception:
+            continue
+        if value is None:
+            continue
+        for alias in aliases:
+            container[alias] = value
+
+    return container
+# --- end authoritative container alias export ---
+
