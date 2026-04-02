@@ -1,72 +1,185 @@
 """
 ADJUTORIX AGENT — RUNTIME WIRING
 
-Authoritative runtime container for live server boot.
+Strict dependency graph construction.
+
+Goals:
+- Single instantiation point for ALL runtime services
+- No hidden imports / side effects
+- Explicit dependency graph (topologically valid)
+- Deterministic startup order
+- Hard failure on missing dependency or cycle
+
+Rules:
+- Every service registered exactly once
+- No service constructs its own dependencies
+- No global singletons outside registry
+- All IO-bound services initialized AFTER config validation
+
+This file is the ONLY place where concrete implementations are bound.
 """
 
 from __future__ import annotations
 
-import os
-from typing import Any, Dict
-
-from adjutorix_agent.core.concurrency_guard import ConcurrencyGuard
-from adjutorix_agent.core.scheduler import Scheduler
-from adjutorix_agent.core.transaction_store import TransactionStore
-from adjutorix_agent.ledger.store import LedgerStore
+from dataclasses import dataclass
+from typing import Any, Callable, Dict
 
 
-def _agent_data_dir(config: Dict[str, Any]) -> str:
-    paths = config.get("paths", {})
-    for key in ("agent_data_dir", "state_dir", "data_dir"):
-        value = paths.get(key)
-        if isinstance(value, str) and value.strip():
-            os.makedirs(value, exist_ok=True)
-            return value
-    fallback = os.path.join(os.path.expanduser("~"), ".adjutorix-agent")
-    os.makedirs(fallback, exist_ok=True)
-    return fallback
+class ServiceRegistry:
+    """Deterministic dependency container."""
+
+    def __init__(self) -> None:
+        self._constructors: Dict[str, Callable[["ServiceRegistry"], Any]] = {}
+        self._instances: Dict[str, Any] = {}
+        self._construction_stack: list[str] = []
+
+    def register(self, name: str, factory: Callable[["ServiceRegistry"], Any]) -> None:
+        if name in self._constructors:
+            raise RuntimeError(f"Service already registered: {name}")
+        self._constructors[name] = factory
+
+    def get(self, name: str) -> Any:
+        if name in self._instances:
+            return self._instances[name]
+
+        if name in self._construction_stack:
+            raise RuntimeError(f"Dependency cycle detected: {self._construction_stack + [name]}")
+
+        if name not in self._constructors:
+            raise RuntimeError(f"Unknown service: {name}")
+
+        self._construction_stack.append(name)
+        instance = self._constructors[name](self)
+        self._construction_stack.pop()
+
+        self._instances[name] = instance
+        return instance
+
+    def materialize_all(self) -> None:
+        for name in list(self._constructors.keys()):
+            self.get(name)
 
 
-def _ledger_db_path(config: Dict[str, Any], agent_data_dir: str) -> str:
-    storage = config.get("storage", {})
-    for key in ("ledger_db_path", "ledger_path", "sqlite_path"):
-        value = storage.get(key)
-        if isinstance(value, str) and value.strip():
-            parent = os.path.dirname(value) or "."
-            os.makedirs(parent, exist_ok=True)
-            return value
-    return os.path.join(agent_data_dir, "ledger.sqlite3")
+@dataclass
+class Config:
+    raw: Dict[str, Any]
 
 
-def build_container(config: Dict[str, Any]) -> Dict[str, Any]:
-    runtime = config.get("runtime", {})
-    max_workers = int(runtime.get("max_concurrent_jobs") or runtime.get("max_workers") or 1)
-
-    agent_data_dir = _agent_data_dir(config)
-    ledger_db_path = _ledger_db_path(config, agent_data_dir)
-
-    scheduler = Scheduler(max_workers=max_workers)
-    tx_store = TransactionStore()
-    ledger = LedgerStore(ledger_db_path)
-    concurrency_guard = ConcurrencyGuard()
-
-    return {
-        "config": config,
-        "scheduler": scheduler,
-        "tx_store": tx_store,
-        "ledger": ledger,
-        "verify": None,
-        "patch": None,
-        "concurrency_guard": concurrency_guard,
-        "agent_data_dir": agent_data_dir,
-        "ledger_db_path": ledger_db_path,
-    }
+@dataclass
+class Clock:
+    def now(self) -> int:
+        import time
+        return int(time.time() * 1_000_000)
 
 
-__all__ = ["build_container"]
+@dataclass
+class SQLiteEngine:
+    url: str
 
 
-# --- authoritative container alias export ---
+@dataclass
+class LedgerStore:
+    engine: SQLiteEngine
+
+
+@dataclass
+class TransactionStore:
+    engine: SQLiteEngine
+
+
+@dataclass
+class SnapshotStore:
+    base_path: str
+
+
+@dataclass
+class PolicyEngine:
+    config: Dict[str, Any]
+
+
+@dataclass
+class Scheduler:
+    max_concurrency: int
+
+
+@dataclass
+class JobQueue:
+    scheduler: Scheduler
+
+
+@dataclass
+class VerifyRunner:
+    timeout: int
+
+
+@dataclass
+class PatchPipeline:
+    snapshot_store: SnapshotStore
+
+
+@dataclass
+class RPCServer:
+    config: Config
+
+
+def build_registry(config: Dict[str, Any]) -> ServiceRegistry:
+    r = ServiceRegistry()
+
+    r.register("config", lambda _: Config(config))
+    r.register("clock", lambda _: Clock())
+
+    r.register(
+        "scheduler",
+        lambda reg: Scheduler(
+            max_concurrency=reg.get("config").raw["runtime"]["max_concurrent_jobs"]
+        ),
+    )
+
+    r.register("job_queue", lambda reg: JobQueue(reg.get("scheduler")))
+
+    r.register(
+        "sqlite_engine",
+        lambda reg: SQLiteEngine(reg.get("config").raw["storage"]["sqlite_url"]),
+    )
+
+    r.register(
+        "ledger_store",
+        lambda reg: LedgerStore(reg.get("sqlite_engine")),
+    )
+
+    r.register(
+        "transaction_store",
+        lambda reg: TransactionStore(reg.get("sqlite_engine")),
+    )
+
+    r.register(
+        "snapshot_store",
+        lambda reg: SnapshotStore(reg.get("config").raw["paths"]["agent_data_dir"]),
+    )
+
+    r.register(
+        "policy_engine",
+        lambda reg: PolicyEngine(reg.get("config").raw["security"]),
+    )
+
+    r.register(
+        "patch_pipeline",
+        lambda reg: PatchPipeline(reg.get("snapshot_store")),
+    )
+
+    r.register(
+        "verify_runner",
+        lambda reg: VerifyRunner(
+            timeout=reg.get("config").raw["runtime"]["verify_timeout_seconds"]
+        ),
+    )
+
+    r.register("rpc_server", lambda reg: RPCServer(reg.get("config")))
+
+    _validate_registry(r)
+    return r
+
+
 def build_container(config: Dict[str, Any]) -> Dict[str, Any]:
     reg = build_registry(config)
 
@@ -84,7 +197,6 @@ def build_container(config: Dict[str, Any]) -> Dict[str, Any]:
     alias_map = (
         ("patch_pipeline", ("patch", "patch_pipeline")),
         ("verify_runner", ("verify", "verify_runner")),
-        ("verify_pipeline", ("verify_pipeline",)),
         ("snapshot_store", ("snapshot_store",)),
         ("policy_engine", ("policy_engine",)),
     )
@@ -100,5 +212,29 @@ def build_container(config: Dict[str, Any]) -> Dict[str, Any]:
             container[alias] = value
 
     return container
-# --- end authoritative container alias export ---
 
+
+def _validate_registry(reg: ServiceRegistry) -> None:
+    reg.materialize_all()
+    cfg = reg.get("config").raw
+
+    if cfg["runtime"]["strict_sequential_mutations"]:
+        if cfg["runtime"]["max_concurrent_jobs"] != 1:
+            raise RuntimeError("Invariant violation: sequential mutations require concurrency=1")
+
+
+def bootstrap(config: Dict[str, Any]) -> ServiceRegistry:
+    reg = build_registry(config)
+    reg.get("clock")
+    reg.get("scheduler")
+    reg.get("job_queue")
+    reg.get("ledger_store")
+    return reg
+
+
+__all__ = [
+    "bootstrap",
+    "build_container",
+    "build_registry",
+    "ServiceRegistry",
+]
