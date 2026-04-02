@@ -131,14 +131,25 @@ class RpcServer:
             try:
                 req = self._parse_request(payload)
 
+                auth = None
+                params = req.params
+
                 if req.method != "health.ping":
-                    require_token(request, method=req.method)
+                    auth = require_token(request, method=req.method)
+                    if (
+                        req.method == "job.submit"
+                        and getattr(auth, "idempotency_key", None)
+                        and isinstance(params, dict)
+                        and "idempotency_key" not in params
+                    ):
+                        params = dict(params)
+                        params["idempotency_key"] = auth.idempotency_key
 
                 handler = self._methods.get(req.method)
                 if handler is None:
                     raise _err(ERR_METHOD_NOT_FOUND, "method_not_found", {"method": req.method})
 
-                result = await handler(req.params)
+                result = await handler(params)
                 return self._success_response(req.id, result)
 
             except HTTPException as exc:
