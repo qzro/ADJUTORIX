@@ -49,11 +49,11 @@ export type AuthorityOperation =
   | "workspace.open"
   | "workspace.close"
   | "workspace.reveal"
-  | "patch.preview"
-  | "patch.apply"
+  | "job.submit"
+  | "job.submit"
   | "verify.run"
-  | "verify.status"
-  | "ledger.current"
+  | "job.status"
+  | "job.status"
   | "settings.update"
   | "window.state.update"
   | "diagnostics.export"
@@ -133,11 +133,11 @@ const OPERATION_LANE: Record<AuthorityOperation, AuthorityLane> = {
   "workspace.open": "workspace-control",
   "workspace.close": "workspace-control",
   "workspace.reveal": "workspace-control",
-  "patch.preview": "governed-preview",
-  "patch.apply": "governed-apply",
+  "job.submit": "governed-preview",
+  "job.submit": "governed-apply",
   "verify.run": "governed-preview",
-  "verify.status": "query",
-  "ledger.current": "query",
+  "job.status": "query",
+  "job.status": "query",
   "settings.update": "local-state",
   "window.state.update": "local-state",
   "diagnostics.export": "service-control",
@@ -304,8 +304,8 @@ export function routeAuthorityRequest(request: AuthorityRequest, ctx: AuthorityR
 
   switch (request.operation) {
     case "runtime.snapshot":
-    case "verify.status":
-    case "ledger.current": {
+    case "job.status":
+    case "job.status": {
       route = allow(request, "query", "query_lane_allowed");
       break;
     }
@@ -324,7 +324,7 @@ export function routeAuthorityRequest(request: AuthorityRequest, ctx: AuthorityR
       break;
     }
 
-    case "patch.preview": {
+    case "job.submit": {
       route = env.workspace_open
         ? allow(request, "governed-preview", "governed_preview_allowed")
         : deny(request, "governed-preview", "workspace_required_for_preview");
@@ -341,7 +341,7 @@ export function routeAuthorityRequest(request: AuthorityRequest, ctx: AuthorityR
       break;
     }
 
-    case "patch.apply": {
+    case "job.submit": {
       const suppliedPreviewHash = request.payload.previewHash;
       if (!env.workspace_open) {
         route = deny(request, "governed-apply", "workspace_required_for_apply");

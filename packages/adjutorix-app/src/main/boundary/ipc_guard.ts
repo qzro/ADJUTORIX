@@ -142,13 +142,13 @@ const CHANNEL_SPECS: Record<AllowedIpcChannel, ChannelSpec> = {
   },
   "adjutorix:patch:preview": {
     contract_kind: "mutation",
-    route: "patch.preview",
+    route: "job.submit",
     payload_shape: "object",
     allow_from_external_frame: false,
   },
   "adjutorix:patch:apply": {
     contract_kind: "mutation",
-    route: "patch.apply",
+    route: "job.submit",
     payload_shape: "object",
     allow_from_external_frame: false,
   },
@@ -160,13 +160,13 @@ const CHANNEL_SPECS: Record<AllowedIpcChannel, ChannelSpec> = {
   },
   "adjutorix:verify:status": {
     contract_kind: "query",
-    route: "verify.status",
+    route: "job.status",
     payload_shape: "object",
     allow_from_external_frame: false,
   },
   "adjutorix:ledger:current": {
     contract_kind: "query",
-    route: "ledger.current",
+    route: "job.status",
     payload_shape: "empty-object",
     allow_from_external_frame: false,
   },

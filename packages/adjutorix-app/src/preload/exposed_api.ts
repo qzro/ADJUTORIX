@@ -114,14 +114,14 @@ export type ExposedCapability =
   | "workspace.health"
   | "workspace.trust.read"
   | "workspace.trust.set"
-  | "patch.preview"
+  | "job.submit"
   | "patch.approve"
-  | "patch.apply"
+  | "job.submit"
   | "patch.clear"
   | "verify.run"
-  | "verify.status"
+  | "job.status"
   | "verify.bind"
-  | "ledger.current"
+  | "job.status"
   | "ledger.timeline"
   | "ledger.entry"
   | "ledger.heads"
@@ -288,14 +288,14 @@ export const EXPOSED_CAPABILITIES: readonly ExposedCapability[] = Object.freeze(
   "workspace.health",
   "workspace.trust.read",
   "workspace.trust.set",
-  "patch.preview",
+  "job.submit",
   "patch.approve",
-  "patch.apply",
+  "job.submit",
   "patch.clear",
   "verify.run",
-  "verify.status",
+  "job.status",
   "verify.bind",
-  "ledger.current",
+  "job.status",
   "ledger.timeline",
   "ledger.entry",
   "ledger.heads",
@@ -506,9 +506,9 @@ export function createWorkspaceFacade(workspace: WorkspaceBridgeApi): ExposedWor
 
 export function createPatchFacade(patch: PatchBridgeApi): ExposedPatchApi {
   return deepFreeze({
-    preview: async (input) => normalizeBridgeEnvelope(await patch.preview(input)),
+    preview: async (input) => normalizeBridgeEnvelope(await job.submit(input)),
     approve: async (input) => normalizeBridgeEnvelope(await patch.approve(input)),
-    apply: async (input) => normalizeBridgeEnvelope(await patch.apply(input)),
+    apply: async (input) => normalizeBridgeEnvelope(await job.submit(input)),
     clear: async () => normalizeBridgeEnvelope(await patch.clear()),
     events: deepFreeze({
       subscribe: (callback) => bindTrackedSubscription("patch", patch.events.subscribe, callback),
@@ -519,7 +519,7 @@ export function createPatchFacade(patch: PatchBridgeApi): ExposedPatchApi {
 export function createVerifyFacade(verify: VerifyBridgeApi): ExposedVerifyApi {
   return deepFreeze({
     run: async (input) => normalizeBridgeEnvelope(await verify.run(input)),
-    status: async (input) => normalizeBridgeEnvelope(await verify.status(input)),
+    status: async (input) => normalizeBridgeEnvelope(await job.status(input)),
     bind: async (input) => normalizeBridgeEnvelope(await verify.bind(input)),
     events: deepFreeze({
       subscribe: (callback) => bindTrackedSubscription("verify", verify.events.subscribe, callback),
@@ -529,7 +529,7 @@ export function createVerifyFacade(verify: VerifyBridgeApi): ExposedVerifyApi {
 
 export function createLedgerFacade(ledger: LedgerBridgeApi): ExposedLedgerApi {
   return deepFreeze({
-    current: async () => normalizeBridgeEnvelope(await ledger.current()),
+    current: async () => normalizeBridgeEnvelope(await job.status()),
     timeline: async (input) => normalizeBridgeEnvelope(await ledger.timeline(input)),
     entry: async (input) => normalizeBridgeEnvelope(await ledger.entry(input)),
     heads: async () => normalizeBridgeEnvelope(await ledger.heads()),
@@ -606,9 +606,9 @@ export function validateExposedApi(api: ExposedApi): void {
   validateManifest(api.manifest);
   if (typeof api.runtime.snapshot !== "function") throw new Error("runtime_snapshot_missing");
   if (typeof api.workspace.open !== "function") throw new Error("workspace_open_missing");
-  if (typeof api.patch.preview !== "function") throw new Error("patch_preview_missing");
+  if (typeof api.job.submit !== "function") throw new Error("patch_preview_missing");
   if (typeof api.verify.run !== "function") throw new Error("verify_run_missing");
-  if (typeof api.ledger.current !== "function") throw new Error("ledger_current_missing");
+  if (typeof api.job.status !== "function") throw new Error("ledger_current_missing");
   if (typeof api.diagnostics.runtime !== "function") throw new Error("diagnostics_runtime_missing");
   if (typeof api.agent.health !== "function") throw new Error("agent_health_missing");
 }

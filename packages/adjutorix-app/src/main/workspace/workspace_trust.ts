@@ -50,9 +50,9 @@ export type WorkspaceTrustDecision = "allow" | "deny";
 export type WorkspaceTrustCapability =
   | "workspace.read"
   | "workspace.reveal"
-  | "patch.preview"
+  | "job.submit"
   | "verify.run"
-  | "patch.apply"
+  | "job.submit"
   | "rpc.proxy"
   | "agent.control"
   | "diagnostics.export.workspace"
@@ -433,7 +433,7 @@ export class WorkspaceTrustService {
         reason = "safe_read_capability_allowed";
         break;
 
-      case "patch.preview":
+      case "job.submit":
         if (level === "trusted") {
           decision = "allow";
           reason = "trusted_preview_allowed";
@@ -459,7 +459,7 @@ export class WorkspaceTrustService {
         }
         break;
 
-      case "patch.apply":
+      case "job.submit":
         if (level === "trusted" && this.policy.allowTrustedPatchApply) {
           decision = "allow";
           reason = "trusted_apply_allowed";
@@ -514,7 +514,7 @@ export class WorkspaceTrustService {
     }
 
     if (evidence.symlinkRoot && this.policy.treatSymlinkRootAsRestricted && level === "trusted") {
-      if (capability === "patch.apply" || capability === "rpc.proxy" || capability === "agent.control") {
+      if (capability === "job.submit" || capability === "rpc.proxy" || capability === "agent.control") {
         decision = "deny";
         reason = "symlink_root_blocks_high_privilege_capability";
       }

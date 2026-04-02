@@ -62,14 +62,14 @@ export type GovernedOperation =
   | "workspace.health"
   | "workspace.trust.read"
   | "workspace.trust.set"
-  | "patch.preview"
+  | "job.submit"
   | "patch.approve"
-  | "patch.apply"
+  | "job.submit"
   | "patch.clear"
   | "verify.run"
-  | "verify.status"
+  | "job.status"
   | "verify.bind"
-  | "ledger.current"
+  | "job.status"
   | "ledger.timeline"
   | "ledger.entry"
   | "agent.health"
@@ -400,9 +400,9 @@ export const GOVERNED_SURFACE_REGISTRY: Record<GovernedOperation, GovernedSurfac
     },
     description: "Persist workspace trust decision.",
   }),
-  "patch.preview": makeSpec({
+  "job.submit": makeSpec({
     schema: 1,
-    operation: "patch.preview",
+    operation: "job.submit",
     kind: "preview",
     authorityLane: "governed-preview",
     mutation: false,
@@ -448,9 +448,9 @@ export const GOVERNED_SURFACE_REGISTRY: Record<GovernedOperation, GovernedSurfac
     },
     description: "Approve current preview lineage for downstream verification/apply.",
   }),
-  "patch.apply": makeSpec({
+  "job.submit": makeSpec({
     schema: 1,
-    operation: "patch.apply",
+    operation: "job.submit",
     kind: "mutation",
     authorityLane: "governed-apply",
     mutation: true,
@@ -520,9 +520,9 @@ export const GOVERNED_SURFACE_REGISTRY: Record<GovernedOperation, GovernedSurfac
     },
     description: "Run verification against current workspace and optional preview lineage.",
   }),
-  "verify.status": makeSpec({
+  "job.status": makeSpec({
     schema: 1,
-    operation: "verify.status",
+    operation: "job.status",
     kind: "query",
     authorityLane: "query",
     mutation: false,
@@ -568,9 +568,9 @@ export const GOVERNED_SURFACE_REGISTRY: Record<GovernedOperation, GovernedSurfac
     },
     description: "Bind verification result into preview lineage state.",
   }),
-  "ledger.current": makeSpec({
+  "job.status": makeSpec({
     schema: 1,
-    operation: "ledger.current",
+    operation: "job.status",
     kind: "query",
     authorityLane: "query",
     mutation: false,
