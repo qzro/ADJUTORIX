@@ -173,8 +173,30 @@ async def _init_storage(config: Dict[str, Any]) -> None:
 
 
 async def _init_core(config: Dict[str, Any]) -> tuple[Scheduler, ConcurrencyGuard]:
-    scheduler = Scheduler(max_concurrent=config["runtime"]["max_concurrent_jobs"])
-    guard = ConcurrencyGuard(strict_sequential=config["runtime"]["strict_sequential_mutations"])
+    import inspect
+
+    runtime_cfg = config["runtime"]
+
+    scheduler_sig = inspect.signature(Scheduler)
+    scheduler_params = scheduler_sig.parameters
+
+    if "max_concurrent" in scheduler_params:
+        scheduler = Scheduler(max_concurrent=runtime_cfg["max_concurrent_jobs"])
+    elif "max_concurrency" in scheduler_params:
+        scheduler = Scheduler(max_concurrency=runtime_cfg["max_concurrent_jobs"])
+    else:
+        scheduler = Scheduler()
+
+    guard_sig = inspect.signature(ConcurrencyGuard)
+    guard_params = guard_sig.parameters
+
+    if "strict_sequential" in guard_params:
+        guard = ConcurrencyGuard(strict_sequential=runtime_cfg["strict_sequential_mutations"])
+    elif "strict_sequential_mutations" in guard_params:
+        guard = ConcurrencyGuard(strict_sequential_mutations=runtime_cfg["strict_sequential_mutations"])
+    else:
+        guard = ConcurrencyGuard()
+
     return scheduler, guard
 
 
