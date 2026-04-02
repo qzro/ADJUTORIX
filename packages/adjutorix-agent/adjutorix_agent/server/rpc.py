@@ -215,15 +215,16 @@ class RpcServer:
         return result
 
     async def _health_ping(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        exposed = self._methods
         return {
             "ts": int(time.time() * 1000),
             "protocol_version": self.protocol_version,
             "services": {
-                "scheduler": self.scheduler is not None,
+                "scheduler": self.scheduler is not None and "job.submit" in exposed and "job.status" in exposed,
                 "tx_store": self.tx_store is not None,
-                "verify": self.verify is not None,
-                "patch": self.patch is not None,
-                "ledger": self.ledger is not None,
+                "verify": self.verify is not None and ("verify.run" in exposed or "verify.status" in exposed or "verify.artifacts" in exposed),
+                "patch": self.patch is not None and ("patch.preview" in exposed or "patch.apply" in exposed),
+                "ledger": self.ledger is not None and ("ledger.current" in exposed or "ledger.at" in exposed or "ledger.range" in exposed or "ledger.replay" in exposed),
             },
         }
 
