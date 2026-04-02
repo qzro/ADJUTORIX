@@ -1,0 +1,99 @@
+packages/adjutorix-app/src/main/index.ts:368:      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "health.ping", params: {} }),
+packages/adjutorix-app/src/main/ipc/agent_ipc.ts:292:        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "health.ping", params: {} }),
+packages/adjutorix-app/src/main/governance/confirmation_rules.ts:82:  workspaceHealth: "healthy" | "degraded" | "unhealthy" | "offline" | null;
+packages/adjutorix-app/src/main/governance/apply_gate.ts:87:  healthLevel: "healthy" | "degraded" | "unhealthy" | "offline" | null;
+packages/adjutorix-app/src/main/agent/agent_health.ts:47:export type AgentHealthLevel = "healthy" | "degraded" | "unhealthy" | "offline";
+packages/adjutorix-app/src/main/agent/agent_health.ts:506:      level = "offline";
+packages/adjutorix-app/src/main/agent/agent_health.ts:577:          : level === "offline"
+packages/adjutorix-app/src/main/agent/agent_health.ts:578:            ? "agent_offline"
+packages/adjutorix-app/src/main/agent/agent_health.ts:596:            : level === "offline"
+packages/adjutorix-app/src/main/agent/agent_health.ts:597:              ? "agent_offline"
+scripts/workspace/reindex.sh:518:                ('todo_count', str(len(re.findall(r'\bTODO\b', text)))),
+scripts/workspace/reindex.sh:519:                ('fixme_count', str(len(re.findall(r'\bFIXME\b', text)))),
+packages/adjutorix-app/src/main/agent/agent_client.ts:189:  healthMethod: "health.ping",
+packages/adjutorix-app/src/main/agent/agent_process.ts:503:        body: JSON.stringify({ jsonrpc: "2.0", id: started, method: "health.ping", params: {} }),
+packages/adjutorix-app/src/main/runtime/bootstrap.ts:295:      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "health.ping", params: {} }),
+packages/adjutorix-app/src/main/runtime/startup_checks.ts:313:      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "health.ping", params: {} }),
+packages/adjutorix-app/src/main/shell/shell_status.ts:48:export type ShellStatusLevel = "healthy" | "degraded" | "unhealthy" | "offline";
+packages/adjutorix-app/src/main/shell/shell_status.ts:497:      level = "offline";
+packages/adjutorix-app/src/main/shell/shell_status.ts:561:          : level === "offline"
+packages/adjutorix-app/src/main/shell/shell_status.ts:562:            ? "shell_status_offline"
+packages/adjutorix-app/src/main/shell/shell_status.ts:580:            : level === "offline"
+packages/adjutorix-app/src/main/shell/shell_status.ts:581:              ? "shell_status_offline"
+configs/tooling/python/ruff.toml:86:task-tags = ["TODO", "FIXME", "NOTE", "HACK"]
+packages/adjutorix-cli/adjutorix_cli/governance.py:111:    offline: bool = False
+packages/adjutorix-app/tests/main/workspace_trust.test.ts:57:      offline: false,
+packages/adjutorix-app/tests/main/workspace_trust.test.ts:304:            offline: false,
+packages/adjutorix-app/tests/main/workspace_trust.test.ts:321:            offline: false,
+packages/adjutorix-app/tests/main/workspace_trust.test.ts:334:            offline: false,
+packages/adjutorix-app/tests/main/workspace_trust.test.ts:437:            offline: true,
+packages/adjutorix-cli/tests/test_cli_replay.py:90:            "offline": False,
+packages/adjutorix-cli/tests/test_cli_replay.py:100:            "offline": False,
+packages/adjutorix-app/src/renderer/state/agent_session.ts:59:export type AgentHealthLevel = "healthy" | "degraded" | "unhealthy" | "offline" | "unknown";
+packages/adjutorix-app/src/renderer/state/agent_session.ts:220:  return stringFromSnapshot(health, "level", ["healthy", "degraded", "unhealthy", "offline", "unknown"] as const, "unknown");
+packages/adjutorix-app/src/renderer/state/agent_session.ts:659:    throw new Error("agent_session_patch_apply_ready_while_offline");
+packages/adjutorix-app/tests/main/environment_fingerprint.test.ts:72:      offline: false,
+packages/adjutorix-app/tests/main/environment_fingerprint.test.ts:236:    it("changes fingerprint when execution mode changes to offline, degraded, readonly, or portable", () => {
+packages/adjutorix-app/tests/main/environment_fingerprint.test.ts:238:      const offline = computeEnvironmentFingerprint(
+packages/adjutorix-app/tests/main/environment_fingerprint.test.ts:243:            offline: true,
+packages/adjutorix-app/tests/main/environment_fingerprint.test.ts:253:            offline: false,
+packages/adjutorix-app/tests/main/environment_fingerprint.test.ts:259:      expect(offline.fingerprint).not.toBe(base.fingerprint);
+packages/adjutorix-app/tests/main/environment_fingerprint.test.ts:371:            offline: true,
+packages/adjutorix-app/src/renderer/state/workspace_state.ts:47:export type WorkspaceHealthLevel = "healthy" | "degraded" | "unhealthy" | "offline" | "unknown";
+packages/adjutorix-app/src/renderer/state/workspace_state.ts:204:  return level === "healthy" || level === "degraded" || level === "unhealthy" || level === "offline" ? level : "unknown";
+packages/adjutorix-cli/adjutorix_cli/replay.py:83:    offline: bool | None = None
+packages/adjutorix-cli/adjutorix_cli/replay.py:537:            current.offline is not None and recorded.offline is not None and current.offline != recorded.offline,
+packages/adjutorix-app/tests/main/agent_client.test.ts:139:          case "health.ping":
+packages/adjutorix-app/tests/main/agent_client.test.ts:258:      expect.objectContaining({ method: "health.ping", requestId: "rpc-1" }),
+packages/adjutorix-app/tests/main/agent_client.test.ts:464:          if (payload.method === "health.ping") {
+packages/adjutorix-app/tests/main/workspace_health.test.ts:85:      offline: false,
+packages/adjutorix-app/tests/main/workspace_health.test.ts:296:            offline: false,
+packages/adjutorix-app/tests/main/workspace_health.test.ts:400:            offline: true,
+packages/adjutorix-app/tests/main/invariant_enforcer.test.ts:92:      offline: false,
+packages/adjutorix-app/tests/main/invariant_enforcer.test.ts:345:          offline: false,
+packages/adjutorix-app/tests/main/invariant_enforcer.test.ts:359:  it("rejects offline apply when verification evidence depends on live unavailable context", () => {
+packages/adjutorix-app/tests/main/invariant_enforcer.test.ts:364:          offline: true,
+packages/adjutorix-app/tests/main/governed_surface.test.ts:83:      offline: false,
+packages/adjutorix-app/tests/main/governed_surface.test.ts:349:            offline: true,
+packages/adjutorix-app/tests/main/apply_gate.test.ts:102:      offline: false,
+packages/adjutorix-app/tests/main/apply_gate.test.ts:359:            offline: false,
+packages/adjutorix-app/tests/main/apply_gate.test.ts:374:            offline: false,
+packages/adjutorix-app/tests/main/apply_gate.test.ts:442:            offline: false,
+packages/adjutorix-app/tests/main/apply_gate.test.ts:509:            offline: true,
+packages/adjutorix-agent/adjutorix_agent/core/verify_runner.py:137:        pipeline = VerifyPipeline(self._reader)
+packages/adjutorix-agent/adjutorix_agent/tests/test_verify_pipeline.py:46:    return VerifyPipeline()
+packages/adjutorix-agent/adjutorix_agent/tests/test_verify_pipeline.py:294:    p1 = VerifyPipeline()
+packages/adjutorix-agent/adjutorix_agent/tests/test_verify_pipeline.py:295:    p2 = VerifyPipeline()
+packages/adjutorix-agent/adjutorix_agent/tests/test_patch_pipeline.py:41:    return PatchPipeline()
+packages/adjutorix-agent/adjutorix_agent/tests/test_patch_pipeline.py:216:    p1 = PatchPipeline()
+packages/adjutorix-agent/adjutorix_agent/tests/test_patch_pipeline.py:217:    p2 = PatchPipeline()
+packages/adjutorix-agent/adjutorix_agent/core/job_runner.py:96:        self._patch_pipeline = patch_pipeline or PatchPipeline()
+packages/adjutorix-agent/adjutorix_agent/runtime/wiring.py:188:        lambda reg: PatchPipeline(reg.get("snapshot_store")),
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331:24:- Authentication required for all methods except health.ping
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331:122:        self.verify_boot_error = "verify_pipeline_reader_unwired"
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331:123:        self.patch = PatchPipeline()
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331:144:                if req.method != "health.ping":
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331:198:        self._register("health.ping", self._health_ping)
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331:250:        return {"ok": False, "state": "offline", "error": self.verify_boot_error}
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331:255:            "state": "offline",
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331:257:            "error": self.verify_boot_error,
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331:263:            "state": "offline",
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331:266:            "error": self.verify_boot_error,
+packages/adjutorix-agent/adjutorix_agent/server/auth.py:243:        "health.ping",
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:24:- Authentication required for all methods except health.ping
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:122:        self.verify_boot_error = "verify_pipeline_reader_unwired"
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:139:            return {"ok": True, "service": "adjutorix-agent", "transport": "jsonrpc", "method": "health.ping"}
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:151:                if req.method != "health.ping":
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:205:        self._register("health.ping", self._health_ping)
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:240:        return {"ok": False, "state": "offline", "error": "scheduler_unwired"}
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:243:        return {"ok": False, "state": "offline", "job_id": params.get("job_id"), "error": "scheduler_unwired"}
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:246:        return {"ok": False, "state": "offline", "job_id": params.get("job_id"), "logs": [], "error": "scheduler_unwired"}
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:249:        return {"ok": False, "state": "offline", "error": "verify_pipeline_unwired"}
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:252:        return {"ok": False, "state": "offline", "verify_id": params.get("verify_id"), "error": "verify_pipeline_unwired"}
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:255:        return {"ok": False, "state": "offline", "verify_id": params.get("verify_id"), "artifacts": [], "error": "verify_pipeline_unwired"}
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:258:        return {"ok": False, "state": "offline", "error": "patch_pipeline_unwired"}
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:261:        return {"ok": False, "state": "offline", "error": "patch_pipeline_unwired"}
+packages/adjutorix-agent/adjutorix_agent/server/rpc.py:264:        return {"ok": False, "state": "offline", "error": "ledger_unwired"}
+packages/adjutorix-agent/adjutorix_agent/core/verify_pipeline.py:198:    pipeline = VerifyPipeline(reader)
+packages/adjutorix-agent/adjutorix_agent/core/patch_pipeline.py:272:    return PatchPipeline(snapshot).build(intents)
+packages/adjutorix-agent/adjutorix_agent/core/verification_artifacts.py:137:        pipeline = VerifyPipeline(self._reader)

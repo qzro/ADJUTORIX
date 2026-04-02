@@ -1,27 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ChevronRight,
-  Clipboard,
-  Eye,
-  Filter,
-  History,
-  Info,
-  Lock,
-  PauseCircle,
-  PlayCircle,
-  RefreshCw,
-  Search,
-  ShieldCheck,
-  Sparkles,
-  Square,
-  TerminalSquare,
-  Trash2,
-  Wand2,
-  XCircle,
-} from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, ChevronRight, Clipboard, Eye, Filter, History, Info, Loader2, Lock, PauseCircle, PlayCircle, RefreshCw, Search, ShieldCheck, Sparkles, Square, TerminalSquare, Trash2, Wand2, XCircle } from "lucide-react";
 
 /**
  * ADJUTORIX APP — RENDERER / COMPONENTS / TerminalPanel.tsx

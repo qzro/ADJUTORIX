@@ -491,7 +491,7 @@ export default function AppShell(props: AppShellProps): JSX.Element {
 
   const statusChips = props.statusChips ?? [];
   const leftCollapsed = props.leftRailCollapsed ?? false;
-  const rightCollapsed = props.rightRailCollapsed ?? false || isNarrow;
+  const rightCollapsed = (props.rightRailCollapsed ?? false) || isNarrow;
   const bottomVisible = props.bottomPanelVisible ?? false;
   const loading = props.loading ?? false;
   const commandPaletteOpen = props.commandPaletteOpen ?? false;

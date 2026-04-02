@@ -1,28 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Activity,
-  AlertTriangle,
-  Bot,
-  CheckCircle2,
-  ChevronRight,
-  Cloud,
-  Database,
-  Gauge,
-  KeyRound,
-  Link2,
-  Loader2,
-  Lock,
-  RefreshCw,
-  Server,
-  ShieldAlert,
-  ShieldCheck,
-  ShieldX,
-  Sparkles,
-  TerminalSquare,
-  Wrench,
-  XCircle,
-} from "lucide-react";
+import { Activity, AlertTriangle, Bot, CheckCircle2, ChevronRight, Cloud, Database, FileCode2, Gauge, KeyRound, Link2, Loader2, Lock, RefreshCw, Server, ShieldAlert, ShieldCheck, ShieldX, Sparkles, TerminalSquare, Wrench, XCircle } from "lucide-react";
 
 /**
  * ADJUTORIX APP — RENDERER / COMPONENTS / ProviderStatus.tsx

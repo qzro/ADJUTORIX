@@ -1,0 +1,10 @@
+ M packages/adjutorix-agent/adjutorix_agent/server/rpc.py
+ M packages/adjutorix-app/assets/asset-manifest.json
+ M packages/adjutorix-app/src/main/index.ts
+ M packages/adjutorix-app/src/renderer/components/AppShell.tsx
+ M packages/adjutorix-app/src/renderer/components/FileTreePane.tsx
+ M packages/adjutorix-app/src/renderer/components/MonacoEditorPane.tsx
+ M packages/adjutorix-app/src/renderer/components/ProviderStatus.tsx
+ M packages/adjutorix-app/src/renderer/components/TerminalPanel.tsx
+?? .adjutorix-audit/
+?? packages/adjutorix-agent/adjutorix_agent/server/rpc.py.bak.1775120331

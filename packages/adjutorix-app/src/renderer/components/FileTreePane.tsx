@@ -1,27 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ChevronRight,
-  ChevronDown,
-  Folder,
-  FolderOpen,
-  FileCode2,
-  FileText,
-  FileJson,
-  FileSearch,
-  ShieldCheck,
-  ShieldAlert,
-  ShieldX,
-  AlertTriangle,
-  CheckCircle2,
-  Circle,
-  Search,
-  Eye,
-  GitBranch,
-  Sparkles,
-  MoreHorizontal,
-  RefreshCw,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Circle, Eye, FileCode2, FileJson, FileSearch, FileText, Folder, FolderOpen, FolderTree, GitBranch, MoreHorizontal, RefreshCw, Search, ShieldAlert, ShieldCheck, ShieldX, Sparkles } from "lucide-react";
 
 /**
  * ADJUTORIX APP — RENDERER / COMPONENTS / FileTreePane.tsx

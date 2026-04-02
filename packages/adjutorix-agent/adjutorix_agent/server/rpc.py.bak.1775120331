@@ -116,12 +116,13 @@ class RpcServer:
         self.app = FastAPI()
 
         # authoritative services (singletons)
-        self.scheduler = None
-        self.tx_store = None
+        self.scheduler = Scheduler()
+        self.tx_store = TransactionStore()
         self.verify = None
         self.verify_boot_error = "verify_pipeline_reader_unwired"
-        self.patch = None
-        self.ledger = None
+        self.patch = PatchPipeline()
+        self.ledger = LedgerStore()
+
         self._methods: Dict[str, Callable[[Dict[str, Any]], Awaitable[Any]]] = {}
 
         self._register_methods()
@@ -130,14 +131,6 @@ class RpcServer:
     # ------------------------------------------------------------------
 
     def _mount_routes(self) -> None:
-        @self.app.get("/")
-        async def root_probe():
-            return {"ok": True, "service": "adjutorix-agent", "transport": "http"}
-
-        @self.app.get("/rpc")
-        async def rpc_probe():
-            return {"ok": True, "service": "adjutorix-agent", "transport": "jsonrpc", "method": "health.ping"}
-
         @self.app.post("/rpc")
         async def handle(request: Request):
             try:
@@ -237,31 +230,56 @@ class RpcServer:
     # ---------------- JOB ----------------
 
     async def _job_submit(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": False, "state": "offline", "error": "scheduler_unwired"}
+        job_id = await self.scheduler.submit(params)
+        return {"job_id": job_id}
 
     async def _job_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": False, "state": "offline", "job_id": params.get("job_id"), "error": "scheduler_unwired"}
+        jid = params.get("job_id")
+        if not jid:
+            raise _err(ERR_INVALID_PARAMS, "missing_job_id")
+        return self.scheduler.status(jid)
 
     async def _job_logs(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": False, "state": "offline", "job_id": params.get("job_id"), "logs": [], "error": "scheduler_unwired"}
+        jid = params.get("job_id")
+        since = int(params.get("since_seq", 0))
+        return self.scheduler.logs(jid, since)
+
+    # ---------------- VERIFY ----------------
 
     async def _verify_run(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": False, "state": "offline", "error": "verify_pipeline_unwired"}
+        return {"ok": False, "state": "offline", "error": self.verify_boot_error}
 
     async def _verify_status(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": False, "state": "offline", "verify_id": params.get("verify_id"), "error": "verify_pipeline_unwired"}
+        return {
+            "ok": False,
+            "state": "offline",
+            "verify_id": params.get("verify_id"),
+            "error": self.verify_boot_error,
+        }
 
     async def _verify_artifacts(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": False, "state": "offline", "verify_id": params.get("verify_id"), "artifacts": [], "error": "verify_pipeline_unwired"}
+        return {
+            "ok": False,
+            "state": "offline",
+            "verify_id": params.get("verify_id"),
+            "artifacts": [],
+            "error": self.verify_boot_error,
+        }
+
+    # ---------------- PATCH ----------------
 
     async def _patch_preview(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": False, "state": "offline", "error": "patch_pipeline_unwired"}
+        return await self.patch.preview(params)
 
     async def _patch_apply(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": False, "state": "offline", "error": "patch_pipeline_unwired"}
+        return await self.patch.apply(params)
+
+    # ---------------- LEDGER ----------------
 
     async def _ledger_current(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": False, "state": "offline", "error": "ledger_unwired"}
+        return self.ledger.current()
+
+    # ---------------- INDEX ----------------
 
     async def _index_build(self, params: Dict[str, Any]) -> Dict[str, Any]:
         root = params.get("root")

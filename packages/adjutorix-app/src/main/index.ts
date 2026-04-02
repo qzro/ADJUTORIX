@@ -599,21 +599,145 @@ async function rpcInvoke(method: string, params: Record<string, Json>): Promise<
 }
 
 function registerIpc(config: RuntimeConfig): void {
-  safeHandle("__adjutorix_smoke_ping__", async () => ({ ok: true, ts: Date.now() }));
+  const registerLegacyCompatHandler = (channel: string, handler: () => Promise<Json> | Json): void => {
+    try {
+      ipcMain.handle(channel, async () => await handler());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/second handler|already.*handler/i.test(message)) {
+        throw error;
+      }
+    }
+  };
 
-  safeHandle("adjutorix:app:getRuntimeInfo", async () => ({
-    version: config.environment.appVersion,
-    platform: config.environment.platform,
-    arch: config.environment.arch,
-    agentUrl: config.agent.configuredUrl,
-    rendererManifestSha256: config.build.rendererManifestSha256,
-    rendererAssetManifestSha256: config.build.rendererAssetManifestSha256,
-  } satisfies Json));
-
-  safeHandle("adjutorix:rpc:invoke", async (method: string, params: Record<string, Json>) => {
-    assert(typeof method === "string" && method.length > 0, "invalid_rpc_method");
-    return rpcInvoke(method, params);
+  registerLegacyCompatHandler("adjutorix:runtime:snapshot", async () => {
+    const mem = process.memoryUsage();
+    const snapshot = {
+      schema: 1,
+      ok: true,
+      phase: appDiagnostics.phase,
+      startedAtMs: appDiagnostics.startedAtMs,
+      configHash: appDiagnostics.configHash,
+      environment: {
+        appVersion: config.environment.appVersion,
+        node: config.environment.node,
+        electron: config.environment.electron,
+        platform: config.environment.platform,
+        arch: config.environment.arch,
+        isPackaged: config.environment.isPackaged,
+        headlessSmokeMode: config.environment.headlessSmokeMode,
+      },
+      workspace: {
+        currentPath: null,
+        workspacePath: null,
+        health: "unknown",
+        status: "unknown",
+        isOpen: false,
+      },
+      agent: {
+        url: agentState.url,
+        managed: agentState.managed,
+        pid: agentState.pid,
+        healthy: agentState.lastHealth.ok,
+        status: agentState.lastHealth.status,
+        checkedAtMs: agentState.lastHealth.checkedAtMs ?? null,
+      },
+      diagnostics: {
+        events: appDiagnostics.events.length,
+        crashes: appDiagnostics.crashes.length,
+        windowCreated: appDiagnostics.windowCreated,
+        rendererLoaded: appDiagnostics.rendererLoaded,
+      },
+      resources: {
+        rss_bytes: mem.rss,
+        heap_total_bytes: mem.heapTotal,
+        heap_used_bytes: mem.heapUsed,
+        external_bytes: mem.external,
+        cpu_load_avg: os.loadavg(),
+      },
+    };
+    const payload = { ok: true, snapshot, ...snapshot };
+    return payload as Json;
   });
+
+  registerLegacyCompatHandler("adjutorix:workspace:health", async () => {
+    const payload = {
+      ok: true,
+      schema: 1,
+      status: "unknown",
+      health: "unknown",
+      currentPath: null,
+      workspacePath: null,
+      isOpen: false,
+      checkedAtMs: Date.now(),
+      issues: ["no-workspace-open"],
+    };
+    return payload as Json;
+  });
+
+  registerLegacyCompatHandler("adjutorix:agent:health", async () => {
+    const payload = {
+      ok: agentState.lastHealth.ok,
+      status: agentState.lastHealth.status,
+      checkedAtMs: agentState.lastHealth.checkedAtMs ?? Date.now(),
+      bodySha256: agentState.lastHealth.bodySha256,
+      url: agentState.url,
+      managed: agentState.managed,
+      pid: agentState.pid,
+    };
+    return payload as Json;
+  });
+
+  registerLegacyCompatHandler("adjutorix:diagnostics:runtimeSnapshot", async () => {
+    const mem = process.memoryUsage();
+    const snapshot = {
+      schema: 1,
+      app: {
+        version: config.environment.appVersion,
+        platform: config.environment.platform,
+        arch: config.environment.arch,
+        electron: config.environment.electron,
+        node: config.environment.node,
+        pid: process.pid,
+        uptime_seconds: Math.floor(process.uptime()),
+      },
+      runtime: {
+        workspacePath: null,
+        agentUrl: agentState.url,
+        agentHealthy: agentState.lastHealth.ok,
+        configHash: appDiagnostics.configHash,
+        environmentHash: sha256(stableJson(config.environment as unknown as Record<string, unknown>)),
+        phase: appDiagnostics.phase,
+      },
+      resources: {
+        rss_bytes: mem.rss,
+        heap_total_bytes: mem.heapTotal,
+        heap_used_bytes: mem.heapUsed,
+        external_bytes: mem.external,
+        cpu_load_avg: os.loadavg(),
+      },
+      stateHash: sha256(
+        stableJson({
+          phase: appDiagnostics.phase,
+          configHash: appDiagnostics.configHash,
+          agent: {
+            ok: agentState.lastHealth.ok,
+            status: agentState.lastHealth.status,
+            checkedAtMs: agentState.lastHealth.checkedAtMs ?? null,
+          },
+          windowCreated: appDiagnostics.windowCreated,
+          rendererLoaded: appDiagnostics.rendererLoaded,
+        }),
+      ),
+    };
+    const payload = {
+      ok: true,
+      snapshot,
+      queryHash: sha256(stableJson(snapshot)),
+    };
+    return payload as Json;
+  });
+
 
   safeHandle("adjutorix:workspace:open", async (workspacePath: string) => {
     const normalized = normalizeFsPath(workspacePath);
