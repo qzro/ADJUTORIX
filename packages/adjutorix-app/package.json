@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Adjutorix Desktop Application — Deterministic Patch-Oriented Workspace",
+  "description": "Adjutorix Desktop Application \u2014 Deterministic Patch-Oriented Workspace",
   "license": "MIT",
   "author": "Adjutorix",
   "engines": {
@@ -15,7 +15,7 @@
     "build": "pnpm run clean && pnpm run build:ts && pnpm run build:preload-entry && pnpm run build:renderer && pnpm run build:assets",
     "build:ts": "tsc -p tsconfig.json --incremental false --noEmitOnError true",
     "build:renderer": "node ./scripts/build-renderer.mjs",
-    "build:assets": "node ./scripts/prepare-renderer-assets.js",
+    "build:assets": "node ./scripts/prepare-renderer-assets.js && node ./scripts/normalize-asset-manifest.cjs",
     "clean": "rimraf dist node_modules/.cache/tsbuildinfo .adjutorix.renderer.entry.html .adjutorix.vite.renderer.config.mjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,json,css,md}\"",
