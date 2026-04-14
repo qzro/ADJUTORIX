@@ -14,7 +14,7 @@
     "dev": "pnpm run build && pnpm exec electron .",
     "build": "pnpm run clean && pnpm run build:ts && pnpm run build:preload-entry && pnpm run build:renderer && pnpm run build:assets",
     "build:ts": "tsc -p tsconfig.json --incremental false --noEmitOnError true",
-    "build:renderer": "node ./scripts/build-renderer.mjs",
+    "build:renderer": "bash -lc 'set -euo pipefail; node ./scripts/build-renderer.mjs | node ./scripts/persist-renderer-asset-manifest.cjs'",
     "build:assets": "node ./scripts/prepare-renderer-assets.js && node ./scripts/normalize-asset-manifest.cjs",
     "clean": "rimraf dist node_modules/.cache/tsbuildinfo .adjutorix.renderer.entry.html .adjutorix.vite.renderer.config.mjs",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=0",
@@ -31,7 +31,6 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "date-fns": "^3.6.0",
-    "electron": "^30.0.0",
     "framer-motion": "^12.38.0",
     "lodash": "^4.17.21",
     "lucide-react": "^1.7.0",
@@ -57,6 +56,7 @@
     "@vitejs/plugin-react": "5.0.0",
     "autoprefixer": "10.4.20",
     "concurrently": "^8.2.2",
+    "electron": "^30.0.0",
     "electron-builder": "^24.13.3",
     "eslint": "^9.9.0",
     "jsdom": "^29.0.2",
@@ -83,7 +83,9 @@
       "buildResources": "assets"
     },
     "files": [
-      "dist/**/*"
+      "dist/**/*",
+      "assets/**/*",
+      "package.json"
     ],
     "mac": {
       "target": [
