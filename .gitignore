@@ -187,3 +187,7 @@ repo-private/
 .github/*.private.yml
 
 # <<< ADJUTORIX HARDENED PRIVACY BLOCK <<<
+
+.adjutorix-audit/
+
+*.bak.*
