@@ -263,19 +263,49 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeJson(value: unknown): JsonValue {
-  if (value === null) return null;
-  if (typeof value === "boolean" || typeof value === "string") return value;
-  if (typeof value === "number") {
-    assert(Number.isFinite(value), "non_finite_number");
-    return Object.is(value, -0) ? 0 : value;
-  }
-  if (Array.isArray(value)) return value.map(normalizeJson);
-  if (isPlainObject(value)) {
-    const out: Record<string, JsonValue> = {};
-    for (const key of Object.keys(value).sort()) out[key] = normalizeJson(value[key]);
-    return out;
-  }
-  throw new Error("preload:non_json_value");
+  const seen = new WeakSet<object>();
+
+  const visit = (input: unknown): JsonValue => {
+    if (input === null || input === undefined) return null;
+
+    if (typeof input === "string") return input;
+    if (typeof input === "boolean") return input;
+    if (typeof input === "number") return Number.isFinite(input) ? input : null;
+    if (typeof input === "bigint") return String(input);
+    if (typeof input === "symbol" || typeof input === "function") return null;
+
+    if (input instanceof Date) return input.toISOString();
+
+    if (input instanceof Error) {
+      const out: Record<string, JsonValue> = {
+        name: input.name,
+        message: input.message,
+        stack: input.stack ?? null,
+      };
+      const cause = (input as { cause?: unknown }).cause;
+      if (cause !== undefined) out.cause = visit(cause);
+      return out;
+    }
+
+    if (Array.isArray(input)) return input.map((item) => visit(item));
+
+    if (typeof input === "object") {
+      if (seen.has(input)) return "[Circular]";
+      seen.add(input);
+
+      const out: Record<string, JsonValue> = {};
+      for (const [key, child] of Object.entries(input as Record<string, unknown>)) {
+        out[key] = visit(child);
+      }
+
+      seen.delete(input);
+      return out;
+    }
+
+    return null;
+  };
+
+  return visit(value);
 }
 
 function deepFreeze<T>(value: T): T {
