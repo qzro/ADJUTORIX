@@ -449,15 +449,20 @@ function deriveOperationalGate(input: {
   const treeEntries = Array.isArray(input.workspaceEntries) ? input.workspaceEntries.length : 0;
   const selectedPath = input.selectedPath ?? null;
 
+  const bufferContent = input.activeEditorBuffer?.content;
+  const hasBufferContent =
+    typeof bufferContent?.workingContent === "string" ||
+    typeof bufferContent?.baselineContent === "string";
+
   const bufferMounted =
     !!input.activeEditorBuffer &&
     typeof input.activeEditorBuffer.path === "string" &&
     input.activeEditorBuffer.path.length > 0 &&
-    typeof input.activeEditorBuffer.content === "string";
+    hasBufferContent;
 
   const fileReadOk =
     bufferMounted &&
-    input.activeEditorBuffer.readOnly === true || bufferMounted;
+    input.activeEditorBuffer.readOnly === true;
 
   const writableKnown =
     typeof input.workspaceHealth?.writable === "boolean" ||
@@ -1011,18 +1016,6 @@ const statusChips = [
   const [openedWorkspacePaths, setOpenedWorkspacePaths] = React.useState<string[]>([]);
   const [editorBuffers, dispatchEditorBuffers] = React.useReducer(editorBuffersReducer, undefined, createInitialEditorBuffersState);
   const activeEditorBuffer = editorBuffers.activePath ? editorBuffers.byPath[editorBuffers.activePath] ?? null : null;
-  const operationalGate = React.useMemo(
-    () =>
-      deriveOperationalGate({
-        workspaceRoot: surfaceWorkspaceRoot ?? workspaceRoot ?? null,
-        workspaceEntries,
-        selectedPath: selectedWorkspacePath,
-        activeEditorBuffer,
-        workspaceHealth: state.workspaceHealth,
-      }),
-    [surfaceWorkspaceRoot, workspaceRoot, workspaceEntries, selectedWorkspacePath, activeEditorBuffer, state.workspaceHealth],
-  );
-
   const workspaceEntries = React.useMemo(() => {
     const health = (state.workspaceHealth ?? {}) as any;
     const runtimeWorkspace = ((state.runtimeSnapshot as any)?.workspace ?? {}) as any;
@@ -1078,6 +1071,18 @@ const statusChips = [
 
     return emptyCandidate ?? [];
   }, [state.runtimeSnapshot, state.workspaceHealth, state.diagnosticsRuntime]);
+
+  const operationalGate = React.useMemo(
+    () =>
+      deriveOperationalGate({
+        workspaceRoot: surfaceWorkspaceRoot ?? workspaceRoot ?? null,
+        workspaceEntries,
+        selectedPath: selectedWorkspacePath,
+        activeEditorBuffer,
+        workspaceHealth: state.workspaceHealth,
+      }),
+    [surfaceWorkspaceRoot, workspaceRoot, workspaceEntries, selectedWorkspacePath, activeEditorBuffer, state.workspaceHealth],
+  );
 
   React.useEffect(() => {
     setSelectedWorkspacePath(null);
