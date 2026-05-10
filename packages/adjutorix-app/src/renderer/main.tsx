@@ -490,6 +490,141 @@ function deriveOperationalGate(input: {
   };
 }
 
+
+type WorkspaceTreeEntryLike = {
+  path?: unknown;
+  workspacePath?: unknown;
+  fullPath?: unknown;
+  absolutePath?: unknown;
+  relativePath?: unknown;
+  id?: unknown;
+  kind?: unknown;
+  type?: unknown;
+  entryType?: unknown;
+  nodeType?: unknown;
+  isFile?: unknown;
+  file?: unknown;
+  isDirectory?: unknown;
+  directory?: unknown;
+  hidden?: unknown;
+  ignored?: unknown;
+  children?: unknown;
+  entries?: unknown;
+  items?: unknown;
+};
+
+function flattenWorkspaceTreeEntries(entries: unknown[]): WorkspaceTreeEntryLike[] {
+  const out: WorkspaceTreeEntryLike[] = [];
+
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+
+    const entry = value as WorkspaceTreeEntryLike;
+    out.push(entry);
+
+    const children =
+      Array.isArray(entry.children) ? entry.children :
+      Array.isArray(entry.entries) ? entry.entries :
+      Array.isArray(entry.items) ? entry.items :
+      [];
+
+    for (const child of children) visit(child);
+  };
+
+  for (const entry of entries) visit(entry);
+  return out;
+}
+
+function workspaceTreeEntryPath(entry: WorkspaceTreeEntryLike): string | null {
+  for (const key of ["path", "workspacePath", "fullPath", "absolutePath", "relativePath", "id"] as const) {
+    const value = entry[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function workspaceTreeEntryKind(entry: WorkspaceTreeEntryLike): string {
+  return String(entry.kind ?? entry.type ?? entry.entryType ?? entry.nodeType ?? "").toLowerCase();
+}
+
+function isWorkspaceTreeDirectory(entry: WorkspaceTreeEntryLike): boolean {
+  const kind = workspaceTreeEntryKind(entry);
+
+  if (entry.isDirectory === true || entry.directory === true) return true;
+  if (kind.includes("directory") || kind.includes("folder") || kind === "root") return true;
+
+  const children =
+    Array.isArray(entry.children) ? entry.children :
+    Array.isArray(entry.entries) ? entry.entries :
+    Array.isArray(entry.items) ? entry.items :
+    [];
+
+  return children.length > 0 && entry.isFile !== true && entry.file !== true && !kind.includes("file");
+}
+
+function isAutoOpenEligibleWorkspacePath(path: string): boolean {
+  const lower = path.replace(/\\/g, "/").toLowerCase();
+
+  if (
+    lower.includes("/node_modules/") ||
+    lower.includes("/.git/") ||
+    lower.includes("/dist/") ||
+    lower.includes("/build/") ||
+    lower.includes("/coverage/") ||
+    lower.includes("/.next/") ||
+    lower.includes("/.turbo/")
+  ) {
+    return false;
+  }
+
+  if (/\.(png|jpg|jpeg|gif|webp|icns|ico|woff|woff2|ttf|otf|zip|gz|tgz|pdf|mp4|mov|mp3|wav)$/i.test(lower)) {
+    return false;
+  }
+
+  return true;
+}
+
+function scoreAutoOpenWorkspacePath(path: string, entry: WorkspaceTreeEntryLike): number {
+  const normalized = path.replace(/\\/g, "/");
+  const lower = normalized.toLowerCase();
+  const parts = lower.split("/").filter(Boolean);
+  const base = parts.length ? parts[parts.length - 1] : lower;
+
+  let score = 0;
+
+  if (base === "readme.md") score += 2000;
+  if (base === "package.json") score += 1800;
+  if (base === "pnpm-workspace.yaml") score += 1600;
+  if (base === "tsconfig.json") score += 1500;
+  if (base.endsWith(".md")) score += 500;
+  if (base.endsWith(".json")) score += 450;
+  if (base.endsWith(".ts") || base.endsWith(".tsx")) score += 400;
+  if (lower.includes("/packages/")) score += 250;
+  if (lower.includes("/src/")) score += 200;
+
+  if (entry.hidden === true || lower.includes("/.adjutorix/")) score -= 1200;
+  if (entry.ignored === true) score -= 1000;
+  if (lower.includes("/logs/")) score -= 500;
+
+  score -= Math.min(normalized.length, 400) / 1000;
+
+  return score;
+}
+
+function pickFirstOperationalWorkspacePath(entries: unknown[]): string | null {
+  const candidates = flattenWorkspaceTreeEntries(entries)
+    .map((entry) => ({ entry, path: workspaceTreeEntryPath(entry) }))
+    .filter((candidate): candidate is { entry: WorkspaceTreeEntryLike; path: string } => {
+      if (!candidate.path) return false;
+      if (isWorkspaceTreeDirectory(candidate.entry)) return false;
+      return isAutoOpenEligibleWorkspacePath(candidate.path);
+    })
+    .sort((a, b) => scoreAutoOpenWorkspacePath(b.path, b.entry) - scoreAutoOpenWorkspacePath(a.path, a.entry));
+
+  return candidates[0]?.path ?? null;
+}
+
+
 function deriveBootstrapHash(state: Pick<AppState, "manifest" | "runtimeSnapshot" | "workspaceHealth" | "agentHealth" | "diagnosticsRuntime" | "phase">): string {
   return createHashLike({
     phase: state.phase,
@@ -1016,6 +1151,7 @@ const statusChips = [
   const [openedWorkspacePaths, setOpenedWorkspacePaths] = React.useState<string[]>([]);
   const [editorBuffers, dispatchEditorBuffers] = React.useReducer(editorBuffersReducer, undefined, createInitialEditorBuffersState);
   const activeEditorBuffer = editorBuffers.activePath ? editorBuffers.byPath[editorBuffers.activePath] ?? null : null;
+  const autoOpenWorkspacePathRef = React.useRef<string | null>(null);
   const workspaceEntries = React.useMemo(() => {
     const health = (state.workspaceHealth ?? {}) as any;
     const runtimeWorkspace = ((state.runtimeSnapshot as any)?.workspace ?? {}) as any;
@@ -1085,6 +1221,7 @@ const statusChips = [
   );
 
   React.useEffect(() => {
+    autoOpenWorkspacePathRef.current = null;
     setSelectedWorkspacePath(null);
     setOpenedWorkspacePaths([]);
   }, [surfaceWorkspaceRoot]);
@@ -1166,6 +1303,18 @@ const statusChips = [
       recordEvent("workspace.open", { kind: "workspace.file.open.threw", detail: { path: next, message } });
     }
   }, [api.workspace, notify, recordEvent, selectWorkspacePath, workspaceEntries]);
+
+  React.useEffect(() => {
+    if (!surfaceWorkspaceBound) return;
+    if (activeEditorBuffer || selectedWorkspacePath) return;
+
+    const nextPath = pickFirstOperationalWorkspacePath(workspaceEntries);
+    if (!nextPath || autoOpenWorkspacePathRef.current === nextPath) return;
+
+    autoOpenWorkspacePathRef.current = nextPath;
+    void openWorkspacePath(nextPath);
+  }, [surfaceWorkspaceBound, workspaceEntries, activeEditorBuffer, selectedWorkspacePath, openWorkspacePath]);
+
 
 
 
