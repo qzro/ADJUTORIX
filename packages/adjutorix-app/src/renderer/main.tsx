@@ -953,6 +953,14 @@ const statusChips = [
   const workspaceEntries = React.useMemo(() => {
     const health = (state.workspaceHealth ?? {}) as any;
     const runtimeWorkspace = ((state.runtimeSnapshot as any)?.workspace ?? {}) as any;
+    const diagnosticsRuntime =
+      ((state.diagnosticsRuntime as any)?.snapshot?.runtime ??
+        (state.diagnosticsRuntime as any)?.runtime ??
+        {}) as any;
+    const diagnosticsWorkspace =
+      ((state.diagnosticsRuntime as any)?.snapshot?.workspace ??
+        (state.diagnosticsRuntime as any)?.workspace ??
+        {}) as any;
 
     const candidates = [
       health.entries,
@@ -963,20 +971,40 @@ const statusChips = [
       runtimeWorkspace.fileTree,
       runtimeWorkspace.tree,
       runtimeWorkspace.workspaceTree,
+      diagnosticsWorkspace.entries,
+      diagnosticsWorkspace.fileTree,
+      diagnosticsWorkspace.tree,
+      diagnosticsWorkspace.workspaceTree,
+      diagnosticsRuntime.entries,
+      diagnosticsRuntime.fileTree,
+      diagnosticsRuntime.tree,
+      diagnosticsRuntime.workspaceTree,
     ];
 
+    let emptyCandidate: any[] | null = null;
+
     for (const candidate of candidates) {
-      if (Array.isArray(candidate)) return candidate;
-      if (candidate && typeof candidate === "object" && Array.isArray((candidate as any).entries)) {
-        return (candidate as any).entries;
+      if (Array.isArray(candidate)) {
+        if (candidate.length > 0) return candidate;
+        if (!emptyCandidate) emptyCandidate = candidate;
+        continue;
       }
+
+      if (candidate && typeof candidate === "object" && Array.isArray((candidate as any).entries)) {
+        const entries = (candidate as any).entries as any[];
+        if (entries.length > 0) return entries;
+        if (!emptyCandidate) emptyCandidate = entries;
+      }
+
       if (candidate && typeof candidate === "object" && Array.isArray((candidate as any).children)) {
-        return (candidate as any).children;
+        const children = (candidate as any).children as any[];
+        if (children.length > 0) return children;
+        if (!emptyCandidate) emptyCandidate = children;
       }
     }
 
-    return [];
-  }, [state.runtimeSnapshot, state.workspaceHealth]);
+    return emptyCandidate ?? [];
+  }, [state.runtimeSnapshot, state.workspaceHealth, state.diagnosticsRuntime]);
 
   React.useEffect(() => {
     setSelectedWorkspacePath(null);
