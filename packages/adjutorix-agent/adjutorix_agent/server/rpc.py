@@ -389,7 +389,28 @@ class RpcServer:
         }
 
     async def _ledger_current(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        return {"ok": False, "state": "offline", "error": "ledger_unwired"}
+        """
+        Return the current ledger projection.
+
+        This method must not report transport/offline when the RPC server is live
+        and auth has succeeded. If the durable ledger backend is not yet bound,
+        return an explicit empty online projection so the app can distinguish
+        "no ledger entries yet" from "agent unavailable".
+        """
+        if self.ledger is not None:
+            current = self.ledger.current()
+            if asyncio.iscoroutine(current):
+                current = await current
+            return current
+
+        return {
+            "ok": True,
+            "state": "online",
+            "head": None,
+            "entries": [],
+            "count": 0,
+            "backend": "contract-fallback",
+        }
 
     async def _index_build(self, params: Dict[str, Any]) -> Dict[str, Any]:
         root = params.get("root")
