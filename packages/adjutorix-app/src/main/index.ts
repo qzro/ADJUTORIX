@@ -209,9 +209,13 @@ const initialWorkspaceRoot = (() => {
 
 const workspaceState: {
   currentPath: string | null;
+  openedAtMs: number | null;
+  checkedAtMs: number | null;
   recentPaths: string[];
 } = {
   currentPath: initialWorkspaceRoot,
+  openedAtMs: initialWorkspaceRoot ? Date.now() : null,
+  checkedAtMs: initialWorkspaceRoot ? Date.now() : null,
   recentPaths: initialWorkspaceRoot ? [initialWorkspaceRoot] : [],
 };
 
@@ -619,6 +623,142 @@ async function rpcInvoke(method: string, params: Record<string, Json>): Promise<
   return payload.result ?? null;
 }
 
+function canAccessPath(targetPath: string, mode: number): boolean {
+  try {
+    fs.accessSync(targetPath, mode);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildCompatWorkspacePosture(): Record<string, Json> {
+  const rootPath = workspaceState.currentPath;
+  const checkedAtMs = Date.now();
+
+  if (!rootPath) {
+    return {
+      schema: 1,
+      ok: false,
+      workspaceOpen: false,
+      currentPath: null,
+      workspacePath: null,
+      rootPath: null,
+      level: "unknown",
+      health: "unknown",
+      status: "unknown",
+      trustLevel: "unknown",
+      trust: null,
+      readable: null,
+      writable: null,
+      exists: false,
+      directory: false,
+      openedAtMs: null,
+      checkedAtMs,
+      recents: workspaceState.recentPaths,
+      issues: ["no-workspace-open"],
+    };
+  }
+
+  const exists = fs.existsSync(rootPath);
+  const directory = exists && fs.statSync(rootPath).isDirectory();
+  const readable = exists && canAccessPath(rootPath, fs.constants.R_OK);
+  const writable = exists && canAccessPath(rootPath, fs.constants.W_OK);
+  const ok = exists && directory && readable;
+  const level = ok ? (writable ? "healthy" : "degraded") : "unhealthy";
+  const trustLevel = "trusted";
+  const source = process.env.ADJUTORIX_WORKSPACE_ROOT ? "env:ADJUTORIX_WORKSPACE_ROOT" : "runtime:workspace.open";
+
+  const issues: string[] = [];
+  if (!exists) issues.push("workspace-missing");
+  if (exists && !directory) issues.push("workspace-not-directory");
+  if (exists && !readable) issues.push("workspace-not-readable");
+  if (exists && !writable) issues.push("workspace-not-writable");
+
+  workspaceState.checkedAtMs = checkedAtMs;
+
+  return {
+    schema: 1,
+    ok,
+    workspaceOpen: true,
+    currentPath: rootPath,
+    workspacePath: rootPath,
+    rootPath,
+    level,
+    health: level,
+    status: ok ? "ready" : "blocked",
+    trustLevel,
+    trust: {
+      level: trustLevel,
+      source,
+      reason: "explicit_workspace_root_bound",
+      checkedAtMs,
+    },
+    readable,
+    writable,
+    exists,
+    directory,
+    openedAtMs: workspaceState.openedAtMs,
+    checkedAtMs,
+    recents: workspaceState.recentPaths,
+    issues,
+  };
+}
+
+function buildCompatAgentAuthProjection(): Record<string, Json> {
+  const tokenFile = path.join(os.homedir(), ".adjutorix", "token");
+  const token = fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, "utf8").trim() : "";
+  const tokenLoaded = token.length > 0;
+
+  return {
+    state: tokenLoaded ? "ready" : "missing",
+    trust: token.length >= 32 ? "usable" : tokenLoaded ? "weak" : "none",
+    authenticated: tokenLoaded,
+    auth: tokenLoaded ? "valid" : "missing",
+    authStatus: tokenLoaded ? "valid" : "missing",
+    tokenLoaded,
+    tokenLength: tokenLoaded ? token.length : null,
+    tokenFingerprint: tokenLoaded ? sha256(token).slice(0, 16) : null,
+    tokenFile: path.basename(tokenFile),
+    headerName: "x-adjutorix-token",
+  };
+}
+
+function buildCompatAgentHealthProjection(): Record<string, Json> {
+  const auth = buildCompatAgentAuthProjection();
+  const transportReady = agentState.lastHealth.ok;
+  const level = transportReady ? "healthy" : "unhealthy";
+
+  return {
+    schema: 1,
+    ok: transportReady,
+    healthy: transportReady,
+    level,
+    health: level,
+    status: agentState.lastHealth.status,
+    checkedAtMs: agentState.lastHealth.checkedAtMs ?? Date.now(),
+    bodySha256: agentState.lastHealth.bodySha256,
+    url: agentState.url,
+    endpoint: agentState.url,
+    endpointUrl: agentState.url,
+    endpointLabel: agentState.url,
+    managed: agentState.managed,
+    pid: agentState.pid,
+    connected: transportReady,
+    transport: transportReady ? "healthy" : "unavailable",
+    transportState: transportReady ? "ready" : "error",
+    provider: "adjutorix-agent",
+    providerName: "adjutorix-agent",
+    auth,
+    authState: auth.state,
+    authStatus: auth.authStatus,
+    authenticated: auth.authenticated,
+    tokenLoaded: auth.tokenLoaded,
+    tokenLength: auth.tokenLength,
+    tokenFingerprint: auth.tokenFingerprint,
+  };
+}
+
 function registerIpc(config: RuntimeConfig): void {
   const registerLegacyCompatHandler = (channel: string, handler: () => Promise<Json> | Json): void => {
     try {
@@ -632,16 +772,11 @@ function registerIpc(config: RuntimeConfig): void {
   };
 
   registerLegacyCompatHandler("adjutorix:agent:health", async () => {
-    const payload = {
-      ok: agentState.lastHealth.ok,
-      status: agentState.lastHealth.status,
-      checkedAtMs: agentState.lastHealth.checkedAtMs ?? Date.now(),
-      bodySha256: agentState.lastHealth.bodySha256,
-      url: agentState.url,
-      managed: agentState.managed,
-      pid: agentState.pid,
-    };
-    return payload as Json;
+    return buildCompatAgentHealthProjection() as Json;
+  });
+
+  registerLegacyCompatHandler("adjutorix:agent:status", async () => {
+    return buildCompatAgentHealthProjection() as Json;
   });
 
   registerLegacyCompatHandler("adjutorix:diagnostics:runtimeSnapshot", async () => {
@@ -717,8 +852,12 @@ function registerIpc(config: RuntimeConfig): void {
         currentPath: workspaceState.currentPath,
         workspacePath: workspaceState.currentPath,
         rootPath: workspaceState.currentPath,
-        health: workspaceState.currentPath ? "ready" : "unknown",
-        status: workspaceState.currentPath ? "ready" : "unknown",
+        health: buildCompatWorkspacePosture().health,
+        status: buildCompatWorkspacePosture().status,
+        level: buildCompatWorkspacePosture().level,
+        trustLevel: buildCompatWorkspacePosture().trustLevel,
+        writable: buildCompatWorkspacePosture().writable,
+        readable: buildCompatWorkspacePosture().readable,
         isOpen: Boolean(workspaceState.currentPath),
         openedAtMs: workspaceState.openedAtMs,
         checkedAtMs: workspaceState.checkedAtMs,
@@ -761,33 +900,7 @@ function registerIpc(config: RuntimeConfig): void {
   });
 
   registerLegacyCompatHandler("adjutorix:workspace:health", async () => {
-    const currentPath =
-      typeof workspaceState.currentPath === "string" && workspaceState.currentPath.length > 0
-        ? workspaceState.currentPath
-        : null;
-    const entries = buildRendererWorkspaceEntries(currentPath);
-    const isOpen = Boolean(currentPath);
-    const recentPaths = Array.isArray(workspaceState.recentPaths) ? workspaceState.recentPaths : [];
-
-    return {
-      schema: 1,
-      ok: true,
-      checkedAtMs: Date.now(),
-      currentPath,
-      rootPath: currentPath,
-      workspacePath: currentPath,
-      isOpen,
-      status: isOpen ? "ready" : "unknown",
-      health: isOpen ? "healthy" : "unknown",
-      level: isOpen ? "healthy" : "unknown",
-      issues: isOpen ? [] : ["no-workspace-open"],
-      recentPaths,
-      entryCount: entries.length,
-      treeTruncated: entries.length >= RENDERER_WORKSPACE_TREE_MAX_ENTRIES,
-      treeMaxEntries: RENDERER_WORKSPACE_TREE_MAX_ENTRIES,
-      treeMaxDepth: RENDERER_WORKSPACE_TREE_MAX_DEPTH,
-      entries,
-    };
+    return buildCompatWorkspacePosture() as Json;
   });
 
 
