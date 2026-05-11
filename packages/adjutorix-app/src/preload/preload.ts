@@ -263,19 +263,49 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeJson(value: unknown): JsonValue {
-  if (value === null) return null;
-  if (typeof value === "boolean" || typeof value === "string") return value;
-  if (typeof value === "number") {
-    assert(Number.isFinite(value), "non_finite_number");
-    return Object.is(value, -0) ? 0 : value;
-  }
-  if (Array.isArray(value)) return value.map(normalizeJson);
-  if (isPlainObject(value)) {
-    const out: Record<string, JsonValue> = {};
-    for (const key of Object.keys(value).sort()) out[key] = normalizeJson(value[key]);
-    return out;
-  }
-  throw new Error("preload:non_json_value");
+  const seen = new WeakSet<object>();
+
+  const visit = (input: unknown): JsonValue => {
+    if (input === null || input === undefined) return null;
+
+    if (typeof input === "string") return input;
+    if (typeof input === "boolean") return input;
+    if (typeof input === "number") return Number.isFinite(input) ? input : null;
+    if (typeof input === "bigint") return String(input);
+    if (typeof input === "symbol" || typeof input === "function") return null;
+
+    if (input instanceof Date) return input.toISOString();
+
+    if (input instanceof Error) {
+      const out: Record<string, JsonValue> = {
+        name: input.name,
+        message: input.message,
+        stack: input.stack ?? null,
+      };
+      const cause = (input as { cause?: unknown }).cause;
+      if (cause !== undefined) out.cause = visit(cause);
+      return out;
+    }
+
+    if (Array.isArray(input)) return input.map((item) => visit(item));
+
+    if (typeof input === "object") {
+      if (seen.has(input)) return "[Circular]";
+      seen.add(input);
+
+      const out: Record<string, JsonValue> = {};
+      for (const [key, child] of Object.entries(input as Record<string, unknown>)) {
+        out[key] = visit(child);
+      }
+
+      seen.delete(input);
+      return out;
+    }
+
+    return null;
+  };
+
+  return visit(value);
 }
 
 function deepFreeze<T>(value: T): T {
@@ -404,15 +434,54 @@ function normalizeWorkspaceRevealRequest(input: unknown): WorkspaceRevealRequest
   };
 }
 
+function workspaceFileReadPathFromUnknown(input: unknown): string {
+  if (typeof input === "string" && input.trim()) return input.trim();
+
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      const value = workspaceFileReadPathFromUnknown(item);
+      if (value) return value;
+    }
+    return "";
+  }
+
+  if (!input || typeof input !== "object") return "";
+  const obj = input as Record<string, unknown>;
+
+  for (const key of ["path", "targetPath", "relativePath", "relative_path", "workspacePath", "workspace_path", "filePath", "file_path"]) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  for (const key of ["payload", "request", "input", "data", "args", "body", "params"]) {
+    const value = workspaceFileReadPathFromUnknown(obj[key]);
+    if (value) return value;
+  }
+
+  return "";
+}
+
 function normalizeWorkspaceFileReadRequest(input: unknown): WorkspaceFileReadRequest {
   const obj = requireJsonRecord(input, "workspace_file_read_request");
-  const rawPath = obj.path !== undefined ? obj.path : obj.targetPath;
+  const readPath = workspaceFileReadPathFromUnknown(obj);
+
+  assert(readPath.length > 0, "workspace_file_read_path_required");
+
   return {
     schema: 1,
     actor: "renderer",
-    path: requireString(rawPath, "path"),
-  };
+    ...obj,
+    path: readPath,
+    targetPath: readPath,
+    relativePath: readPath,
+    relative_path: readPath,
+    workspacePath: readPath,
+    workspace_path: readPath,
+    filePath: readPath,
+    file_path: readPath,
+  } as WorkspaceFileReadRequest;
 }
+
 
 function normalizeWorkspaceTrustSetRequest(input: unknown): WorkspaceTrustSetRequest {
   const obj = requireJsonRecord(input, "workspace_trust_set_request");

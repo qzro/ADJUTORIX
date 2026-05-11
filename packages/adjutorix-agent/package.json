@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node ./scripts/verify-package-surface.mjs"
+    "test": "node ./scripts/verify-package-surface.mjs",
+    "setup": "python3 -m venv .venv && .venv/bin/python -m pip install --upgrade pip setuptools wheel && .venv/bin/python -m pip install -e .",
+    "start": "bash ./scripts/start.sh",
+    "dev": "bash ./scripts/start.sh",
+    "stop": "bash ./scripts/stop.sh"
   }
 }

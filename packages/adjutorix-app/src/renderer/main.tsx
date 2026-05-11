@@ -423,6 +423,220 @@ function initialState(): AppState {
   };
 }
 
+
+type OperationalGate = {
+  ok: boolean;
+  label: "HEALTHY" | "NOT OPERATIONAL";
+  workspaceRoot: string | null;
+  treeEntries: number;
+  selectedPath: string | null;
+  bufferMounted: boolean;
+  fileReadOk: boolean;
+  writableKnown: boolean;
+  failures: string[];
+};
+
+function deriveOperationalGate(input: {
+  workspaceRoot: string | null;
+  workspaceEntries: unknown[];
+  selectedPath: string | null;
+  activeEditorBuffer: any | null;
+  workspaceHealth: any | null;
+}): OperationalGate {
+  const failures: string[] = [];
+
+  const workspaceRoot = input.workspaceRoot ?? null;
+  const treeEntries = Array.isArray(input.workspaceEntries) ? input.workspaceEntries.length : 0;
+  const selectedPath = input.selectedPath ?? null;
+
+  const bufferContent = input.activeEditorBuffer?.content;
+  const hasBufferContent =
+    typeof bufferContent?.workingContent === "string" ||
+    typeof bufferContent?.baselineContent === "string";
+
+  const bufferMounted =
+    !!input.activeEditorBuffer &&
+    typeof input.activeEditorBuffer.path === "string" &&
+    input.activeEditorBuffer.path.length > 0 &&
+    hasBufferContent;
+
+  const fileReadOk =
+    bufferMounted &&
+    input.activeEditorBuffer.readOnly === true;
+
+  const writableKnown =
+    typeof input.workspaceHealth?.writable === "boolean" ||
+    input.activeEditorBuffer?.readOnly === true;
+
+  if (!workspaceRoot) failures.push("workspace_root_missing");
+  if (treeEntries <= 0) failures.push("workspace_tree_empty");
+  if (!selectedPath) failures.push("file_selection_missing");
+  if (!bufferMounted) failures.push("editor_buffer_not_mounted");
+  if (!fileReadOk) failures.push("governed_file_read_not_proven");
+  if (!writableKnown) failures.push("write_posture_unknown");
+
+  const ok = failures.length === 0;
+
+  return {
+    ok,
+    label: ok ? "HEALTHY" : "NOT OPERATIONAL",
+    workspaceRoot,
+    treeEntries,
+    selectedPath,
+    bufferMounted,
+    fileReadOk,
+    writableKnown,
+    failures,
+  };
+}
+
+
+type WorkspaceTreeEntryLike = {
+  path?: unknown;
+  workspacePath?: unknown;
+  fullPath?: unknown;
+  absolutePath?: unknown;
+  relativePath?: unknown;
+  id?: unknown;
+  kind?: unknown;
+  type?: unknown;
+  entryType?: unknown;
+  nodeType?: unknown;
+  isFile?: unknown;
+  file?: unknown;
+  isDirectory?: unknown;
+  directory?: unknown;
+  hidden?: unknown;
+  ignored?: unknown;
+  children?: unknown;
+  entries?: unknown;
+  items?: unknown;
+};
+
+function flattenWorkspaceTreeEntries(entries: unknown[]): WorkspaceTreeEntryLike[] {
+  const out: WorkspaceTreeEntryLike[] = [];
+
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== "object") return;
+
+    const entry = value as WorkspaceTreeEntryLike;
+    out.push(entry);
+
+    const children =
+      Array.isArray(entry.children) ? entry.children :
+      Array.isArray(entry.entries) ? entry.entries :
+      Array.isArray(entry.items) ? entry.items :
+      [];
+
+    for (const child of children) visit(child);
+  };
+
+  for (const entry of entries) visit(entry);
+  return out;
+}
+
+function workspaceTreeEntryPath(entry: WorkspaceTreeEntryLike): string | null {
+  for (const key of ["path", "workspacePath", "fullPath", "absolutePath", "relativePath", "id"] as const) {
+    const value = entry[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function workspaceTreeEntryKind(entry: WorkspaceTreeEntryLike): string {
+  return String(entry.kind ?? entry.type ?? entry.entryType ?? entry.nodeType ?? "").toLowerCase();
+}
+
+function isWorkspaceTreeDirectory(entry: WorkspaceTreeEntryLike): boolean {
+  const kind = workspaceTreeEntryKind(entry);
+
+  if (entry.isDirectory === true || entry.directory === true) return true;
+  if (kind.includes("directory") || kind.includes("folder") || kind === "root") return true;
+
+  const children =
+    Array.isArray(entry.children) ? entry.children :
+    Array.isArray(entry.entries) ? entry.entries :
+    Array.isArray(entry.items) ? entry.items :
+    [];
+
+  return children.length > 0 && entry.isFile !== true && entry.file !== true && !kind.includes("file");
+}
+
+function isAutoOpenEligibleWorkspacePath(path: string): boolean {
+  const lower = path.replace(/\\/g, "/").toLowerCase();
+
+  if (
+    lower.includes("/node_modules/") ||
+    lower.includes("/.git/") ||
+    lower.includes("/dist/") ||
+    lower.includes("/build/") ||
+    lower.includes("/coverage/") ||
+    lower.includes("/.next/") ||
+    lower.includes("/.turbo/")
+  ) {
+    return false;
+  }
+
+  if (/\.(png|jpg|jpeg|gif|webp|icns|ico|woff|woff2|ttf|otf|zip|gz|tgz|pdf|mp4|mov|mp3|wav)$/i.test(lower)) {
+    return false;
+  }
+
+  return true;
+}
+
+function scoreAutoOpenWorkspacePath(path: string, entry: WorkspaceTreeEntryLike): number {
+  const normalized = path.replace(/\\/g, "/");
+  const lower = normalized.toLowerCase();
+  const parts = lower.split("/").filter(Boolean);
+  const base = parts.length ? parts[parts.length - 1] : lower;
+
+  let score = 0;
+
+  if (base === "readme.md") score += 2000;
+  if (base === "package.json") score += 1800;
+  if (base === "pnpm-workspace.yaml") score += 1600;
+  if (base === "tsconfig.json") score += 1500;
+  if (base.endsWith(".md")) score += 500;
+  if (base.endsWith(".json")) score += 450;
+  if (base.endsWith(".ts") || base.endsWith(".tsx")) score += 400;
+  if (lower.includes("/packages/")) score += 250;
+  if (lower.includes("/src/")) score += 200;
+
+  if (entry.hidden === true || lower.includes("/.adjutorix/")) score -= 1200;
+  if (entry.ignored === true) score -= 1000;
+  if (lower.includes("/logs/")) score -= 500;
+
+  score -= Math.min(normalized.length, 400) / 1000;
+
+  return score;
+}
+
+
+function workspacePathForReadRequest(pathValue: string, workspaceRoot: string | null): string {
+  const normalized = pathValue.trim().replace(/\\/g, "/").replace(/\/+/g, "/");
+  const root = workspaceRoot?.trim().replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\/$/, "") ?? "";
+
+  if (root && normalized === root) return "";
+  if (root && normalized.startsWith(root + "/")) return normalized.slice(root.length + 1);
+
+  return normalized.replace(/^\.\//, "");
+}
+
+
+function pickFirstOperationalWorkspacePath(entries: unknown[]): string | null {
+  const candidates = flattenWorkspaceTreeEntries(entries)
+    .map((entry) => ({ entry, path: workspaceTreeEntryPath(entry) }))
+    .filter((candidate): candidate is { entry: WorkspaceTreeEntryLike; path: string } => {
+      if (!candidate.path) return false;
+      if (isWorkspaceTreeDirectory(candidate.entry)) return false;
+      return isAutoOpenEligibleWorkspacePath(candidate.path);
+    })
+    .sort((a, b) => scoreAutoOpenWorkspacePath(b.path, b.entry) - scoreAutoOpenWorkspacePath(a.path, a.entry));
+
+  return candidates[0]?.path ?? null;
+}
+
+
 function deriveBootstrapHash(state: Pick<AppState, "manifest" | "runtimeSnapshot" | "workspaceHealth" | "agentHealth" | "diagnosticsRuntime" | "phase">): string {
   return createHashLike({
     phase: state.phase,
@@ -949,10 +1163,18 @@ const statusChips = [
   const [openedWorkspacePaths, setOpenedWorkspacePaths] = React.useState<string[]>([]);
   const [editorBuffers, dispatchEditorBuffers] = React.useReducer(editorBuffersReducer, undefined, createInitialEditorBuffersState);
   const activeEditorBuffer = editorBuffers.activePath ? editorBuffers.byPath[editorBuffers.activePath] ?? null : null;
-
+  const autoOpenWorkspacePathRef = React.useRef<string | null>(null);
   const workspaceEntries = React.useMemo(() => {
     const health = (state.workspaceHealth ?? {}) as any;
     const runtimeWorkspace = ((state.runtimeSnapshot as any)?.workspace ?? {}) as any;
+    const diagnosticsRuntime =
+      ((state.diagnosticsRuntime as any)?.snapshot?.runtime ??
+        (state.diagnosticsRuntime as any)?.runtime ??
+        {}) as any;
+    const diagnosticsWorkspace =
+      ((state.diagnosticsRuntime as any)?.snapshot?.workspace ??
+        (state.diagnosticsRuntime as any)?.workspace ??
+        {}) as any;
 
     const candidates = [
       health.entries,
@@ -963,22 +1185,55 @@ const statusChips = [
       runtimeWorkspace.fileTree,
       runtimeWorkspace.tree,
       runtimeWorkspace.workspaceTree,
+      diagnosticsWorkspace.entries,
+      diagnosticsWorkspace.fileTree,
+      diagnosticsWorkspace.tree,
+      diagnosticsWorkspace.workspaceTree,
+      diagnosticsRuntime.entries,
+      diagnosticsRuntime.fileTree,
+      diagnosticsRuntime.tree,
+      diagnosticsRuntime.workspaceTree,
     ];
 
+    let emptyCandidate: any[] | null = null;
+
     for (const candidate of candidates) {
-      if (Array.isArray(candidate)) return candidate;
-      if (candidate && typeof candidate === "object" && Array.isArray((candidate as any).entries)) {
-        return (candidate as any).entries;
+      if (Array.isArray(candidate)) {
+        if (candidate.length > 0) return candidate;
+        if (!emptyCandidate) emptyCandidate = candidate;
+        continue;
       }
+
+      if (candidate && typeof candidate === "object" && Array.isArray((candidate as any).entries)) {
+        const entries = (candidate as any).entries as any[];
+        if (entries.length > 0) return entries;
+        if (!emptyCandidate) emptyCandidate = entries;
+      }
+
       if (candidate && typeof candidate === "object" && Array.isArray((candidate as any).children)) {
-        return (candidate as any).children;
+        const children = (candidate as any).children as any[];
+        if (children.length > 0) return children;
+        if (!emptyCandidate) emptyCandidate = children;
       }
     }
 
-    return [];
-  }, [state.runtimeSnapshot, state.workspaceHealth]);
+    return emptyCandidate ?? [];
+  }, [state.runtimeSnapshot, state.workspaceHealth, state.diagnosticsRuntime]);
+
+  const operationalGate = React.useMemo(
+    () =>
+      deriveOperationalGate({
+        workspaceRoot: surfaceWorkspaceRoot ?? workspaceRoot ?? null,
+        workspaceEntries,
+        selectedPath: selectedWorkspacePath,
+        activeEditorBuffer,
+        workspaceHealth: state.workspaceHealth,
+      }),
+    [surfaceWorkspaceRoot, workspaceRoot, workspaceEntries, selectedWorkspacePath, activeEditorBuffer, state.workspaceHealth],
+  );
 
   React.useEffect(() => {
+    autoOpenWorkspacePathRef.current = null;
     setSelectedWorkspacePath(null);
     setOpenedWorkspacePaths([]);
   }, [surfaceWorkspaceRoot]);
@@ -1026,7 +1281,21 @@ const statusChips = [
     dispatchEditorBuffers({ type: "BUFFER_OPEN_REQUESTED", payload: { path: next, readOnly: true, atMs: Date.now() } });
 
     try {
-      const envelope = await (api.workspace as any).readFile({ schema: 1, actor: "renderer", path: next });
+      const readPath = workspacePathForReadRequest(next, surfaceWorkspaceRoot ?? workspaceRoot ?? null) || next;
+      if (!readPath.trim()) throw new Error("workspace_file_open_path_empty");
+
+      const envelope = await (api.workspace as any).readFile({
+        schema: 1,
+        actor: "renderer",
+        path: readPath,
+        targetPath: readPath,
+        relativePath: readPath,
+        relative_path: readPath,
+        workspacePath: readPath,
+        workspace_path: readPath,
+        filePath: readPath,
+        file_path: readPath,
+      });
       if (!envelope?.ok) {
         const message = envelope?.error?.message ?? "Workspace file read failed.";
         dispatchEditorBuffers({ type: "BUFFER_OPEN_FAILED", path: next, error: message, atMs: Date.now() });
@@ -1059,7 +1328,19 @@ const statusChips = [
       notify("error", "File open failed", message);
       recordEvent("workspace.open", { kind: "workspace.file.open.threw", detail: { path: next, message } });
     }
-  }, [api.workspace, notify, recordEvent, selectWorkspacePath, workspaceEntries]);
+  }, [api.workspace, notify, recordEvent, selectWorkspacePath, surfaceWorkspaceRoot, workspaceRoot, workspaceEntries]);
+
+  React.useEffect(() => {
+    if (!surfaceWorkspaceBound) return;
+    if (activeEditorBuffer || selectedWorkspacePath) return;
+
+    const nextPath = pickFirstOperationalWorkspacePath(workspaceEntries);
+    if (!nextPath || autoOpenWorkspacePathRef.current === nextPath) return;
+
+    autoOpenWorkspacePathRef.current = nextPath;
+    void openWorkspacePath(nextPath);
+  }, [surfaceWorkspaceBound, workspaceEntries, activeEditorBuffer, selectedWorkspacePath, openWorkspacePath]);
+
 
 
 
@@ -1189,7 +1470,7 @@ const statusChips = [
           id: "go-patch",
           label: "Go to Patch",
           description: "Open patch review surface.",
-          disabled: !surfaceWorkspaceBound,
+          disabled: !operationalGate.ok,
           onClick: () => selectInteractionView("patch", "Workspace posture accepted for patch review."),
         },
       ]}
@@ -1200,6 +1481,15 @@ const statusChips = [
         { label: "Issues", value: String(((state.workspaceHealth as any)?.issues ?? []).length ?? 0), tone: ((state.workspaceHealth as any)?.issues ?? []).length ? "warn" : "good" },
       ]}
     >
+      {!operationalGate.ok ? (
+        <div className="rounded-2xl border border-red-500/40 bg-red-950/30 p-4 text-sm text-red-100">
+          <div className="text-xs font-semibold uppercase tracking-[0.24em] text-red-300">Not operational</div>
+          <div className="mt-2 font-medium">Workspace is attached, but governed action has not been proven.</div>
+          <div className="mt-2 text-red-200/80">
+            Missing: {operationalGate.failures.join(", ")}
+          </div>
+        </div>
+      ) : null}
       <div className="grid gap-6 2xl:grid-cols-[minmax(22rem,0.9fr)_minmax(0,1.1fr)]">
         <FileTreePane
           rootPath={surfaceWorkspaceRoot ?? undefined}
@@ -1212,7 +1502,7 @@ const statusChips = [
           health={surfaceWorkspaceBound ? "healthy" : "unknown"}
           onFilterQueryChange={setWorkspaceTreeQuery}
           onSearchQueryChange={setWorkspaceTreeQuery}
-          onPathSelected={selectWorkspacePath}
+          onPathSelected={openWorkspacePath}
           onOpenPath={openWorkspacePath}
           onOpenPathRequested={openWorkspacePath}
           onRefreshRequested={refreshWorkspaceHealth}
@@ -1280,7 +1570,7 @@ const statusChips = [
           id: "open-verify",
           label: "Bind verification",
           description: "Move to verification surface.",
-          disabled: !surfaceWorkspaceBound,
+          disabled: !operationalGate.ok,
           onClick: () => selectInteractionView("verify", "Patch surface requested verification binding."),
         },
       ]}
@@ -1508,7 +1798,7 @@ const statusChips = [
               health={workspaceOpen ? "healthy" : "unknown"}
               onFilterQueryChange={setWorkspaceTreeQuery}
               onSearchQueryChange={setWorkspaceTreeQuery}
-              onPathSelected={selectWorkspacePath}
+              onPathSelected={openWorkspacePath}
               onOpenPath={openWorkspacePath}
               onOpenPathRequested={openWorkspacePath}
               onRefreshRequested={refreshWorkspaceHealth}

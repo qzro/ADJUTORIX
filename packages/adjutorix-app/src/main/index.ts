@@ -195,14 +195,28 @@ const agentState: AgentState = {
   },
 };
 
+const initialWorkspaceRoot = (() => {
+  const candidate = process.env.ADJUTORIX_WORKSPACE_ROOT;
+  if (!candidate || candidate.trim().length === 0) return null;
+
+  const resolved = path.resolve(candidate.trim());
+  try {
+    return fs.statSync(resolved).isDirectory() ? resolved : null;
+  } catch {
+    return null;
+  }
+})();
+
 const workspaceState: {
   currentPath: string | null;
   openedAtMs: number | null;
   checkedAtMs: number | null;
+  recentPaths: string[];
 } = {
-  currentPath: null,
-  openedAtMs: null,
-  checkedAtMs: null,
+  currentPath: initialWorkspaceRoot,
+  openedAtMs: initialWorkspaceRoot ? Date.now() : null,
+  checkedAtMs: initialWorkspaceRoot ? Date.now() : null,
+  recentPaths: initialWorkspaceRoot ? [initialWorkspaceRoot] : [],
 };
 
 // -----------------------------------------------------------------------------
@@ -609,10 +623,149 @@ async function rpcInvoke(method: string, params: Record<string, Json>): Promise<
   return payload.result ?? null;
 }
 
+function canAccessPath(targetPath: string, mode: number): boolean {
+  try {
+    fs.accessSync(targetPath, mode);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildCompatWorkspacePosture(): Record<string, Json> {
+  const rootPath = workspaceState.currentPath;
+  const checkedAtMs = Date.now();
+
+  if (!rootPath) {
+    return {
+      schema: 1,
+      ok: false,
+      workspaceOpen: false,
+      currentPath: null,
+      workspacePath: null,
+      rootPath: null,
+      level: "unknown",
+      health: "unknown",
+      status: "unknown",
+      trustLevel: "unknown",
+      trust: null,
+      readable: null,
+      writable: null,
+      exists: false,
+      directory: false,
+      openedAtMs: null,
+      checkedAtMs,
+      recents: workspaceState.recentPaths,
+      issues: ["no-workspace-open"],
+    };
+  }
+
+  const exists = fs.existsSync(rootPath);
+  const directory = exists && fs.statSync(rootPath).isDirectory();
+  const readable = exists && canAccessPath(rootPath, fs.constants.R_OK);
+  const writable = exists && canAccessPath(rootPath, fs.constants.W_OK);
+  const ok = exists && directory && readable;
+  const level = ok ? (writable ? "healthy" : "degraded") : "unhealthy";
+  const trustLevel = "trusted";
+  const source = process.env.ADJUTORIX_WORKSPACE_ROOT ? "env:ADJUTORIX_WORKSPACE_ROOT" : "runtime:workspace.open";
+
+  const issues: string[] = [];
+  if (!exists) issues.push("workspace-missing");
+  if (exists && !directory) issues.push("workspace-not-directory");
+  if (exists && !readable) issues.push("workspace-not-readable");
+  if (exists && !writable) issues.push("workspace-not-writable");
+
+  workspaceState.checkedAtMs = checkedAtMs;
+
+  return {
+    schema: 1,
+    ok,
+    workspaceOpen: true,
+    currentPath: rootPath,
+    workspacePath: rootPath,
+    rootPath,
+    level,
+    health: level,
+    status: ok ? "ready" : "blocked",
+    trustLevel,
+    trust: {
+      level: trustLevel,
+      source,
+      reason: "explicit_workspace_root_bound",
+      checkedAtMs,
+    },
+    readable,
+    writable,
+    exists,
+    directory,
+    openedAtMs: workspaceState.openedAtMs,
+    checkedAtMs,
+    recents: workspaceState.recentPaths,
+    issues,
+  };
+}
+
+function buildCompatAgentAuthProjection(): Record<string, Json> {
+  const tokenFile = path.join(os.homedir(), ".adjutorix", "token");
+  const token = fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, "utf8").trim() : "";
+  const tokenLoaded = token.length > 0;
+
+  return {
+    state: tokenLoaded ? "ready" : "missing",
+    trust: token.length >= 32 ? "usable" : tokenLoaded ? "weak" : "none",
+    authenticated: tokenLoaded,
+    auth: tokenLoaded ? "valid" : "missing",
+    authStatus: tokenLoaded ? "valid" : "missing",
+    tokenLoaded,
+    tokenLength: tokenLoaded ? token.length : null,
+    tokenFingerprint: tokenLoaded ? sha256(token).slice(0, 16) : null,
+    tokenFile: path.basename(tokenFile),
+    headerName: "x-adjutorix-token",
+  };
+}
+
+function buildCompatAgentHealthProjection(): Record<string, Json> {
+  const auth = buildCompatAgentAuthProjection();
+  const transportReady = agentState.lastHealth.ok;
+  const level = transportReady ? "healthy" : "unhealthy";
+
+  return {
+    schema: 1,
+    ok: transportReady,
+    healthy: transportReady,
+    level,
+    health: level,
+    status: agentState.lastHealth.status,
+    checkedAtMs: agentState.lastHealth.checkedAtMs ?? Date.now(),
+    bodySha256: agentState.lastHealth.bodySha256,
+    url: agentState.url,
+    endpoint: agentState.url,
+    endpointUrl: agentState.url,
+    endpointLabel: agentState.url,
+    managed: agentState.managed,
+    pid: agentState.pid,
+    connected: transportReady,
+    transport: transportReady ? "healthy" : "unavailable",
+    transportState: transportReady ? "ready" : "error",
+    provider: "adjutorix-agent",
+    providerName: "adjutorix-agent",
+    auth,
+    authState: auth.state,
+    authStatus: auth.authStatus,
+    authenticated: auth.authenticated,
+    tokenLoaded: auth.tokenLoaded,
+    tokenLength: auth.tokenLength,
+    tokenFingerprint: auth.tokenFingerprint,
+  };
+}
+
 function registerIpc(config: RuntimeConfig): void {
-  const registerLegacyCompatHandler = (channel: string, handler: () => Promise<Json> | Json): void => {
+  const registerLegacyCompatHandler = (channel: string, handler: (payload?: unknown) => Promise<Json> | Json): void => {
     try {
-      ipcMain.handle(channel, async () => await handler());
+      ipcMain.handle(channel, async (_event, ...args: unknown[]) => {
+        const payload = args.length <= 1 ? args[0] : args;
+        return await handler(payload);
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (!/second handler|already.*handler/i.test(message)) {
@@ -622,16 +775,7 @@ function registerIpc(config: RuntimeConfig): void {
   };
 
   registerLegacyCompatHandler("adjutorix:agent:health", async () => {
-    const payload = {
-      ok: agentState.lastHealth.ok,
-      status: agentState.lastHealth.status,
-      checkedAtMs: agentState.lastHealth.checkedAtMs ?? Date.now(),
-      bodySha256: agentState.lastHealth.bodySha256,
-      url: agentState.url,
-      managed: agentState.managed,
-      pid: agentState.pid,
-    };
-    return payload as Json;
+    return buildCompatAgentHealthProjection() as Json;
   });
 
   registerLegacyCompatHandler("adjutorix:diagnostics:runtimeSnapshot", async () => {
@@ -651,6 +795,8 @@ function registerIpc(config: RuntimeConfig): void {
         workspacePath: workspaceState.currentPath,
         rootPath: workspaceState.currentPath,
         workspaceOpen: Boolean(workspaceState.currentPath),
+        workspaceTree: buildRendererWorkspaceTreeProjection(workspaceState.currentPath),
+        entries: buildRendererWorkspaceEntries(workspaceState.currentPath),
         agentUrl: agentState.url,
         agentHealthy: agentState.lastHealth.ok,
         configHash: appDiagnostics.configHash,
@@ -707,8 +853,12 @@ function registerIpc(config: RuntimeConfig): void {
         currentPath: workspaceState.currentPath,
         workspacePath: workspaceState.currentPath,
         rootPath: workspaceState.currentPath,
-        health: workspaceState.currentPath ? "ready" : "unknown",
-        status: workspaceState.currentPath ? "ready" : "unknown",
+        health: buildCompatWorkspacePosture().health,
+        status: buildCompatWorkspacePosture().status,
+        level: buildCompatWorkspacePosture().level,
+        trustLevel: buildCompatWorkspacePosture().trustLevel,
+        writable: buildCompatWorkspacePosture().writable,
+        readable: buildCompatWorkspacePosture().readable,
         isOpen: Boolean(workspaceState.currentPath),
         openedAtMs: workspaceState.openedAtMs,
         checkedAtMs: workspaceState.checkedAtMs,
@@ -740,8 +890,7 @@ function registerIpc(config: RuntimeConfig): void {
   });
 
   registerLegacyCompatHandler("adjutorix:workspace:file:read", async (payload) => {
-    const obj = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
-    const requestedPath = obj.path ?? obj.targetPath;
+    const requestedPath = rendererWorkspaceReadPathFromPayload(payload);
     const currentPath =
       typeof workspaceState.currentPath === "string" && workspaceState.currentPath.length > 0
         ? workspaceState.currentPath
@@ -751,33 +900,7 @@ function registerIpc(config: RuntimeConfig): void {
   });
 
   registerLegacyCompatHandler("adjutorix:workspace:health", async () => {
-    const currentPath =
-      typeof workspaceState.currentPath === "string" && workspaceState.currentPath.length > 0
-        ? workspaceState.currentPath
-        : null;
-    const entries = buildRendererWorkspaceEntries(currentPath);
-    const isOpen = Boolean(currentPath);
-    const recentPaths = Array.isArray(workspaceState.recentPaths) ? workspaceState.recentPaths : [];
-
-    return {
-      schema: 1,
-      ok: true,
-      checkedAtMs: Date.now(),
-      currentPath,
-      rootPath: currentPath,
-      workspacePath: currentPath,
-      isOpen,
-      status: isOpen ? "ready" : "unknown",
-      health: isOpen ? "healthy" : "unknown",
-      level: isOpen ? "healthy" : "unknown",
-      issues: isOpen ? [] : ["no-workspace-open"],
-      recentPaths,
-      entryCount: entries.length,
-      treeTruncated: entries.length >= RENDERER_WORKSPACE_TREE_MAX_ENTRIES,
-      treeMaxEntries: RENDERER_WORKSPACE_TREE_MAX_ENTRIES,
-      treeMaxDepth: RENDERER_WORKSPACE_TREE_MAX_DEPTH,
-      entries,
-    };
+    return buildCompatWorkspacePosture() as Json;
   });
 
 
@@ -852,14 +975,45 @@ function assertTextBuffer(buffer: Buffer): void {
   }
 }
 
+function rendererWorkspaceReadPathFromPayload(payload: unknown): string {
+  if (typeof payload === "string" && payload.trim()) return payload.trim();
+
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const value = rendererWorkspaceReadPathFromPayload(item);
+      if (value) return value;
+    }
+    return "";
+  }
+
+  if (!payload || typeof payload !== "object") return "";
+  const obj = payload as Record<string, unknown>;
+
+  for (const key of ["path", "targetPath", "relativePath", "relative_path", "workspacePath", "workspace_path", "filePath", "file_path"]) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  for (const key of ["payload", "request", "input", "data", "args", "body", "params"]) {
+    const value = rendererWorkspaceReadPathFromPayload(obj[key]);
+    if (value) return value;
+  }
+
+  return "";
+}
+
 function buildRendererWorkspaceFileSnapshot(rootPath: string | null, requestedPath: unknown): Json {
   if (!rootPath) throw new Error("workspace_file_read_requires_open_workspace");
-  if (typeof requestedPath !== "string" || requestedPath.trim().length === 0) {
+
+  const readPath = rendererWorkspaceReadPathFromPayload(requestedPath);
+  if (!readPath) {
     throw new Error("workspace_file_read_path_required");
   }
 
   const rootRealPath = fs.realpathSync(path.resolve(rootPath));
-  const targetResolvedPath = path.resolve(requestedPath);
+  const targetResolvedPath = path.isAbsolute(readPath)
+    ? path.resolve(readPath)
+    : path.resolve(rootRealPath, readPath);
   const lstat = fs.lstatSync(targetResolvedPath);
 
   if (lstat.isSymbolicLink()) throw new Error("workspace_file_read_symlink_rejected");
@@ -986,6 +1140,19 @@ function buildRendererWorkspaceEntries(rootPath: string | null): RendererWorkspa
 
   visit(normalizedRoot, 1);
   return entries;
+}
+
+function buildRendererWorkspaceTreeProjection(rootPath: string | null): Json {
+  const entries = buildRendererWorkspaceEntries(rootPath);
+  return {
+    schema: 1,
+    rootPath,
+    entries,
+    total: entries.length,
+    truncated: entries.length >= RENDERER_WORKSPACE_TREE_MAX_ENTRIES,
+    maxEntries: RENDERER_WORKSPACE_TREE_MAX_ENTRIES,
+    maxDepth: RENDERER_WORKSPACE_TREE_MAX_DEPTH,
+  } as Json;
 }
 
 
