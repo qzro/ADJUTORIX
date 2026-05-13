@@ -16,6 +16,7 @@ import ProviderStatus from "./components/ProviderStatus";
 import FileTreePane from "./components/FileTreePane";
 import MonacoEditorPane from "./components/MonacoEditorPane";
 import TerminalPanel from "./components/TerminalPanel";
+import ChatPanel from "./components/ChatPanel";
 import { createInitialEditorBuffersState, editorBuffersReducer } from "./state/editor_buffers";
 import "./styles/theme.css";
 import "./styles/layout.css";
@@ -1822,25 +1823,59 @@ const statusChips = [
         }
         primaryContent={renderPrimaryContent()}
         rightRail={
-          <ProviderStatus
-            title="Provider posture"
-            subtitle="Live renderer-side provider and bridge visibility"
-            health={shellHealth as any}
-            providers={providers as any}
-            onRefreshRequested={() => {
-              void Promise.allSettled([
-                refreshRuntime(),
-                refreshWorkspaceHealth(),
-                refreshAgentHealth(),
-                refreshDiagnosticsRuntime(),
-              ]);
-            }}
-            onReconnectRequested={(provider) => {
-              if (!provider || provider.id === "agent") {
-                void refreshAgentHealth();
-              }
-            }}
-          />
+          <div className="space-y-6 p-4">
+            <ProviderStatus
+              title="Provider posture"
+              subtitle="Live renderer-side provider and bridge visibility"
+              health={shellHealth as any}
+              providers={providers as any}
+              onRefreshRequested={() => {
+                void Promise.allSettled([
+                  refreshRuntime(),
+                  refreshWorkspaceHealth(),
+                  refreshAgentHealth(),
+                  refreshDiagnosticsRuntime(),
+                ]);
+              }}
+              onReconnectRequested={(provider) => {
+                if (!provider || provider.id === "agent") {
+                  void refreshAgentHealth();
+                }
+              }}
+            />
+            <ChatPanel
+              title="Workbench chat"
+              subtitle="Governed assistant interaction surface bound to current workspace posture."
+              health={shellHealth}
+              trustLevel={String((state.workspaceHealth as any)?.trustLevel ?? "unknown")}
+              workspaceRoot={workspaceRoot ?? null}
+              messages={state.eventLog.slice(0, 12).map((entry) => ({
+                id: entry.id,
+                role: "system",
+                author: entry.source,
+                content: `${entry.payload.kind}\n${JSON.stringify(entry.payload.detail ?? {}, null, 2)}`,
+                createdAtMs: entry.atMs,
+              }))}
+              onSendMessage={(value: unknown) => {
+                const content =
+                  typeof value === "string"
+                    ? value
+                    : value && typeof value === "object"
+                      ? String((value as any).content ?? (value as any).message ?? "")
+                      : "";
+                recordEvent("renderer.chat", {
+                  kind: "chat.message.submitted",
+                  detail: { content, workspaceRoot: workspaceRoot ?? null },
+                });
+              }}
+              onClearRequested={() => {
+                recordEvent("renderer.chat", {
+                  kind: "chat.clear.requested",
+                  detail: { source: "right-rail" },
+                });
+              }}
+            />
+          </div>
         }
         bottomPanel={
           <TerminalPanel
