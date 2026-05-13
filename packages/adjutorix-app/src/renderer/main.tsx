@@ -17,6 +17,7 @@ import FileTreePane from "./components/FileTreePane";
 import MonacoEditorPane from "./components/MonacoEditorPane";
 import TerminalPanel from "./components/TerminalPanel";
 import ChatPanel from "./components/ChatPanel";
+import CommandPalette from "./components/CommandPalette";
 import { createInitialEditorBuffersState, editorBuffersReducer } from "./state/editor_buffers";
 import "./styles/theme.css";
 import "./styles/layout.css";
@@ -1772,6 +1773,86 @@ const statusChips = [
     }
   };
 
+  const commandPaletteCommands = React.useMemo(
+    () => [
+      { id: "nav:overview", title: "Open Overview", subtitle: "Show workbench overview.", category: "navigation", scope: "global", risk: "safe", enabled: true, shortcutLabel: "G O", icon: "system" },
+      { id: "nav:workspace", title: "Open Workspace", subtitle: "Show file tree and editor surface.", category: "navigation", scope: "workspace", risk: "safe", enabled: true, shortcutLabel: "G W", icon: "folder" },
+      { id: "nav:patch", title: "Open Patch", subtitle: "Show patch review gate.", category: "navigation", scope: "patch", risk: "guarded", enabled: operationalGate.ok, enabledReason: operationalGate.ok ? "Workspace gate is operational." : operationalGate.failures.join(", "), shortcutLabel: "G P", icon: "patch" },
+      { id: "nav:verify", title: "Open Verify", subtitle: "Show verification evidence gate.", category: "navigation", scope: "verify", risk: "safe", enabled: true, shortcutLabel: "G V", icon: "verify" },
+      { id: "nav:ledger", title: "Open Ledger", subtitle: "Show ledger-backed history.", category: "navigation", scope: "global", risk: "safe", enabled: true, shortcutLabel: "G L", icon: "ledger" },
+      { id: "nav:agent", title: "Open Agent", subtitle: "Show agent readiness posture.", category: "navigation", scope: "global", risk: "safe", enabled: true, shortcutLabel: "G A", icon: "bot" },
+      { id: "nav:diagnostics", title: "Open Diagnostics", subtitle: "Show diagnostics cockpit.", category: "navigation", scope: "global", risk: "safe", enabled: true, shortcutLabel: "G D", icon: "diagnostics" },
+      { id: "nav:activity", title: "Open Activity", subtitle: "Show renderer activity stream.", category: "navigation", scope: "global", risk: "safe", enabled: true, shortcutLabel: "G E", icon: "system" },
+
+      { id: "workspace:open", title: "Open governed workspace", subtitle: "Attach a workspace through the preload bridge.", category: "workspace", scope: "workspace", risk: "guarded", enabled: true, authorityLabel: "workspace.open", icon: "folder" },
+      { id: "workspace:refresh", title: "Refresh workspace posture", subtitle: "Reload workspace health and trust evidence.", category: "workspace", scope: "workspace", risk: "safe", enabled: true, authorityLabel: "workspace.health", icon: "folder" },
+      { id: "runtime:refresh", title: "Refresh runtime", subtitle: "Reload renderer runtime snapshot.", category: "system", scope: "global", risk: "safe", enabled: true, authorityLabel: "runtime.snapshot", icon: "system" },
+      { id: "agent:refresh", title: "Refresh agent", subtitle: "Reload provider and agent health.", category: "diagnostics", scope: "global", risk: "safe", enabled: true, authorityLabel: "agent.health", icon: "bot" },
+      { id: "diagnostics:refresh", title: "Refresh diagnostics", subtitle: "Reload diagnostics runtime evidence.", category: "diagnostics", scope: "global", risk: "safe", enabled: true, authorityLabel: "diagnostics.runtime", icon: "diagnostics" },
+
+      { id: "terminal:focus", title: "Focus terminal panel", subtitle: "Route operator to bottom transcript surface.", category: "terminal", scope: "global", risk: "safe", enabled: true, icon: "terminal" },
+      { id: "chat:focus", title: "Focus chat rail", subtitle: "Route operator to workbench chat surface.", category: "chat", scope: "chat", risk: "safe", enabled: true, icon: "chat" },
+    ],
+    [operationalGate.failures, operationalGate.ok],
+  );
+
+  const runCommandPaletteCommand = React.useCallback(
+    (command: any) => {
+      recordEvent("renderer.command", {
+        kind: "command.palette.run",
+        detail: { id: command?.id ?? "unknown", title: command?.title ?? "unknown" },
+      });
+
+      const id = String(command?.id ?? "");
+
+      if (id.startsWith("nav:")) {
+        selectInteractionView(id.slice(4), `Command palette selected ${id}.`);
+        setCommandPaletteOpen(false);
+        return;
+      }
+
+      switch (id) {
+        case "workspace:open":
+          void openWorkspace();
+          break;
+        case "workspace:refresh":
+          void refreshWorkspaceHealth();
+          break;
+        case "runtime:refresh":
+          void refreshRuntime();
+          break;
+        case "agent:refresh":
+          void refreshAgentHealth();
+          break;
+        case "diagnostics:refresh":
+          void refreshDiagnosticsRuntime();
+          break;
+        case "terminal:focus":
+          selectInteractionView("activity", "Command palette focused terminal-backed activity.");
+          break;
+        case "chat:focus":
+          selectInteractionView("agent", "Command palette focused chat-adjacent agent posture.");
+          break;
+        default:
+          notify("warn", "Command unavailable", id || "Unknown command.");
+          break;
+      }
+
+      setCommandPaletteOpen(false);
+    },
+    [
+      notify,
+      openWorkspace,
+      recordEvent,
+      refreshAgentHealth,
+      refreshDiagnosticsRuntime,
+      refreshRuntime,
+      refreshWorkspaceHealth,
+      selectInteractionView,
+    ],
+  );
+
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <AppShell
@@ -1912,50 +1993,29 @@ const statusChips = [
           />
         }
         modalLayer={
-          commandPaletteOpen ? (
-            <div className="pointer-events-auto grid h-full place-items-start justify-center bg-black/40 p-10 backdrop-blur-sm">
-              <section className="mt-24 w-full max-w-3xl rounded-3xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Commands</div>
-                    <h2 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-50">Route surface</h2>
-                    <p className="mt-2 text-sm leading-7 text-zinc-400">
-                      Command palette is wired to the same governed navigation path as the left rail.
-                    </p>
-                  </div>
-                  <button
-                    className="rounded-2xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-100 hover:bg-zinc-800"
-                    onClick={() => setCommandPaletteOpen(false)}
-                  >
-                    Close
-                  </button>
-                </div>
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                  {[
-                    ["overview", "Overview"],
-                    ["workspace", "Workspace"],
-                    ["patch", "Patch"],
-                    ["verify", "Verify"],
-                    ["ledger", "Ledger"],
-                    ["agent", "Agent"],
-                    ["diagnostics", "Diagnostics"],
-                    ["activity", "Activity"],
-                  ].map(([id, label]) => (
-                    <button
-                      key={id}
-                      className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-left text-sm font-semibold text-zinc-100 hover:bg-zinc-800"
-                      onClick={() => {
-                        setCommandPaletteOpen(false);
-                        selectInteractionView(id as InteractionView, `Command palette selected: ${label}`);
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            </div>
-          ) : null
+          <CommandPalette
+            isOpen={commandPaletteOpen}
+            title="Governed command palette"
+            subtitle="Command routing with explicit scope, risk, readiness, and authority posture."
+            health={shellHealth as any}
+            trustLevel={String((state.workspaceHealth as any)?.trustLevel ?? "unknown") as any}
+            commands={commandPaletteCommands as any}
+            selectedCommandId={null}
+            onClose={() => {
+              setCommandPaletteOpen(false);
+              recordEvent("renderer.command", {
+                kind: "command.palette.closed",
+                detail: { source: "command-palette" },
+              });
+            }}
+            onSelectCommand={(command) => {
+              recordEvent("renderer.command", {
+                kind: "command.palette.selected",
+                detail: { id: command.id, title: command.title },
+              });
+            }}
+            onRunCommand={runCommandPaletteCommand}
+          />
         }
         footer={
           <div className="px-4 py-3 text-xs text-zinc-500">
