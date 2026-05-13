@@ -64,6 +64,11 @@ export function ProviderStatus(props: ProviderStatusProps) {
       ? props.notes
       : [`Provider is ${connection} with ${auth} auth and ${trust} endpoint identity.`];
 
+  const noteText = notes.join(" ").toLowerCase();
+  const postureFacts = [connection, auth, trust, health]
+    .map((fact) => String(fact))
+    .filter((fact) => fact.length > 0 && !noteText.includes(fact.toLowerCase()));
+
   return (
     <section className="flex h-full min-h-0 flex-col rounded-[2rem] border border-zinc-800 bg-zinc-900/70 shadow-xl">
       <header className="border-b border-zinc-800 px-5 py-4">
@@ -72,7 +77,7 @@ export function ProviderStatus(props: ProviderStatusProps) {
           <h2>{title}</h2>
           <p>{subtitle}</p>
 
-          {props.loading ? <div>Loading provider status</div> : null}
+          {props.loading ? <div>Loading provider data</div> : null}
 
           <div>{provider}</div>
           {model ? <div>{String(model)}</div> : null}
@@ -80,14 +85,13 @@ export function ProviderStatus(props: ProviderStatusProps) {
           {session ? <div>{String(session)}</div> : null}
 
           <div>
-            <span>{connection}</span>
-            <span>{auth}</span>
-            <span>{trust}</span>
-            <span>{health}</span>
+            {postureFacts.map((fact) => (
+              <span key={fact}>{fact}</span>
+            ))}
           </div>
 
           <div>
-            {protocol !== undefined ? <span>{String(protocol)}</span> : null}
+            {protocol !== undefined ? <span>protocol {String(protocol)}</span> : null}
             {latency !== undefined && latency !== null ? <span>{String(latency)}</span> : null}
             <span>{String(pending)}</span>
           </div>
@@ -122,7 +126,7 @@ export function ProviderStatus(props: ProviderStatusProps) {
           <div>attempts {String(attempts)}</div>
           <div>successful {String(successful)}</div>
           <div>failed {String(failed)}</div>
-          <div>pending requests {String(pending)}</div>
+          <div>queued requests {String(pending)}</div>
         </div>
       </header>
 
