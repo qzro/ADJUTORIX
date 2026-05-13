@@ -15,6 +15,7 @@ import WelcomeScreen from "./components/WelcomeScreen";
 import ProviderStatus from "./components/ProviderStatus";
 import FileTreePane from "./components/FileTreePane";
 import MonacoEditorPane from "./components/MonacoEditorPane";
+import DiffViewerPane from "./components/DiffViewerPane";
 import TerminalPanel from "./components/TerminalPanel";
 import ChatPanel from "./components/ChatPanel";
 import CommandPalette from "./components/CommandPalette";
@@ -1556,6 +1557,60 @@ const statusChips = [
     </SurfaceFrame>
   );
 
+
+  const patchReviewFiles = React.useMemo(() => {
+    const buffer = activeEditorBuffer;
+    const path = String(buffer?.path ?? selectedWorkspacePath ?? "No active buffer");
+    const baseline = String(buffer?.content?.baselineContent ?? "");
+    const working = String(buffer?.content?.workingContent ?? baseline);
+    const baselineLines = baseline.split(/\r?\n/);
+    const workingLines = working.split(/\r?\n/);
+    const maxLines = Math.max(baselineLines.length, workingLines.length, 1);
+    const changedLineCount = Array.from({ length: maxLines }).filter((_, index) => baselineLines[index] !== workingLines[index]).length;
+    const addedLines = working === baseline ? 0 : Math.max(1, workingLines.length - baselineLines.length, changedLineCount);
+    const removedLines = working === baseline ? 0 : Math.max(0, baselineLines.length - workingLines.length, changedLineCount);
+
+    return [
+      {
+        id: path,
+        path,
+        status: buffer ? (working === baseline ? "unchanged" : "preview") : "empty",
+        original: baseline,
+        modified: working,
+        addedLines,
+        removedLines,
+        diagnosticsCount: 0,
+        diagnosticsSeverity: "none",
+        reviewStatus: buffer ? "reviewable" : "no-buffer",
+        verifyStatus: operationalGate.ok ? "ready" : "blocked",
+        applyStatus: operationalGate.ok ? "guarded" : "blocked",
+        healthStatus: operationalGate.ok ? "operational" : "not-operational",
+        hunks: [
+          {
+            id: `${path}:synthetic-hunk`,
+            header: `@@ active-buffer ${path} @@`,
+            summary: buffer ? "Baseline versus working copy for the active editor buffer." : "Select a workspace file to hydrate diff review.",
+            decision: working === baseline ? "accepted" : "needs-attention",
+            diagnosticsCount: 0,
+            diagnosticsSeverity: "none",
+            lines: Array.from({ length: Math.min(maxLines, 160) }).map((_, index) => {
+              const oldLine = baselineLines[index];
+              const newLine = workingLines[index];
+              const same = oldLine === newLine;
+              return {
+                id: `${path}:line:${index + 1}`,
+                kind: same ? "context" : "modified",
+                content: newLine ?? oldLine ?? "",
+                oldLineNumber: oldLine === undefined ? undefined : index + 1,
+                newLineNumber: newLine === undefined ? undefined : index + 1,
+              };
+            }),
+          },
+        ],
+      },
+    ];
+  }, [activeEditorBuffer, operationalGate.ok, selectedWorkspacePath]);
+
   const PatchSurface = () => (
     <SurfaceFrame
       eyebrow="Patch"
@@ -1589,10 +1644,45 @@ const statusChips = [
         { label: "Patch capability", value: hasSurfaceCapability("patch") ? "declared" : "not declared", tone: hasSurfaceCapability("patch") ? "good" : "bad" },
       ]}
     >
-      <div className="grid gap-6 2xl:grid-cols-3">
-        <SnapshotCard title="Patch gate evidence" value={toSurfaceJson({ workspaceRoot: surfaceWorkspaceRoot, workspaceBound: surfaceWorkspaceBound, bridgeCapabilities: surfaceCapabilities.filter((c) => String(c).includes("patch")) })} />
-        <SnapshotCard title="Workspace posture" value={toSurfaceJson(state.workspaceHealth)} />
-        <SnapshotCard title="Runtime snapshot" value={toSurfaceJson(state.runtimeSnapshot)} />
+      <div className="grid gap-6">
+        <div className="min-h-[34rem]">
+          <DiffViewerPane
+            title="Active buffer diff review"
+            subtitle="Governed baseline versus working-copy comparison for the selected workspace file."
+            files={patchReviewFiles as any}
+            selectedFileId={patchReviewFiles[0]?.id}
+            splitView={true}
+            showWhitespace={false}
+            canOpenFile={Boolean(activeEditorBuffer?.path)}
+            canRevealFile={Boolean(activeEditorBuffer?.path)}
+            canNavigateToFile={Boolean(activeEditorBuffer?.path)}
+            onOpenFile={(file) => {
+              if (file?.path && file.path !== "No active buffer") void openWorkspacePath(file.path);
+            }}
+            onRevealFile={(file) => {
+              if (!file?.path || file.path === "No active buffer") return;
+              selectWorkspacePath(file.path);
+              recordEvent("workspace.diff", { kind: "diff.file.revealed", detail: { path: file.path } });
+            }}
+            onNavigateToFile={(file) => {
+              if (!file?.path || file.path === "No active buffer") return;
+              selectWorkspacePath(file.path);
+              selectInteractionView("workspace", "Diff viewer navigated to workspace editor.");
+            }}
+            onSelectFile={(file) => {
+              recordEvent("workspace.diff", { kind: "diff.file.selected", detail: { path: file.path, status: file.status } });
+            }}
+            onSelectHunk={(file, hunk) => {
+              recordEvent("workspace.diff", { kind: "diff.hunk.selected", detail: { path: file.path, hunkId: hunk.id } });
+            }}
+            onRefresh={refreshWorkspaceHealth}
+          />
+        </div>
+        <div className="grid gap-6 2xl:grid-cols-3">
+          <SnapshotCard title="Patch gate evidence" value={toSurfaceJson({ workspaceRoot: surfaceWorkspaceRoot, workspaceBound: surfaceWorkspaceBound, bridgeCapabilities: surfaceCapabilities.filter((c) => String(c).includes("patch")) })} />
+          <SnapshotCard title="Workspace posture" value={toSurfaceJson(state.workspaceHealth)} />
+          <SnapshotCard title="Runtime snapshot" value={toSurfaceJson(state.runtimeSnapshot)} />
+        </div>
       </div>
     </SurfaceFrame>
   );
