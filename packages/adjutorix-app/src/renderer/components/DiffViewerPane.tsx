@@ -518,7 +518,10 @@ export default function DiffViewerPane(props: DiffViewerPaneProps): ReactElement
                   hunk={hunk}
                   splitView={Boolean(props.splitView)}
                   showWhitespace={Boolean(props.showWhitespace)}
-                  onSelect={(_file, hunk) => invoke(props.onSelectHunk, hunk.id)}
+                  onSelect={(file, hunk) => {
+                  props.onSelectHunk?.(file, hunk);
+                  invoke(props.onSelectHunkRequested, file.path, hunk.id, hunk, file);
+                }}
                 />
               ))
             ) : (
