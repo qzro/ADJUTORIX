@@ -30,7 +30,7 @@ import useWorkspace, {
   type WorkspaceProvider,
   type WorkspaceSnapshot,
   type WorkspaceStatus,
-} from "../../../src/hooks/useWorkspace";
+} from "../../src/renderer/hooks/useWorkspace";
 
 // -----------------------------------------------------------------------------
 // HELPERS

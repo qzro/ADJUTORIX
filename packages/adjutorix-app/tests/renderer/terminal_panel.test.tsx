@@ -26,7 +26,7 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import TerminalPanel from "../../../src/renderer/components/TerminalPanel";
+import TerminalPanel from "../../src/renderer/components/TerminalPanel";
 
 type TerminalPanelProps = React.ComponentProps<typeof TerminalPanel>;
 
@@ -120,24 +120,24 @@ describe("TerminalPanel", () => {
   it("renders the canonical terminal shell with title, subtitle, shell identity, cwd, and command input", () => {
     render(<TerminalPanel {...buildProps()} />);
 
-    expect(screen.getByText(/Terminal/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Terminal$/i })).toBeInTheDocument();
     expect(screen.getByText(/Governed shell execution and output surface/i)).toBeInTheDocument();
     expect(screen.getByText(/\/bin\/zsh/i)).toBeInTheDocument();
-    expect(screen.getByText(/\/repo\/adjutorix-app/i)).toBeInTheDocument();
+    expect(screen.getByText(/^\/repo\/adjutorix-app$/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue("npm test -- --runInBand")).toBeInTheDocument();
   });
 
   it("surfaces trust and shell-readiness posture explicitly instead of presenting an unqualified console", () => {
     render(<TerminalPanel {...buildProps()} />);
 
-    expect(screen.getByText(/restricted/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/restricted/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/ready/i)).toBeInTheDocument();
   });
 
   it("surfaces active command identity explicitly so execution context is operator-visible", () => {
     render(<TerminalPanel {...buildProps()} />);
 
-    expect(screen.getByText(/npm test -- --runInBand/i)).toBeInTheDocument();
+    expect(screen.getByText(/^npm test -- --runInBand$/i)).toBeInTheDocument();
     expect(screen.getByText(/requires confirmation/i)).toBeInTheDocument();
   });
 
@@ -145,7 +145,7 @@ describe("TerminalPanel", () => {
     render(<TerminalPanel {...buildProps()} />);
 
     expect(screen.getByText(/\$ npm test -- --runInBand/i)).toBeInTheDocument();
-    expect(screen.getByText(/RUN  v3.0.0/i)).toBeInTheDocument();
+    expect(screen.getByText(/RUN\s+v3\.0\.0/i)).toBeInTheDocument();
     expect(screen.getByText(/warning: terminal running with restricted shell policy/i)).toBeInTheDocument();
     expect(screen.getByText(/process exited with code 0/i)).toBeInTheDocument();
   });
@@ -163,7 +163,7 @@ describe("TerminalPanel", () => {
     const props = buildProps();
     render(<TerminalPanel {...props} />);
 
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "npm run verify" } });
+    fireEvent.change(screen.getByDisplayValue("npm test -- --runInBand"), { target: { value: "npm run verify" } });
 
     expect(props.onCommandInputChange).toHaveBeenCalledTimes(1);
     expect(props.onCommandInputChange).toHaveBeenCalledWith("npm run verify");
@@ -212,7 +212,7 @@ describe("TerminalPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/running/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/running/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it("surfaces failed shell posture explicitly when execution is not healthy", () => {
@@ -240,7 +240,7 @@ describe("TerminalPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/failed/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/failed/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/missing token or invalid environment/i)).toBeInTheDocument();
   });
 
@@ -287,7 +287,7 @@ describe("TerminalPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/Terminal/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Terminal$/i })).toBeInTheDocument();
     expect(screen.queryByText(/RUN  v3\.0\.0/i)).not.toBeInTheDocument();
   });
 
@@ -300,7 +300,7 @@ describe("TerminalPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/Terminal/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Terminal$/i })).toBeInTheDocument();
     expect(screen.getByText(/Governed shell execution and output surface/i)).toBeInTheDocument();
   });
 
@@ -323,9 +323,9 @@ describe("TerminalPanel", () => {
   it("does not collapse terminal shell into only an output log; input, controls, metrics, and execution context remain distinct surfaces", () => {
     render(<TerminalPanel {...buildProps()} />);
 
-    expect(screen.getByRole("textbox")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("npm test -- --runInBand")).toBeInTheDocument();
     expect(screen.getAllByRole("button").length).toBeGreaterThanOrEqual(4);
     expect(screen.getByText(/darwin-arm64/i)).toBeInTheDocument();
-    expect(screen.getByText(/RUN  v3\.0\.0/i)).toBeInTheDocument();
+    expect(screen.getByText(/RUN\s+v3\.0\.0/i)).toBeInTheDocument();
   });
 });

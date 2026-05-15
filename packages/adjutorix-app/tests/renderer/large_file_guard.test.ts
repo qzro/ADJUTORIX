@@ -33,7 +33,7 @@ import {
   type LargeFileDecision,
   type LargeFilePolicy,
   type LargeFileProbe,
-} from "../../../src/renderer/lib/large_file_guard";
+} from "../../src/renderer/lib/large_file_guard";
 
 function policy(overrides: Partial<LargeFilePolicy> = {}): LargeFilePolicy {
   return {

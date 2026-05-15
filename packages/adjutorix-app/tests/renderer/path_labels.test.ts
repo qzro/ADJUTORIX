@@ -31,7 +31,7 @@ import {
   disambiguatePathLabels,
   commonPathPrefix,
   normalizePathForLabeling,
-} from "../../../src/renderer/lib/path_labels";
+} from "../../src/renderer/lib/path_labels";
 
 describe("renderer/lib/path_labels", () => {
   describe("normalizePathForLabeling", () => {

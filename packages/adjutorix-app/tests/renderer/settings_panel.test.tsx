@@ -26,7 +26,7 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import SettingsPanel from "../../../src/renderer/components/SettingsPanel";
+import SettingsPanel from "../../src/renderer/components/SettingsPanel";
 
 type SettingsPanelProps = React.ComponentProps<typeof SettingsPanel>;
 
@@ -152,9 +152,9 @@ describe("SettingsPanel", () => {
 
     expect(screen.getByText(/Settings/i)).toBeInTheDocument();
     expect(screen.getByText(/Governed runtime, workspace, and execution configuration surface/i)).toBeInTheDocument();
-    expect(screen.getByText(/Workspace/i)).toBeInTheDocument();
-    expect(screen.getByText(/Agent/i)).toBeInTheDocument();
-    expect(screen.getByText(/Editor/i)).toBeInTheDocument();
+    expect(screen.getByText(/Workspace trust, hidden-file visibility, and indexing behavior/i)).toBeInTheDocument();
+    expect(screen.getByText(/Agent endpoint/i)).toBeInTheDocument();
+    expect(screen.getByText(/Editor formatting, read-only fallback, and large-file degradation behavior/i)).toBeInTheDocument();
   });
 
   it("surfaces grouped setting descriptions explicitly so configuration remains operationally interpretable", () => {
@@ -191,7 +191,7 @@ describe("SettingsPanel", () => {
   it("surfaces health posture explicitly instead of treating settings as pure form chrome", () => {
     render(<SettingsPanel {...buildProps()} />);
 
-    expect(screen.getByText(/healthy/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/healthy/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders current and draft text values so draft divergence remains inspectable", () => {
@@ -276,7 +276,7 @@ describe("SettingsPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/read.?only/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/read.?only/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/locked by current authority posture/i)).toBeInTheDocument();
   });
 
@@ -325,7 +325,7 @@ describe("SettingsPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/No governed settings are currently exposed/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/No governed settings are currently exposed/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(/Workspace/i)).not.toBeInTheDocument();
   });
 

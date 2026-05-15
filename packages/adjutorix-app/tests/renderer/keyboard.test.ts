@@ -33,7 +33,7 @@ import {
   eventToShortcut,
   equalShortcut,
   sortShortcutModifiers,
-} from "../../../src/renderer/lib/keyboard";
+} from "../../src/renderer/lib/keyboard";
 
 function makeTarget<K extends keyof HTMLElementTagNameMap>(
   tag: K,

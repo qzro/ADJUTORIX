@@ -26,7 +26,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import useKeyboardShortcuts, {
   type KeyboardShortcut,
   type KeyboardShortcutScope,
-} from "../../../src/hooks/useKeyboardShortcuts";
+} from "../../src/renderer/hooks/useKeyboardShortcuts";
 
 function makeKeyEvent(
   key: string,

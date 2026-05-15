@@ -26,24 +26,37 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import MonacoEditorPane from "../../../src/renderer/components/MonacoEditorPane";
+import MonacoEditorPane from "../../src/renderer/components/MonacoEditorPane";
 
 type MonacoEditorPaneProps = React.ComponentProps<typeof MonacoEditorPane>;
 
-vi.mock("@monaco-editor/react", () => ({
-  default: (props: Record<string, unknown>) => (
-    <section data-testid="monaco-react-editor">
-      <div>MockMonacoEditor</div>
-      <pre data-testid="monaco-react-editor-props">{JSON.stringify(props, null, 2)}</pre>
-    </section>
-  ),
-  DiffEditor: (props: Record<string, unknown>) => (
-    <section data-testid="monaco-react-diff-editor">
-      <div>MockMonacoDiffEditor</div>
-      <pre data-testid="monaco-react-diff-editor-props">{JSON.stringify(props, null, 2)}</pre>
-    </section>
-  ),
-}));
+vi.mock("@monaco-editor/react", () => {
+  const safeProps = (props: Record<string, unknown>) =>
+    Object.fromEntries(
+      Object.entries(props).filter(
+        ([key, value]) =>
+          key !== "children" &&
+          key !== "path" &&
+          (value == null || ["string", "number", "boolean"].includes(typeof value)),
+      ),
+    );
+
+  return {
+    default: (props: Record<string, unknown>) => (
+      <section data-testid="monaco-react-editor">
+        <script type="application/json" data-testid="monaco-react-editor-props">{JSON.stringify(safeProps(props))}</script>
+        <div data-testid="monaco-react-editor-value">{String(props.value ?? props.defaultValue ?? "")}</div>
+      </section>
+    ),
+    DiffEditor: (props: Record<string, unknown>) => (
+      <section data-testid="monaco-react-diff-editor">
+        <script type="application/json" data-testid="monaco-react-diff-editor-props">{JSON.stringify(safeProps(props))}</script>
+        <div data-testid="monaco-react-diff-editor-original">{String(props.original ?? "")}</div>
+        <div data-testid="monaco-react-diff-editor-modified">{String(props.modified ?? "")}</div>
+      </section>
+    ),
+  };
+});
 
 function buildProps(overrides: Partial<MonacoEditorPaneProps> = {}): MonacoEditorPaneProps {
   return {

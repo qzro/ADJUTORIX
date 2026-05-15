@@ -33,7 +33,7 @@ import useAgent, {
   type AgentToolRun,
   type AgentJob,
   type AgentHealth,
-} from "../../../src/hooks/useAgent";
+} from "../../src/renderer/hooks/useAgent";
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;

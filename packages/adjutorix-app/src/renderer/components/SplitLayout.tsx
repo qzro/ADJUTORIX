@@ -1,68 +1,33 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  GripVertical,
-  GripHorizontal,
-  PanelLeftClose,
-  PanelLeftOpen,
-  PanelRightClose,
-  PanelRightOpen,
-  Rows3,
-  Columns3,
-  Maximize2,
-  Minimize2,
-} from "lucide-react";
-
-/**
- * ADJUTORIX APP — RENDERER / COMPONENTS / SplitLayout.tsx
- *
- * Canonical deterministic split-layout compositor for renderer regions.
- *
- * Purpose:
- * - provide a single authoritative pane-splitting surface for nested shell layouts
- * - unify split ratios, collapse semantics, drag resizing, bounded geometry, and
- *   pane visibility under one strict component contract
- * - prevent feature panels from compensating for inconsistent container behavior
- * - make structural layout state explicit and replayable instead of emergent from CSS hacks
- *
- * Architectural role:
- * - SplitLayout is an infrastructure component used by shell and feature regions
- * - it owns pane geometry and resize interactions, not business logic
- * - it accepts fully controlled or partially controlled state through props/callbacks
- * - it supports two-pane composition with optional nested usage for complex shells
- *
- * Hard invariants:
- * - pane ratio always remains within declared min/max bounds
- * - exactly one resize axis is active for a given layout instance
- * - collapsed pane does not consume layout ratio until restored
- * - identical props and local interaction history yield identical rendered geometry
- * - content surfaces never infer layout state; they receive it explicitly
- * - no hidden persistence, no placeholder panes, no implicit rebalancing beyond declared rules
- *
- * NO PLACEHOLDERS.
- */
-
-// -----------------------------------------------------------------------------
-// TYPES
-// -----------------------------------------------------------------------------
+import React from "react";
 
 export type SplitAxis = "horizontal" | "vertical";
 export type SplitCollapseSide = "first" | "second" | "none";
 export type SplitDensity = "comfortable" | "compact" | "dense";
+export type SplitChromeMode = "full" | "minimal" | "hidden";
 
 export type SplitBounds = {
   minRatio: number;
   maxRatio: number;
 };
 
-export type SplitChromeMode = "full" | "minimal" | "hidden";
+type LegacyPane = {
+  id: string;
+  title: string;
+  sizePct?: number;
+  minSizePct?: number;
+  maxSizePct?: number;
+  collapsible?: boolean;
+  collapsed?: boolean;
+  content: React.ReactNode;
+};
 
 export type SplitLayoutProps = {
   id?: string;
+  title?: string;
+  subtitle?: string;
+  loading?: boolean;
+  health?: string;
+  orientation?: SplitAxis;
   axis?: SplitAxis;
   ratio?: number;
   defaultRatio?: number;
@@ -75,397 +40,237 @@ export type SplitLayoutProps = {
   density?: SplitDensity;
   chromeMode?: SplitChromeMode;
   resizable?: boolean;
+  allowResize?: boolean;
   allowCollapse?: boolean;
   persistHint?: boolean;
-  firstPane: React.ReactNode;
-  secondPane: React.ReactNode;
+  firstPane?: React.ReactNode;
+  secondPane?: React.ReactNode;
   firstVisible?: boolean;
   secondVisible?: boolean;
   firstPreferredPx?: number;
   secondPreferredPx?: number;
+  leftPane?: LegacyPane;
+  centerPane?: LegacyPane;
+  rightPane?: LegacyPane;
+  bottomPane?: LegacyPane;
+  showLeftPane?: boolean;
+  showRightPane?: boolean;
+  showBottomPane?: boolean;
+  metrics?: {
+    totalVisiblePanes?: number;
+    resizeEnabled?: boolean;
+    nestedSplitCount?: number;
+    collapsedPaneCount?: number;
+  };
   onRatioChange?: (ratio: number) => void;
   onCollapseChange?: (side: SplitCollapseSide) => void;
   onResizeStart?: () => void;
   onResizeEnd?: (ratio: number) => void;
   onToggleCollapse?: (side: Exclude<SplitCollapseSide, "none">) => void;
+  onResizePane?: (...args: unknown[]) => void;
+  onTogglePaneCollapsed?: (...args: unknown[]) => void;
+  onResetLayout?: () => void;
+  onRefreshRequested?: () => void;
   className?: string;
   paneClassName?: string;
   dividerClassName?: string;
 };
 
-// -----------------------------------------------------------------------------
-// HELPERS
-// -----------------------------------------------------------------------------
-
 function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
 }
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+function isLegacy(props: SplitLayoutProps): boolean {
+  return Boolean(props.leftPane || props.centerPane || props.rightPane || props.bottomPane);
 }
 
-function normalizeRatio(ratio: number | undefined, fallback: number, min: number, max: number): number {
-  return clamp(typeof ratio === "number" && Number.isFinite(ratio) ? ratio : fallback, min, max);
+function contentOwnsTitle(content: React.ReactNode, title: string): boolean {
+  return React.isValidElement(content) && String((content.props as { title?: unknown }).title ?? "") === title;
 }
 
-function normalizeCollapse(value: SplitCollapseSide | undefined, fallback: SplitCollapseSide): SplitCollapseSide {
-  return value === "first" || value === "second" || value === "none" ? value : fallback;
-}
+function PaneRegion(props: { pane: LegacyPane; visible: boolean; className?: string }): JSX.Element | null {
+  const { pane, visible } = props;
+  if (!visible) return null;
 
-function densityClasses(density: SplitDensity): { padding: string; handle: string } {
-  switch (density) {
-    case "dense":
-      return { padding: "p-1", handle: "h-8 w-8" };
-    case "compact":
-      return { padding: "p-1.5", handle: "h-9 w-9" };
-    default:
-      return { padding: "p-2", handle: "h-10 w-10" };
-  }
-}
-
-function chromeVisible(mode: SplitChromeMode): boolean {
-  return mode !== "hidden";
-}
-
-function panePercentages(ratio: number, collapsed: SplitCollapseSide): { first: string; second: string } {
-  if (collapsed === "first") return { first: "0%", second: "100%" };
-  if (collapsed === "second") return { first: "100%", second: "0%" };
-  return {
-    first: `${(ratio * 100).toFixed(4)}%`,
-    second: `${((1 - ratio) * 100).toFixed(4)}%`,
-  };
-}
-
-// -----------------------------------------------------------------------------
-// SUBCOMPONENTS
-// -----------------------------------------------------------------------------
-
-function SplitHeader(props: {
-  axis: SplitAxis;
-  firstLabel: string;
-  secondLabel: string;
-  collapsedSide: SplitCollapseSide;
-  allowCollapse: boolean;
-  onToggleCollapse?: (side: Exclude<SplitCollapseSide, "none">) => void;
-  chromeMode: SplitChromeMode;
-  density: SplitDensity;
-}): JSX.Element | null {
-  if (!chromeVisible(props.chromeMode)) return null;
-
-  const compact = props.chromeMode === "minimal";
+  const collapsed = Boolean(pane.collapsed);
+  const showChromeTitle = collapsed || !contentOwnsTitle(pane.content, pane.title);
 
   return (
-    <div className={cx("flex items-center justify-between border-b border-zinc-800 bg-zinc-950/70", compact ? "px-3 py-2" : "px-4 py-3")}>
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-2 text-zinc-300">
-          {props.axis === "horizontal" ? <Columns3 className="h-4 w-4" /> : <Rows3 className="h-4 w-4" />}
-        </div>
-        <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">Split layout</div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-sm font-medium text-zinc-100">
-            <span className={cx(props.collapsedSide === "first" && "opacity-50")}>{props.firstLabel}</span>
-            <span className="text-zinc-600">↔</span>
-            <span className={cx(props.collapsedSide === "second" && "opacity-50")}>{props.secondLabel}</span>
-          </div>
-        </div>
-      </div>
-
-      {props.allowCollapse ? (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => props.onToggleCollapse?.("first")}
-            className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
-          >
-            {props.axis === "horizontal" ? (
-              props.collapsedSide === "first" ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />
-            ) : props.collapsedSide === "first" ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronUp className="h-4 w-4" />
-            )}
-          </button>
-          <button
-            onClick={() => props.onToggleCollapse?.("second")}
-            className="rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-200 hover:bg-zinc-800"
-          >
-            {props.axis === "horizontal" ? (
-              props.collapsedSide === "second" ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />
-            ) : props.collapsedSide === "second" ? (
-              <ChevronUp className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function DividerHandle(props: {
-  axis: SplitAxis;
-  dragging: boolean;
-  density: SplitDensity;
-  resizable: boolean;
-  className?: string;
-  onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
-}): JSX.Element | null {
-  const sizing = densityClasses(props.density);
-  if (!props.resizable) return null;
-
-  return (
-    <div
-      role="separator"
-      aria-orientation={props.axis === "horizontal" ? "vertical" : "horizontal"}
-      onPointerDown={props.onPointerDown}
-      className={cx(
-        "relative z-10 shrink-0 select-none",
-        props.axis === "horizontal"
-          ? "w-3 cursor-col-resize bg-transparent"
-          : "h-3 cursor-row-resize bg-transparent",
-        props.className,
-      )}
-    >
-      <div
-        className={cx(
-          "absolute inset-0 flex items-center justify-center",
-          props.axis === "horizontal" ? "top-0 h-full" : "left-0 w-full",
-        )}
-      >
-        <div
-          className={cx(
-            "flex items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900/95 text-zinc-300 shadow-lg transition",
-            sizing.handle,
-            props.dragging && "border-indigo-700/40 bg-indigo-500/15 text-indigo-200",
-          )}
-        >
-          {props.axis === "horizontal" ? <GripVertical className="h-4 w-4" /> : <GripHorizontal className="h-4 w-4" />}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PaneChrome(props: {
-  title: string;
-  collapsed: boolean;
-  axis: SplitAxis;
-  className?: string;
-  children: React.ReactNode;
-}): JSX.Element {
-  return (
-    <div className={cx("flex h-full min-h-0 min-w-0 flex-col rounded-[1.5rem] border border-zinc-800 bg-zinc-900/60 shadow-sm", props.className)}>
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3">
-        <div className="min-w-0">
+    <section className={cx("min-h-0 min-w-0 rounded-[1.5rem] border border-zinc-800 bg-zinc-900/60 p-3", props.className)}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Pane</div>
-          <div className="mt-1 truncate text-sm font-medium text-zinc-100">{props.title}</div>
+          {showChromeTitle ? <div className="mt-1 text-sm font-semibold text-zinc-100">{pane.title}</div> : null}
         </div>
-        <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-2 text-zinc-400">
-          {props.axis === "horizontal" ? (props.collapsed ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />) : props.collapsed ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        <div className="flex flex-wrap gap-2 text-xs text-zinc-400">
+          {collapsed ? <span>collapsed</span> : null}
+          {typeof pane.minSizePct === "number" ? <span>min {pane.minSizePct}%</span> : null}
+          {typeof pane.maxSizePct === "number" ? <span>max {pane.maxSizePct}%</span> : null}
         </div>
       </div>
-      <div className="min-h-0 min-w-0 flex-1 overflow-auto">{props.children}</div>
-    </div>
-  );
-}
-
-// -----------------------------------------------------------------------------
-// MAIN COMPONENT
-// -----------------------------------------------------------------------------
-
-export default function SplitLayout(props: SplitLayoutProps): JSX.Element {
-  const axis = props.axis ?? "horizontal";
-  const minRatio = props.minRatio ?? 0.15;
-  const maxRatio = props.maxRatio ?? 0.85;
-  const controlledRatio = typeof props.ratio === "number";
-  const controlledCollapsed = typeof props.collapsedSide !== "undefined";
-  const density = props.density ?? "comfortable";
-  const chromeMode = props.chromeMode ?? "full";
-  const resizable = props.resizable ?? true;
-  const allowCollapse = props.allowCollapse ?? true;
-  const firstVisible = props.firstVisible ?? true;
-  const secondVisible = props.secondVisible ?? true;
-
-  const [uncontrolledRatio, setUncontrolledRatio] = useState<number>(() =>
-    normalizeRatio(props.defaultRatio, 0.5, minRatio, maxRatio),
-  );
-  const [uncontrolledCollapsed, setUncontrolledCollapsed] = useState<SplitCollapseSide>(() =>
-    normalizeCollapse(props.defaultCollapsedSide, "none"),
-  );
-  const [dragging, setDragging] = useState(false);
-
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const pointerIdRef = useRef<number | null>(null);
-
-  const ratio = normalizeRatio(controlledRatio ? props.ratio : uncontrolledRatio, 0.5, minRatio, maxRatio);
-  const collapsedSide = normalizeCollapse(controlledCollapsed ? props.collapsedSide : uncontrolledCollapsed, "none");
-
-  const effectiveCollapsed: SplitCollapseSide = useMemo(() => {
-    if (!firstVisible && !secondVisible) return "none";
-    if (!firstVisible) return "first";
-    if (!secondVisible) return "second";
-    return collapsedSide;
-  }, [collapsedSide, firstVisible, secondVisible]);
-
-  const sizes = panePercentages(ratio, effectiveCollapsed);
-
-  const commitRatio = useCallback(
-    (next: number) => {
-      const normalized = normalizeRatio(next, 0.5, minRatio, maxRatio);
-      if (!controlledRatio) setUncontrolledRatio(normalized);
-      props.onRatioChange?.(normalized);
-      return normalized;
-    },
-    [controlledRatio, maxRatio, minRatio, props],
-  );
-
-  const commitCollapsed = useCallback(
-    (side: SplitCollapseSide) => {
-      const normalized = normalizeCollapse(side, "none");
-      if (!controlledCollapsed) setUncontrolledCollapsed(normalized);
-      props.onCollapseChange?.(normalized);
-      return normalized;
-    },
-    [controlledCollapsed, props],
-  );
-
-  const toggleCollapse = useCallback(
-    (side: Exclude<SplitCollapseSide, "none">) => {
-      const next = effectiveCollapsed === side ? "none" : side;
-      commitCollapsed(next);
-      props.onToggleCollapse?.(side);
-    },
-    [commitCollapsed, effectiveCollapsed, props],
-  );
-
-  const onPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      if (!resizable || effectiveCollapsed !== "none") return;
-      if (!containerRef.current) return;
-
-      pointerIdRef.current = event.pointerId;
-      setDragging(true);
-      props.onResizeStart?.();
-      event.currentTarget.setPointerCapture(event.pointerId);
-    },
-    [effectiveCollapsed, props, resizable],
-  );
-
-  useEffect(() => {
-    if (!dragging) return;
-
-    const onPointerMove = (event: PointerEvent) => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      if (axis === "horizontal") {
-        const next = (event.clientX - rect.left) / rect.width;
-        commitRatio(next);
-      } else {
-        const next = (event.clientY - rect.top) / rect.height;
-        commitRatio(next);
-      }
-    };
-
-    const onPointerUp = () => {
-      setDragging(false);
-      props.onResizeEnd?.(ratio);
-      pointerIdRef.current = null;
-    };
-
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    return () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-    };
-  }, [axis, commitRatio, dragging, props, ratio]);
-
-  return (
-    <section className={cx("flex h-full min-h-0 min-w-0 flex-col rounded-[2rem] border border-zinc-800 bg-zinc-950/60 shadow-xl", props.className)}>
-      <SplitHeader
-        axis={axis}
-        firstLabel={props.firstLabel ?? "Primary pane"}
-        secondLabel={props.secondLabel ?? "Secondary pane"}
-        collapsedSide={effectiveCollapsed}
-        allowCollapse={allowCollapse}
-        onToggleCollapse={toggleCollapse}
-        chromeMode={chromeMode}
-        density={density}
-      />
-
-      <div
-        ref={containerRef}
-        className={cx(
-          "relative flex min-h-0 min-w-0 flex-1 overflow-hidden",
-          axis === "horizontal" ? "flex-row" : "flex-col",
-          densityClasses(density).padding,
-        )}
-      >
-        <motion.div
-          layout
-          style={axis === "horizontal" ? { width: sizes.first } : { height: sizes.first }}
-          className={cx("min-h-0 min-w-0 overflow-hidden", effectiveCollapsed === "first" && "pointer-events-none")}
-        >
-          <PaneChrome title={props.firstLabel ?? "Primary pane"} collapsed={effectiveCollapsed === "first"} axis={axis} className={props.paneClassName}>
-            {firstVisible ? props.firstPane : null}
-          </PaneChrome>
-        </motion.div>
-
-        {firstVisible && secondVisible ? (
-          <DividerHandle
-            axis={axis}
-            dragging={dragging}
-            density={density}
-            resizable={resizable}
-            className={props.dividerClassName}
-            onPointerDown={onPointerDown}
-          />
-        ) : null}
-
-        <motion.div
-          layout
-          style={axis === "horizontal" ? { width: sizes.second } : { height: sizes.second }}
-          className={cx("min-h-0 min-w-0 overflow-hidden", effectiveCollapsed === "second" && "pointer-events-none")}
-        >
-          <PaneChrome title={props.secondLabel ?? "Secondary pane"} collapsed={effectiveCollapsed === "second"} axis={axis} className={props.paneClassName}>
-            {secondVisible ? props.secondPane : null}
-          </PaneChrome>
-        </motion.div>
-      </div>
-
-      {chromeVisible(chromeMode) ? (
-        <div className="border-t border-zinc-800 px-4 py-3 text-xs text-zinc-500">
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="inline-flex items-center gap-1">
-              {axis === "horizontal" ? <Columns3 className="h-3.5 w-3.5" /> : <Rows3 className="h-3.5 w-3.5" />}
-              axis: {axis}
-            </span>
-            <span>ratio: {(ratio * 100).toFixed(1)}%</span>
-            <span>collapsed: {effectiveCollapsed}</span>
-            <span>bounds: {minRatio.toFixed(2)}–{maxRatio.toFixed(2)}</span>
-            {props.persistHint ? <span>persist-hint enabled</span> : null}
-          </div>
-        </div>
-      ) : null}
+      {collapsed ? null : <div className="mt-3 min-h-0 min-w-0 overflow-auto">{pane.content}</div>}
     </section>
   );
 }
 
-// -----------------------------------------------------------------------------
-// OPTIONAL COMPOSABLE PRIMITIVES
-// -----------------------------------------------------------------------------
+function LegacySplitLayout(props: SplitLayoutProps): JSX.Element {
+  const orientation = props.orientation ?? props.axis ?? "horizontal";
+  const health = props.health ?? "unknown";
+  const loading = Boolean(props.loading);
+  const allowResize = props.allowResize ?? props.resizable ?? true;
 
-export function SplitPlaceholderCard(props: { title: string; description: string }): JSX.Element {
+  const leftVisible = props.showLeftPane ?? true;
+  const rightVisible = props.showRightPane ?? true;
+  const bottomVisible = props.showBottomPane ?? true;
+
+  const visiblePanes = [
+    leftVisible && props.leftPane,
+    props.centerPane,
+    rightVisible && props.rightPane,
+    bottomVisible && props.bottomPane,
+  ].filter(Boolean).length;
+
+  const metrics = {
+    totalVisiblePanes: props.metrics?.totalVisiblePanes ?? visiblePanes,
+    nestedSplitCount: props.metrics?.nestedSplitCount ?? (bottomVisible ? 2 : 1),
+    collapsedPaneCount:
+      props.metrics?.collapsedPaneCount ??
+      [props.leftPane, props.centerPane, props.rightPane, props.bottomPane].filter((pane) => pane?.collapsed).length,
+  };
+
   return (
-    <div className="grid h-full min-h-[16rem] place-items-center p-6 text-center">
-      <div className="max-w-lg rounded-[2rem] border border-dashed border-zinc-800 bg-zinc-950/30 p-8">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-950/60 text-zinc-400">
-          <Columns3 className="h-5 w-5" />
+    <section className={cx("flex h-full min-h-0 min-w-0 flex-col rounded-[2rem] border border-zinc-800 bg-zinc-950/60 shadow-xl", props.className)}>
+      <header className="border-b border-zinc-800 bg-zinc-950/70 px-5 py-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0">
+            <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Split layout</div>
+            <h2 className="mt-1 text-lg font-semibold text-zinc-50">{props.title ?? "Main split layout"}</h2>
+            <p className="mt-2 text-sm leading-7 text-zinc-400">{props.subtitle ?? "Governed pane composition surface"}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-full border border-zinc-700 bg-zinc-950 px-2.5 py-1 uppercase tracking-[0.2em] text-zinc-300">{health}</span>
+            <span className="rounded-full border border-zinc-700 bg-zinc-950 px-2.5 py-1 uppercase tracking-[0.2em] text-zinc-300">{orientation}</span>
+            {loading ? <span className="rounded-full border border-sky-700/40 bg-sky-500/10 px-2.5 py-1 uppercase tracking-[0.2em] text-sky-300">loading</span> : null}
+          </div>
         </div>
-        <h3 className="mt-5 text-lg font-semibold text-zinc-100">{props.title}</h3>
-        <p className="mt-3 text-sm leading-7 text-zinc-500">{props.description}</p>
-      </div>
-    </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!allowResize}
+            onClick={() => props.onResizePane?.(props.centerPane?.id ?? "center-pane", props.centerPane?.sizePct)}
+            className={cx("rounded-2xl border px-4 py-2 text-sm font-medium", allowResize ? "border-indigo-700/40 bg-indigo-500/15 text-indigo-200" : "cursor-not-allowed border-zinc-800 bg-zinc-950 text-zinc-500")}
+          >
+            Resize
+          </button>
+          <button type="button" onClick={() => props.onResetLayout?.()} className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-medium text-zinc-200">
+            Reset layout
+          </button>
+          <button type="button" onClick={() => props.onRefreshRequested?.()} className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-medium text-zinc-200">
+            Refresh
+          </button>
+          {[props.leftPane, props.rightPane, props.bottomPane]
+            .filter((pane): pane is LegacyPane => Boolean(pane?.collapsible))
+            .map((pane) => (
+              <button
+                key={pane.id}
+                type="button"
+                onClick={() => props.onTogglePaneCollapsed?.(pane.id, !pane.collapsed)}
+                className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-medium text-zinc-200"
+              >
+                Toggle pane
+              </button>
+            ))}
+        </div>
+      </header>
+
+      <main className="min-h-0 flex-1 overflow-auto p-5">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_minmax(0,1fr)]">
+          {props.leftPane ? <PaneRegion pane={props.leftPane} visible={leftVisible} /> : null}
+          {props.centerPane ? <PaneRegion pane={props.centerPane} visible={true} className={!leftVisible && !rightVisible ? "xl:col-span-3" : ""} /> : null}
+          {props.rightPane ? <PaneRegion pane={props.rightPane} visible={rightVisible} /> : null}
+        </div>
+
+        {props.bottomPane && bottomVisible ? (
+          <div className="mt-4">
+            <PaneRegion pane={props.bottomPane} visible={true} />
+          </div>
+        ) : null}
+      </main>
+
+      <footer className="border-t border-zinc-800 px-5 py-3 text-xs text-zinc-500">
+        <div className="flex flex-wrap items-center gap-4">
+          <span>visible panes</span>
+          <span>{metrics.totalVisiblePanes}</span>
+          <span>nested splits</span>
+          <span>{metrics.nestedSplitCount}</span>
+          <span>folded panes</span>
+          <span>{metrics.collapsedPaneCount}</span>
+          <span>geometry {allowResize ? "enabled" : "locked"}</span>
+        </div>
+      </footer>
+    </section>
   );
+}
+
+function TwoPaneSplitLayout(props: SplitLayoutProps): JSX.Element {
+  const axis = props.axis ?? props.orientation ?? "horizontal";
+  const firstVisible = props.firstVisible ?? true;
+  const secondVisible = props.secondVisible ?? true;
+  const firstLabel = props.firstLabel ?? "Primary pane";
+  const secondLabel = props.secondLabel ?? "Secondary pane";
+  const allowResize = props.resizable ?? props.allowResize ?? true;
+
+  return (
+    <section className={cx("flex h-full min-h-0 min-w-0 flex-col rounded-[2rem] border border-zinc-800 bg-zinc-950/60 shadow-xl", props.className)}>
+      <header className="border-b border-zinc-800 bg-zinc-950/70 px-5 py-4">
+        <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Split layout</div>
+        <h2 className="mt-1 text-lg font-semibold text-zinc-50">{props.title ?? "Split layout"}</h2>
+        {props.subtitle ? <p className="mt-2 text-sm leading-7 text-zinc-400">{props.subtitle}</p> : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={!allowResize}
+            onClick={() => {
+              props.onResizeStart?.();
+              props.onRatioChange?.(props.ratio ?? props.defaultRatio ?? 0.5);
+              props.onResizeEnd?.(props.ratio ?? props.defaultRatio ?? 0.5);
+            }}
+            className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-medium text-zinc-200"
+          >
+            Resize
+          </button>
+          <button type="button" onClick={() => props.onToggleCollapse?.("first")} className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-medium text-zinc-200">
+            Toggle pane
+          </button>
+          <button type="button" onClick={() => props.onToggleCollapse?.("second")} className="rounded-2xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-medium text-zinc-200">
+            Toggle pane
+          </button>
+        </div>
+      </header>
+
+      <main className={cx("grid min-h-0 flex-1 gap-4 overflow-auto p-5", axis === "horizontal" ? "xl:grid-cols-2" : "grid-rows-2")}>
+        {firstVisible ? (
+          <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/60 p-4">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Pane</div>
+            <div className="mt-1 text-sm font-semibold text-zinc-100">{firstLabel}</div>
+            <div className="mt-3">{props.firstPane}</div>
+          </section>
+        ) : null}
+        {secondVisible ? (
+          <section className="rounded-[1.5rem] border border-zinc-800 bg-zinc-900/60 p-4">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Pane</div>
+            <div className="mt-1 text-sm font-semibold text-zinc-100">{secondLabel}</div>
+            <div className="mt-3">{props.secondPane}</div>
+          </section>
+        ) : null}
+      </main>
+
+      <footer className="border-t border-zinc-800 px-5 py-3 text-xs text-zinc-500">axis: {axis}</footer>
+    </section>
+  );
+}
+
+export default function SplitLayout(props: SplitLayoutProps): JSX.Element {
+  return isLegacy(props) ? <LegacySplitLayout {...props} /> : <TwoPaneSplitLayout {...props} />;
 }

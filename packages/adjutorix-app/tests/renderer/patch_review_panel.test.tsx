@@ -24,7 +24,7 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import PatchReviewPanel from "../../../src/renderer/components/PatchReviewPanel";
+import PatchReviewPanel from "../../src/renderer/components/PatchReviewPanel";
 
 type PatchReviewPanelProps = React.ComponentProps<typeof PatchReviewPanel>;
 

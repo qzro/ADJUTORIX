@@ -26,7 +26,7 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import DiagnosticsPanel from "../../../src/renderer/components/DiagnosticsPanel";
+import DiagnosticsPanel from "../../src/renderer/components/DiagnosticsPanel";
 
 type DiagnosticsPanelProps = React.ComponentProps<typeof DiagnosticsPanel>;
 

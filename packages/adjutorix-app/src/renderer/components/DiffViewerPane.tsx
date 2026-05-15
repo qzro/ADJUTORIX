@@ -17,7 +17,7 @@ export interface DiffViewerPaneProps extends UnknownRecord {
   splitView?: boolean;
   showWhitespace?: boolean;
   onSelectFile?: (file: DiffFile) => void;
-  onSelectHunk?: (file: DiffFile, hunk: DiffHunk) => void;
+  onSelectHunk?: (hunkId: string) => void;
   onSetDecision?: (file: DiffFile, decision: DiffDecision) => void;
   onOpenFile?: (file: DiffFile) => void;
   onRevealFile?: (file: DiffFile) => void;
@@ -484,7 +484,7 @@ export default function DiffViewerPane(props: DiffViewerPaneProps): ReactElement
                   showWhitespace={Boolean(props.showWhitespace)}
                   selected={hunk.id === selectedHunk?.id}
                   onSelect={(file, hunk) => {
-                    props.onSelectHunk?.(file, hunk);
+                    props.onSelectHunk?.(hunk.id);
                     invoke(props.onSelectHunkRequested, file.path, hunk.id, hunk, file);
                   }}
                 />

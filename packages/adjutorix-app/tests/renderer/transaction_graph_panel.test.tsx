@@ -25,7 +25,7 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import TransactionGraphPanel from "../../../src/renderer/components/TransactionGraphPanel";
+import TransactionGraphPanel from "../../src/renderer/components/TransactionGraphPanel";
 
 type TransactionGraphPanelProps = React.ComponentProps<typeof TransactionGraphPanel>;
 

@@ -99,7 +99,7 @@ import {
   disposeAllManagedModels,
   listManagedModels,
   type ManagedModelDescriptor,
-} from "../../../src/renderer/lib/monaco_models";
+} from "../../src/renderer/lib/monaco_models";
 
 function descriptor(
   overrides: Partial<ManagedModelDescriptor> = {},

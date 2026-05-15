@@ -25,7 +25,7 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import JobPanel from "../../../src/renderer/components/JobPanel";
+import JobPanel from "../../src/renderer/components/JobPanel";
 
 type JobPanelProps = React.ComponentProps<typeof JobPanel>;
 

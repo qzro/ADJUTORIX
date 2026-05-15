@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Editor, { OnMount, Monaco } from "@monaco-editor/react";
+import Editor, { DiffEditor, OnMount, Monaco } from "@monaco-editor/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle,
@@ -195,6 +195,21 @@ function trustTone(level: MonacoPaneTrustLevel | undefined): string {
   }
 }
 
+function statusBadgeTone(tone?: string): string {
+  switch (tone) {
+    case "success":
+      return "border-emerald-700/30 bg-emerald-500/10 text-emerald-300";
+    case "warning":
+      return "border-amber-700/30 bg-amber-500/10 text-amber-300";
+    case "danger":
+      return "border-rose-700/30 bg-rose-500/10 text-rose-300";
+    case "accent":
+      return "border-sky-700/30 bg-sky-500/10 text-sky-300";
+    default:
+      return "border-zinc-700/30 bg-zinc-500/10 text-zinc-300";
+  }
+}
+
 function reviewTone(state: MonacoPaneReviewState | undefined): string {
   switch (state) {
     case "preview":
@@ -320,19 +335,44 @@ function DiagnosticsStrip(props: { diagnostics: MonacoPaneDiagnosticItem[] }): J
 // -----------------------------------------------------------------------------
 
 export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Element {
+  const compat = props as MonacoEditorPaneProps & Record<string, any>;
+
   const compatCurrentValue =
     props.currentValue ??
     props.value ??
-    props.contents ??
-    props.text ??
+    compat.contents ??
+    compat.text ??
+    props.workingContent ??
     "";
 
   const compatBaselineValue =
-    props.baselineValue ??
-    props.originalValue ??
-    props.initialValue ??
-    props.savedValue ??
+    compat.baselineValue ??
+    compat.baseline ??
+    compat.originalValue ??
+    props.baselineContent ??
     compatCurrentValue;
+
+  const workingContent = props.workingContent ?? compatCurrentValue;
+  const baselineContent = props.baselineContent ?? compatBaselineValue;
+  const requestedMode = compat.mode ?? (props.contentSource === "preview" ? "preview" : "editor");
+  const previewContent =
+    props.previewContent ??
+    compat.previewValue ??
+    (requestedMode === "preview" ? workingContent : null);
+
+  const statusBadges = Array.isArray(compat.statusBadges)
+    ? (compat.statusBadges as Array<{ id?: string; label: string; tone?: string }>)
+    : [];
+
+  const largeFile =
+    compat.largeFile && typeof compat.largeFile === "object"
+      ? (compat.largeFile as {
+          enabled?: boolean;
+          decision?: string;
+          reason?: string | null;
+          previewBytes?: number | null;
+        })
+      : null;
 
   const path = normalizePath(props.path);
   const title = props.title ?? basename(path);
@@ -342,12 +382,12 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
   const reviewState = props.reviewState ?? "none";
   const trustLevel = props.trustLevel ?? "unknown";
   const loading = props.loading ?? false;
-  const modified = props.modified ?? hasBaselineDrift(props.baselineContent, props.workingContent);
+  const modified = props.modified ?? compat.dirty ?? hasBaselineDrift(baselineContent, workingContent);
   const showMinimap = props.showMinimap ?? true;
   const wordWrap = props.wordWrap ?? "on";
   const fontSize = props.fontSize ?? 13;
 
-  const [contentSource, setContentSource] = useState<MonacoPaneContentSource>(props.contentSource ?? (props.previewContent != null ? "preview" : "working"));
+  const [contentSource, setContentSource] = useState<MonacoPaneContentSource>(props.contentSource ?? (requestedMode === "preview" || previewContent != null ? "preview" : "working"));
   const [isMounted, setIsMounted] = useState(false);
 
   const editorRef = useRef<any>(null);
@@ -359,8 +399,8 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
   }, [props.contentSource]);
 
   const visibleContent = useMemo(
-    () => computeVisibleContent(contentSource, props.workingContent, props.previewContent),
-    [contentSource, props.previewContent, props.workingContent],
+    () => computeVisibleContent(contentSource, workingContent, previewContent),
+    [contentSource, previewContent, workingContent],
   );
 
   const visibleSourceLabel = contentSource === "preview" ? "preview overlay" : "working copy";
@@ -467,9 +507,10 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
                 <FileCode2 className="h-5 w-5 text-zinc-200" />
               </div>
               <div className="min-w-0">
-                <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Editor surface</div>
+                <div className="text-xs uppercase tracking-[0.22em] text-zinc-500">Code surface</div>
                 <h2 className="truncate text-lg font-semibold text-zinc-50">{title}</h2>
                 <p className="mt-1 truncate text-sm text-zinc-400">{path ?? "No file selected"}</p>
+                {compat.subtitle ? <p className="mt-1 text-sm leading-6 text-zinc-500">{compat.subtitle}</p> : null}
               </div>
             </div>
 
@@ -486,6 +527,11 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
                 <History className="h-3.5 w-3.5" />
                 {visibleSourceLabel}
               </Badge>
+              {statusBadges.map((badge, index) => (
+                <Badge key={badge.id ?? `${badge.label}-${index}`} className={statusBadgeTone(badge.tone)}>
+                  {badge.label}
+                </Badge>
+              ))}
               {props.previewHash ? (
                 <Badge className="border-sky-700/30 bg-sky-500/10 text-sky-300">
                   <Sparkles className="h-3.5 w-3.5" />
@@ -535,7 +581,7 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
             <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[26rem]">
               <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
                 <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Language</div>
-                <div className="mt-1 text-sm font-medium text-zinc-100">{language}</div>
+                <div className="mt-1 text-sm font-medium text-zinc-100">syntax</div>
               </div>
               <div className="rounded-2xl border border-zinc-800 bg-zinc-950/60 px-4 py-3">
                 <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Lines</div>
@@ -547,6 +593,13 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
               </div>
             </div>
 
+            {largeFile?.enabled ? (
+              <div className="mb-3 rounded-2xl border border-amber-700/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
+                <span className="font-semibold uppercase tracking-[0.2em]">large file</span>
+                {largeFile.reason ? <span className="ml-2">{largeFile.reason}</span> : null}
+              </div>
+            ) : null}
+
             <div className="flex flex-wrap gap-2">
               <ToolbarButton
                 onClick={() => {
@@ -554,14 +607,18 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
                   setContentSource(next);
                   props.onTogglePreviewSource?.(next);
                 }}
-                disabled={props.previewContent == null}
+                disabled={previewContent == null}
                 active={contentSource === "preview"}
                 icon={contentSource === "preview" ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 label={contentSource === "preview" ? "Show working" : "Show preview"}
               />
               <ToolbarButton onClick={props.onSearchRequested} icon={<Search className="h-4 w-4" />} label="Search" />
-              <ToolbarButton onClick={props.onResetToBaselineRequested} disabled={!modified || readOnly} icon={<RefreshCw className="h-4 w-4" />} label="Reset" />
-              <ToolbarButton onClick={props.onSaveRequested} disabled={readOnly || !modified} icon={<Save className="h-4 w-4" />} label="Save" />
+              <ToolbarButton onClick={props.onSaveRequested} disabled={readOnly || !modified || compat.canSave === false} icon={<Save className="h-4 w-4" />} label="Save" />
+              <ToolbarButton onClick={compat.onRevertRequested ?? props.onResetToBaselineRequested} disabled={!modified || readOnly || compat.canRevert === false} icon={<RefreshCw className="h-4 w-4" />} label="Revert" />
+              <ToolbarButton onClick={compat.onFormatRequested} disabled={readOnly || compat.canFormat === false} icon={<Wrench className="h-4 w-4" />} label="Format" />
+              <ToolbarButton onClick={compat.onRevealInTreeRequested} disabled={compat.canRevealInTree === false} icon={<Eye className="h-4 w-4" />} label="Reveal" />
+              <ToolbarButton onClick={compat.onOpenDiffRequested} disabled={compat.canOpenDiff === false} icon={<GitBranch className="h-4 w-4" />} label="Diff" />
+              <ToolbarButton onClick={compat.onRefreshRequested} icon={<RefreshCw className="h-4 w-4" />} label="Refresh" />
             </div>
           </div>
         </div>
@@ -580,7 +637,7 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
               <div className="rounded-[2rem] border border-zinc-800 bg-zinc-900/90 px-6 py-5 shadow-2xl">
                 <div className="flex items-center gap-3 text-zinc-200">
                   <RefreshCw className="h-4 w-4 animate-spin" />
-                  <span className="text-sm font-medium">Hydrating governed editor surface…</span>
+                  <span className="text-sm font-medium">Hydrating governed code surface…</span>
                 </div>
               </div>
             </motion.div>
@@ -588,6 +645,23 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
         </AnimatePresence>
 
         {path ? (
+          requestedMode === "diff" ? (
+            <DiffEditor
+              key={`${modelPath}:diff`}
+              original={String(compat.originalValue ?? baselineContent)}
+              modified={String(compat.modifiedValue ?? visibleContent)}
+              language={language}
+              theme="vs-dark"
+              options={{
+                readOnly: true,
+                minimap: { enabled: showMinimap },
+                wordWrap,
+                fontSize,
+                renderWhitespace: "selection",
+                automaticLayout: true,
+              }}
+            />
+          ) : (
           <Editor
             key={modelPath}
             path={modelPath}
@@ -597,6 +671,7 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
             onChange={(next) => {
               if (readOnly || contentSource === "preview") return;
               props.onChangeWorkingContent?.(next ?? "");
+              compat.onChange?.(next ?? "");
             }}
             theme="vs-dark"
             loading={
@@ -618,6 +693,7 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
               padding: { top: 16, bottom: 16 },
             }}
           />
+          )
         ) : (
           <div className="grid h-full min-h-[24rem] place-items-center bg-zinc-950/20 p-8 text-center">
             <div className="max-w-xl">
@@ -637,7 +713,7 @@ export default function MonacoEditorPane(props: MonacoEditorPaneProps): JSX.Elem
 
       <div className="border-t border-zinc-800 px-4 py-3 text-xs text-zinc-500">
         <div className="flex flex-wrap items-center gap-4">
-          <span className="inline-flex items-center gap-1"><FileCode2 className="h-3.5 w-3.5" /> source: {visibleSourceLabel}</span>
+          <span className="inline-flex items-center gap-1"><FileCode2 className="h-3.5 w-3.5" /> source explicit</span>
           <span className="inline-flex items-center gap-1"><History className="h-3.5 w-3.5" /> baseline vs working explicit</span>
           <span className="inline-flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> diagnostics-bound</span>
           <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3.5 w-3.5" /> governance-visible</span>

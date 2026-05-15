@@ -27,7 +27,7 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import DiffViewerPane from "../../../src/renderer/components/DiffViewerPane";
+import DiffViewerPane from "../../src/renderer/components/DiffViewerPane";
 
 type DiffViewerPaneProps = React.ComponentProps<typeof DiffViewerPane>;
 

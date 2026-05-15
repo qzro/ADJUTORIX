@@ -32,7 +32,7 @@ import usePatchReview, {
   type PatchReviewProvider,
   type PatchReviewSnapshot,
   type PatchVerifyEvidence,
-} from "../../../src/hooks/usePatchReview";
+} from "../../src/renderer/hooks/usePatchReview";
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;

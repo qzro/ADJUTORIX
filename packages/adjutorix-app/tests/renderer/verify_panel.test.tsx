@@ -25,7 +25,7 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import VerifyPanel from "../../../src/renderer/components/VerifyPanel";
+import VerifyPanel from "../../src/renderer/components/VerifyPanel";
 
 type VerifyPanelProps = React.ComponentProps<typeof VerifyPanel>;
 
@@ -123,11 +123,11 @@ describe("VerifyPanel", () => {
   it("renders the canonical verify shell with title, subtitle, verify identity, and evidence sections", () => {
     render(<VerifyPanel {...buildProps()} />);
 
-    expect(screen.getByText(/Verify/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Verify$/i })).toBeInTheDocument();
     expect(screen.getByText(/Governed verification and replay evidence surface/i)).toBeInTheDocument();
-    expect(screen.getByText(/verify-42/i)).toBeInTheDocument();
-    expect(screen.getByText(/job-verify-42/i)).toBeInTheDocument();
-    expect(screen.getByText(/patch-42/i)).toBeInTheDocument();
+    expect(screen.getByText(/^verify-42$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^job-verify-42$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^patch-42$/i)).toBeInTheDocument();
   });
 
   it("surfaces verification outcome, lifecycle phase, and apply-readiness impact explicitly", () => {
@@ -141,7 +141,7 @@ describe("VerifyPanel", () => {
   it("surfaces replay posture explicitly instead of hiding replay relevance behind generic status", () => {
     render(<VerifyPanel {...buildProps()} />);
 
-    expect(screen.getByText(/replay/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/replay/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/replay mismatch detected at transaction edge 18 -> 19/i)).toBeInTheDocument();
   });
 
@@ -153,7 +153,7 @@ describe("VerifyPanel", () => {
     expect(screen.getByText(/Apply gate readiness/i)).toBeInTheDocument();
     expect(screen.getByText(/Ledger continuity/i)).toBeInTheDocument();
 
-    expect(screen.getByText(/passed/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/passed/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/warning/i)).toBeInTheDocument();
     expect(screen.getAllByText(/failed/i).length).toBeGreaterThanOrEqual(1);
   });
@@ -161,10 +161,10 @@ describe("VerifyPanel", () => {
   it("keeps summary metrics operator-visible as facts about passed, failed, warning, and replay checks", () => {
     render(<VerifyPanel {...buildProps()} />);
 
-    expect(screen.getByText(/12/i)).toBeInTheDocument();
-    expect(screen.getByText(/9/i)).toBeInTheDocument();
-    expect(screen.getByText(/2/i)).toBeInTheDocument();
-    expect(screen.getByText(/3/i)).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("9")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
   });
 
   it("surfaces blocking notes explicitly instead of reducing verification to a badge-only summary", () => {
@@ -178,7 +178,7 @@ describe("VerifyPanel", () => {
     render(<VerifyPanel {...buildProps()} />);
 
     expect(screen.getByText(/verify\.log/i)).toBeInTheDocument();
-    expect(screen.getByText(/replay-report\.json/i)).toBeInTheDocument();
+    expect(screen.getByText(/^replay-report\.json$/i)).toBeInTheDocument();
     expect(screen.getByText(/\.adjutorix\/verify\/verify-42\.log/i)).toBeInTheDocument();
     expect(screen.getByText(/\.adjutorix\/verify\/replay-report\.json/i)).toBeInTheDocument();
   });
@@ -300,7 +300,7 @@ describe("VerifyPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/passed/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/passed/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/ready/i)).toBeInTheDocument();
     expect(screen.getByText(/Verification passed and no blocking evidence remains/i)).toBeInTheDocument();
   });
@@ -341,7 +341,7 @@ describe("VerifyPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/Verify/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Verify$/i })).toBeInTheDocument();
     expect(screen.getByText(/Governed verification and replay evidence surface/i)).toBeInTheDocument();
   });
 

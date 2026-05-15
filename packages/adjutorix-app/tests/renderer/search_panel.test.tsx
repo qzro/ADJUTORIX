@@ -26,7 +26,7 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import SearchPanel from "../../../src/renderer/components/SearchPanel";
+import SearchPanel from "../../src/renderer/components/SearchPanel";
 
 type SearchPanelProps = React.ComponentProps<typeof SearchPanel>;
 
@@ -116,7 +116,7 @@ describe("SearchPanel", () => {
   it("renders the canonical search shell with title, subtitle, query, and result set", () => {
     render(<SearchPanel {...buildProps()} />);
 
-    expect(screen.getByText(/Search/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Search/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Governed workspace and index search surface/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue("AppShell")).toBeInTheDocument();
     expect(screen.getByText("AppShell.tsx")).toBeInTheDocument();
@@ -267,7 +267,7 @@ describe("SearchPanel", () => {
       />,
     );
 
-    expect(screen.getByText(/Search/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Search/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByDisplayValue("AppShell")).toBeInTheDocument();
   });
 

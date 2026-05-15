@@ -26,7 +26,7 @@ import "@testing-library/jest-dom/vitest";
  * - if the production prop surface evolves, update buildProps() first
  */
 
-import LedgerPanel from "../../../src/renderer/components/LedgerPanel";
+import LedgerPanel from "../../src/renderer/components/LedgerPanel";
 
 type LedgerPanelProps = React.ComponentProps<typeof LedgerPanel>;
 

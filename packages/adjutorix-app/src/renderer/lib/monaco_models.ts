@@ -624,3 +624,259 @@ export function __private__identityKey(identity: MonacoLogicalIdentity): string 
 export function __private__stableDiffId(originalKey: string, modifiedKey: string): string {
   return stableDiffId(originalKey, modifiedKey);
 }
+
+// -----------------------------------------------------------------------------
+// Test/renderer compatibility contract: deterministic Monaco registry helpers.
+// -----------------------------------------------------------------------------
+
+import * as monacoRegistryCompat from "monaco-editor";
+
+export type MonacoModelKindCompat = "editor" | "preview" | "diff-original" | "diff-modified";
+
+export type MonacoModelDescriptorCompat = {
+  path: string;
+  language?: string;
+  value?: string;
+  kind?: MonacoModelKindCompat;
+  readonly?: boolean;
+  readOnly?: boolean;
+};
+
+export type MonacoDiffModelDescriptorCompat = {
+  oldPath?: string | null;
+  path: string;
+  language?: string;
+  originalValue?: string;
+  modifiedValue?: string;
+  readonly?: boolean;
+  readOnly?: boolean;
+  updateContents?: boolean;
+  update?: boolean;
+  forceUpdate?: boolean;
+  syncContents?: boolean;
+};
+
+const compatManagedModels = new Map<string, any>();
+
+function compatNormalizePath(path: string): string {
+  return String(path ?? "")
+    .replace(/^file:\/\//, "")
+    .replace(/[\\]+/g, "/")
+    .replace(/\/+/g, "/")
+    .replace(/\/\.\//g, "/");
+}
+
+function compatEncodePath(path: string): string {
+  return compatNormalizePath(path)
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join("/");
+}
+
+function compatDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function compatIsReadonly(descriptor: { readonly?: boolean; readOnly?: boolean }): boolean {
+  return Boolean(descriptor.readonly ?? descriptor.readOnly);
+}
+
+function compatUriToString(uri: string | { toString(): string }): string {
+  return typeof uri === "string" ? uri : uri.toString();
+}
+
+function compatGetLiveModel(uri: string): any | null {
+  const parsedUri = monacoRegistryCompat.Uri.parse(uri);
+  const model = monacoRegistryCompat.editor.getModel(parsedUri);
+  return model && !model.isDisposed?.() ? model : null;
+}
+
+function compatPruneManagedModels(): void {
+  for (const [uri, model] of [...compatManagedModels.entries()]) {
+    const live = compatGetLiveModel(uri);
+
+    if (!model || model.isDisposed?.() || live !== model) {
+      compatManagedModels.delete(uri);
+    }
+  }
+}
+
+function compatShouldUpdateDiffContents(descriptor: MonacoDiffModelDescriptorCompat): boolean {
+  return Boolean(
+    descriptor.updateContents ??
+      descriptor.update ??
+      descriptor.forceUpdate ??
+      descriptor.syncContents,
+  );
+}
+
+export function buildModelUri(descriptor: MonacoModelDescriptorCompat): string {
+  const kind = descriptor.kind ?? "editor";
+  const authority = compatIsReadonly(descriptor) ? "readonly" : "writable";
+  return `adjutorix://${kind}/${authority}/${compatEncodePath(descriptor.path)}`;
+}
+
+export function buildDiffModelUris(descriptor: MonacoDiffModelDescriptorCompat): {
+  original: string;
+  modified: string;
+  originalUri: string;
+  modifiedUri: string;
+} {
+  const original = buildModelUri({
+    path: descriptor.oldPath ?? descriptor.path,
+    language: descriptor.language,
+    kind: "diff-original",
+    readonly: true,
+  });
+
+  const modified = buildModelUri({
+    path: descriptor.path,
+    language: descriptor.language,
+    kind: "diff-modified",
+    readonly: compatIsReadonly(descriptor),
+  });
+
+  return {
+    original,
+    modified,
+    originalUri: original,
+    modifiedUri: modified,
+  };
+}
+
+export function getOrCreateModel(descriptor: MonacoModelDescriptorCompat): any {
+  compatPruneManagedModels();
+
+  const uri = buildModelUri(descriptor);
+  const existing = compatManagedModels.get(uri);
+
+  if (existing && !existing.isDisposed?.()) {
+    return existing;
+  }
+
+  const live = compatGetLiveModel(uri);
+  if (live) {
+    compatManagedModels.set(uri, live);
+    return live;
+  }
+
+  const parsedUri = monacoRegistryCompat.Uri.parse(uri);
+  const model = monacoRegistryCompat.editor.createModel(
+    descriptor.value ?? "",
+    descriptor.language ?? "plaintext",
+    parsedUri,
+  );
+
+  compatManagedModels.set(uri, model);
+  return model;
+}
+
+export function updateModelContents(model: any, value: string): void {
+  if (!model || model.isDisposed?.()) return;
+
+  if (model.getValue() !== value) {
+    model.setValue(value);
+  }
+}
+
+export function ensureModelLanguage(model: any, language?: string): void {
+  if (!model || !language || model.isDisposed?.()) return;
+
+  if (model.getLanguageId() !== language) {
+    monacoRegistryCompat.editor.setModelLanguage(model, language);
+  }
+}
+
+export function getOrCreateDiffModels(descriptor: MonacoDiffModelDescriptorCompat): {
+  original: any;
+  modified: any;
+  originalModel: any;
+  modifiedModel: any;
+} {
+  const original = getOrCreateModel({
+    path: descriptor.oldPath ?? descriptor.path,
+    language: descriptor.language,
+    value: descriptor.originalValue ?? "",
+    kind: "diff-original",
+    readonly: true,
+  });
+
+  const modified = getOrCreateModel({
+    path: descriptor.path,
+    language: descriptor.language,
+    value: descriptor.modifiedValue ?? "",
+    kind: "diff-modified",
+    readonly: compatIsReadonly(descriptor),
+  });
+
+  if (compatShouldUpdateDiffContents(descriptor)) {
+    updateModelContents(original, descriptor.originalValue ?? "");
+    updateModelContents(modified, descriptor.modifiedValue ?? "");
+  }
+
+  return {
+    original,
+    modified,
+    originalModel: original,
+    modifiedModel: modified,
+  };
+}
+
+export function listManagedModels(): any[] {
+  compatPruneManagedModels();
+  return [...compatManagedModels.values()];
+}
+
+export function disposeModelByUri(uri: string | { toString(): string }): void {
+  compatPruneManagedModels();
+
+  const key = compatUriToString(uri);
+  const model = compatManagedModels.get(key) ?? compatGetLiveModel(key);
+
+  if (!model) return;
+
+  if (!model.isDisposed?.()) {
+    model.dispose();
+  }
+
+  compatManagedModels.delete(key);
+}
+
+export function disposeModelsByPrefix(prefix: string): void {
+  compatPruneManagedModels();
+
+  const normalizedPrefix = compatNormalizePath(prefix);
+  const encodedPrefix = compatEncodePath(prefix);
+
+  for (const [uri, model] of [...compatManagedModels.entries()]) {
+    const decodedUri = compatNormalizePath(compatDecode(uri));
+
+    const matches =
+      uri.startsWith(prefix) ||
+      uri.includes(encodedPrefix) ||
+      decodedUri.includes(normalizedPrefix);
+
+    if (!matches) continue;
+
+    if (model && !model.isDisposed?.()) {
+      model.dispose();
+    }
+
+    compatManagedModels.delete(uri);
+  }
+}
+
+export function disposeAllManagedModels(): void {
+  for (const model of compatManagedModels.values()) {
+    if (model && !model.isDisposed?.()) {
+      model.dispose();
+    }
+  }
+
+  compatManagedModels.clear();
+}

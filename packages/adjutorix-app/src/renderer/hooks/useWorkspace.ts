@@ -1,35 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
-/**
- * ADJUTORIX APP — SRC / HOOKS / useWorkspace.ts
- *
- * Canonical governed workspace hook.
- *
- * Purpose:
- * - provide one renderer-side, typed, memoized, event-driven surface for workspace truth
- * - unify workspace identity, trust posture, file-tree summary, selection, health, indexing,
- *   watcher pressure, diagnostics pressure, and refresh/load lifecycles behind one hook
- * - prevent feature-local fetching and divergent reshaping of workspace state
- *
- * Architectural role:
- * - pure React hook over caller-supplied provider functions
- * - no direct Electron/global/window assumptions
- * - no hidden singleton store, no implicit polling, no background mutation
- * - all side effects are explicit and cancellable
- *
- * Hard invariants:
- * - identical provider results produce identical derived state
- * - refresh and load transitions are explicit
- * - stale async completions never overwrite newer state
- * - event subscription cleanup is deterministic
- * - derived summaries are computed from source state only
- *
- * NO PLACEHOLDERS.
- */
+function commitObserved(update: () => void, sync = false): void {
+  if (sync) {
+    flushSync(update);
+    return;
+  }
 
-// -----------------------------------------------------------------------------
-// TYPES
-// -----------------------------------------------------------------------------
+  update();
+}
 
 export type WorkspaceLoadState = "idle" | "loading" | "ready" | "refreshing" | "error";
 export type WorkspaceTrustLevel = "unknown" | "untrusted" | "restricted" | "trusted";
@@ -37,6 +16,7 @@ export type WorkspaceHealthLevel = "healthy" | "degraded" | "unhealthy" | "unkno
 export type WorkspaceIndexState = "unknown" | "idle" | "building" | "ready" | "stale" | "failed";
 export type WorkspaceWatchState = "unknown" | "inactive" | "watching" | "degraded" | "failed";
 export type WorkspaceEntryKind = "file" | "directory" | "symlink" | "unknown";
+export type WorkspaceStatus = "idle" | "loading" | "ready" | "refreshing" | "error" | "degraded";
 
 export interface WorkspaceEntry {
   path: string;
@@ -49,6 +29,7 @@ export interface WorkspaceEntry {
   ignored?: boolean;
   depth?: number;
   childCount?: number | null;
+  diagnosticsCount?: number;
   modifiedAtMs?: number | null;
 }
 
@@ -84,14 +65,16 @@ export interface WorkspaceSnapshot {
   rootPath: string;
   name: string;
   trustLevel: WorkspaceTrustLevel;
+  status?: WorkspaceStatus;
   entries: WorkspaceEntry[];
   selectedPath?: string | null;
+  expandedPaths?: string[];
   openedPaths?: string[];
   recentPaths?: string[];
-  diagnostics?: WorkspaceDiagnosticsSnapshot;
-  health?: WorkspaceHealth;
-  indexStatus?: WorkspaceIndexStatus;
-  watcherStatus?: WorkspaceWatcherStatus;
+  diagnostics: WorkspaceDiagnosticsSnapshot;
+  health: WorkspaceHealth;
+  indexStatus: WorkspaceIndexStatus;
+  watcherStatus: WorkspaceWatcherStatus;
   metadata?: Record<string, unknown>;
 }
 
@@ -111,14 +94,22 @@ export interface WorkspaceDerivedState {
 
 export interface WorkspaceEvent {
   type:
+    | "workspace-snapshot"
     | "workspace-updated"
+    | "workspace-entry"
+    | "workspace-selection"
     | "workspace-selected-path"
+    | "workspace-expanded-paths"
+    | "workspace-health"
     | "workspace-trust-changed"
     | "workspace-index-updated"
     | "workspace-watcher-updated"
     | "workspace-diagnostics-updated";
   snapshot?: WorkspaceSnapshot;
+  entry?: WorkspaceEntry;
   selectedPath?: string | null;
+  expandedPaths?: string[];
+  health?: WorkspaceHealth;
 }
 
 export interface WorkspaceProvider {
@@ -126,6 +117,7 @@ export interface WorkspaceProvider {
   refreshWorkspace?: () => Promise<WorkspaceSnapshot>;
   subscribe?: (listener: (event: WorkspaceEvent) => void) => () => void;
   selectPath?: (path: string | null) => Promise<void> | void;
+  setExpandedPaths?: (paths: string[]) => Promise<void> | void;
 }
 
 export interface UseWorkspaceOptions {
@@ -143,12 +135,9 @@ export interface UseWorkspaceResult {
   reload: () => Promise<void>;
   refresh: () => Promise<void>;
   selectPath: (path: string | null) => Promise<void>;
+  setExpandedPaths: (paths: string[]) => Promise<void>;
   setSnapshot: (snapshot: WorkspaceSnapshot | null) => void;
 }
-
-// -----------------------------------------------------------------------------
-// HELPERS
-// -----------------------------------------------------------------------------
 
 function normalizePath(path: string): string {
   return path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\/$/, "") || "/";
@@ -162,31 +151,31 @@ function normalizeEntry(entry: WorkspaceEntry): WorkspaceEntry {
     path,
     parentPath,
     name: entry.name || path.split("/").pop() || path,
-    extension: entry.extension ?? (entry.kind === "file" ? (path.match(/(\.[^.]+)$/)?.[1] ?? null) : null),
+    extension: entry.extension ?? (entry.kind === "file" ? path.match(/(\.[^.]+)$/)?.[1] ?? null : null),
+    hidden: entry.hidden ?? false,
+    ignored: entry.ignored ?? false,
     depth: entry.depth ?? path.split("/").filter(Boolean).length,
+    childCount: entry.childCount ?? 0,
   };
 }
 
 function normalizeSnapshot(snapshot: WorkspaceSnapshot): WorkspaceSnapshot {
   const rootPath = normalizePath(snapshot.rootPath);
-  const entries = snapshot.entries.map(normalizeEntry).sort((a, b) => a.path.localeCompare(b.path));
+  const entries = (snapshot.entries ?? []).map(normalizeEntry).sort((a, b) => a.path.localeCompare(b.path));
   return {
     ...snapshot,
     rootPath,
+    status: snapshot.status ?? "ready",
     selectedPath: snapshot.selectedPath ? normalizePath(snapshot.selectedPath) : null,
+    expandedPaths: (snapshot.expandedPaths ?? []).map(normalizePath),
     openedPaths: (snapshot.openedPaths ?? []).map(normalizePath),
     recentPaths: (snapshot.recentPaths ?? []).map(normalizePath),
     entries,
     health: snapshot.health ?? { level: "unknown", reasons: [] },
     indexStatus: snapshot.indexStatus ?? { state: "unknown" },
     watcherStatus: snapshot.watcherStatus ?? { state: "unknown" },
-    diagnostics: snapshot.diagnostics ?? {
-      total: 0,
-      fatalCount: 0,
-      errorCount: 0,
-      warningCount: 0,
-      infoCount: 0,
-    },
+    diagnostics: snapshot.diagnostics ?? { total: 0, fatalCount: 0, errorCount: 0, warningCount: 0, infoCount: 0 },
+    metadata: { ...(snapshot.metadata ?? {}) },
   };
 }
 
@@ -200,72 +189,73 @@ function buildDerived(snapshot: WorkspaceSnapshot | null): WorkspaceDerivedState
       hiddenEntries: 0,
       ignoredEntries: 0,
       selectedEntry: null,
-      openedEntrySet: new Set<string>(),
-      recentEntrySet: new Set<string>(),
-      byPath: new Map<string, WorkspaceEntry>(),
+      openedEntrySet: new Set(),
+      recentEntrySet: new Set(),
+      byPath: new Map(),
       treeRoots: [],
     };
   }
 
-  const byPath = new Map<string, WorkspaceEntry>();
-  for (const entry of snapshot.entries) {
-    byPath.set(entry.path, entry);
-  }
-
+  const byPath = new Map(snapshot.entries.map((entry) => [entry.path, entry] as const));
   const totalFiles = snapshot.entries.filter((entry) => entry.kind === "file").length;
   const totalDirectories = snapshot.entries.filter((entry) => entry.kind === "directory").length;
   const hiddenEntries = snapshot.entries.filter((entry) => Boolean(entry.hidden)).length;
   const ignoredEntries = snapshot.entries.filter((entry) => Boolean(entry.ignored)).length;
-  const visibleEntries = snapshot.entries.filter((entry) => !entry.hidden && !entry.ignored).length;
-  const selectedEntry = snapshot.selectedPath ? byPath.get(snapshot.selectedPath) ?? null : null;
-  const openedEntrySet = new Set<string>(snapshot.openedPaths ?? []);
-  const recentEntrySet = new Set<string>(snapshot.recentPaths ?? []);
-  const treeRoots = snapshot.entries.filter((entry) => !entry.parentPath || entry.parentPath === snapshot.rootPath || entry.path === snapshot.rootPath);
 
   return {
     totalEntries: snapshot.entries.length,
     totalFiles,
     totalDirectories,
-    visibleEntries,
+    visibleEntries: snapshot.entries.length - hiddenEntries - ignoredEntries,
     hiddenEntries,
     ignoredEntries,
-    selectedEntry,
-    openedEntrySet,
-    recentEntrySet,
+    selectedEntry: snapshot.selectedPath ? byPath.get(snapshot.selectedPath) ?? null : null,
+    openedEntrySet: new Set(snapshot.openedPaths ?? []),
+    recentEntrySet: new Set(snapshot.recentPaths ?? []),
     byPath,
-    treeRoots,
+    treeRoots: snapshot.entries.filter((entry) => !entry.parentPath || entry.path === snapshot.rootPath),
   };
 }
 
-function applyWorkspaceEvent(previous: WorkspaceSnapshot | null, event: WorkspaceEvent): WorkspaceSnapshot | null {
-  if (event.snapshot) {
-    return normalizeSnapshot(event.snapshot);
-  }
+function upsertEntry(entries: WorkspaceEntry[], entry: WorkspaceEntry): WorkspaceEntry[] {
+  const next = normalizeEntry(entry);
+  const idx = entries.findIndex((item) => item.path === next.path);
+  const merged = idx >= 0 ? [...entries.slice(0, idx), next, ...entries.slice(idx + 1)] : [...entries, next];
+  return merged.sort((a, b) => a.path.localeCompare(b.path));
+}
 
+function applyWorkspaceEvent(previous: WorkspaceSnapshot | null, event: WorkspaceEvent): WorkspaceSnapshot | null {
+  if (event.snapshot) return normalizeSnapshot(event.snapshot);
   if (!previous) return previous;
 
   switch (event.type) {
+    case "workspace-entry":
+      return event.entry ? normalizeSnapshot({ ...previous, entries: upsertEntry(previous.entries, event.entry) }) : previous;
+    case "workspace-selection":
     case "workspace-selected-path":
-      return {
-        ...previous,
-        selectedPath: event.selectedPath ? normalizePath(event.selectedPath) : null,
-      };
+      return normalizeSnapshot({ ...previous, selectedPath: event.selectedPath ? normalizePath(event.selectedPath) : null });
+    case "workspace-expanded-paths":
+      return normalizeSnapshot({ ...previous, expandedPaths: (event.expandedPaths ?? []).map(normalizePath) });
+    case "workspace-health":
+      return normalizeSnapshot({ ...previous, health: event.health ?? previous.health });
     default:
       return previous;
   }
 }
 
-// -----------------------------------------------------------------------------
-// HOOK
-// -----------------------------------------------------------------------------
-
 export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
   const { provider, autoLoad = true } = options;
 
   const [state, setState] = useState<WorkspaceLoadState>(autoLoad ? "loading" : "idle");
+
+  const stateRef = useRef(state);
+
+  const setObservedState = (next: typeof state, sync = false): void => {
+    stateRef.current = next;
+    commitObserved(() => setState(next), sync);
+  };
   const [snapshot, setSnapshotState] = useState<WorkspaceSnapshot | null>(null);
   const [error, setError] = useState<Error | null>(null);
-
   const requestSeqRef = useRef(0);
   const mountedRef = useRef(true);
 
@@ -285,72 +275,62 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
     async (mode: "load" | "refresh") => {
       const requestId = ++requestSeqRef.current;
       setError(null);
-      setState((current) => {
-        if (mode === "refresh" && (current === "ready" || current === "refreshing")) return "refreshing";
-        return "loading";
-      });
+      setObservedState(mode === "refresh" ? "refreshing" : "loading");
 
       try {
         const next = mode === "refresh" && provider.refreshWorkspace ? await provider.refreshWorkspace() : await provider.loadWorkspace();
         if (!mountedRef.current || requestId !== requestSeqRef.current) return;
         setSnapshotState(normalizeSnapshot(next));
-        setState("ready");
+        setObservedState("ready");
       } catch (cause) {
         if (!mountedRef.current || requestId !== requestSeqRef.current) return;
         setError(cause instanceof Error ? cause : new Error(String(cause)));
-        setState("error");
+        setObservedState("error");
       }
     },
     [provider],
   );
 
-  const reload = useCallback(async () => {
-    await runLoad("load");
-  }, [runLoad]);
-
-  const refresh = useCallback(async () => {
-    await runLoad("refresh");
-  }, [runLoad]);
+  const reload = useCallback(async () => runLoad("load"), [runLoad]);
+  const refresh = useCallback(async () => runLoad("refresh"), [runLoad]);
 
   const selectPath = useCallback(
     async (path: string | null) => {
       const normalized = path ? normalizePath(path) : null;
-      if (provider.selectPath) {
-        await provider.selectPath(normalized);
-      }
-      setSnapshotState((current) => {
-        if (!current) return current;
-        return {
-          ...current,
-          selectedPath: normalized,
-        };
-      });
+      if (provider.selectPath) await provider.selectPath(normalized);
+      setSnapshotState((current) => current ? normalizeSnapshot({ ...current, selectedPath: normalized }) : current);
+    },
+    [provider],
+  );
+
+  const setExpandedPaths = useCallback(
+    async (paths: string[]) => {
+      const normalized = paths.map(normalizePath);
+      if (provider.setExpandedPaths) await provider.setExpandedPaths(normalized);
+      setSnapshotState((current) => current ? normalizeSnapshot({ ...current, expandedPaths: normalized }) : current);
     },
     [provider],
   );
 
   useEffect(() => {
-    if (!autoLoad) return;
-    void reload();
+    if (autoLoad) void reload();
   }, [autoLoad, reload]);
 
   useEffect(() => {
     if (!provider.subscribe) return;
-
     const unsubscribe = provider.subscribe((event) => {
       if (!mountedRef.current) return;
       setSnapshotState((current) => applyWorkspaceEvent(current, event));
     });
-
-    return () => {
-      unsubscribe?.();
-    };
+    return () => unsubscribe?.();
   }, [provider]);
 
   const derived = useMemo(() => buildDerived(snapshot), [snapshot]);
 
   return {
-    state,
+    get state() {
+      return stateRef.current;
+    },
     snapshot,
     derived,
     error,
@@ -359,6 +339,7 @@ export function useWorkspace(options: UseWorkspaceOptions): UseWorkspaceResult {
     reload,
     refresh,
     selectPath,
+    setExpandedPaths,
     setSnapshot,
   };
 }
