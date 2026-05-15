@@ -26,22 +26,30 @@ type SearchHit = {
   preview: string;
 };
 
-type BottomPanel = "log" | "search" | "command" | "patch" | "raw" | "closed";
-type RightPanel = "file" | "patch" | "tools" | "bridge";
-
-type ToolAction = {
-  label: string;
-  command: (root: string | null, file: string | null) => string;
+type ProblemItem = {
+  path: string;
+  line: number;
+  severity: "info" | "warning" | "error";
+  message: string;
 };
 
-type ToolAdapter = {
-  id: string;
+type OutlineItem = {
+  line: number;
+  kind: string;
   label: string;
-  description: string;
-  actions: ToolAction[];
 };
 
-const MARKER = "ADJUTORIX_TOOLCHAIN_WORKBENCH_V3";
+type ActivityView = "explorer" | "search" | "scm" | "run" | "agent";
+type BottomPanel = "terminal" | "output" | "problems" | "patch" | "raw" | "closed";
+type RightPanel = "inspector" | "outline" | "problems" | "patch" | "agent" | "runtime";
+
+type CommandItem = {
+  label: string;
+  detail: string;
+  run: () => void;
+};
+
+const MARKER = "ADJUTORIX_NATIVE_IDE_WORKBENCH_V4";
 
 const COMMAND_BRIDGES = [
   "shell.run",
@@ -62,20 +70,18 @@ function api(): Any | null {
 }
 
 function normalize(value: unknown): string {
-  return String(value ?? "")
-    .replace(/\\/g, "/")
-    .replace(/\/+/g, "/")
-    .replace(/\/$/, "");
-}
-
-function shellQuote(value: unknown): string {
-  const s = String(value ?? "");
-  return "'" + s.replace(/'/g, "'\\''") + "'";
+  return String(value ?? "").replace(/\\/g, "/").replace(/\/+/g, "/").replace(/\/$/, "");
 }
 
 function basename(path: unknown): string {
   const parts = normalize(path).split("/").filter(Boolean);
   return parts[parts.length - 1] ?? String(path ?? "");
+}
+
+function dirname(path: unknown): string {
+  const parts = normalize(path).split("/").filter(Boolean);
+  parts.pop();
+  return parts.join("/");
 }
 
 function relative(path: unknown, root: unknown): string {
@@ -91,7 +97,7 @@ function asRecord(value: unknown): Any {
   return value && typeof value === "object" ? (value as Any) : {};
 }
 
-function unwrap(value: unknown): any {
+function unwrap(value: unknown): unknown {
   const record = asRecord(value);
   if (record.ok === true && "data" in record) return record.data;
   if (record.ok === true && "snapshot" in record) return record.snapshot;
@@ -108,12 +114,12 @@ function getFunction(rootApi: Any | null, dotted: string): unknown {
   return current;
 }
 
-async function call(fn: unknown, payload: Any = {}): Promise<any> {
+async function call(fn: unknown, payload: Any = {}): Promise<unknown> {
   if (typeof fn !== "function") return null;
   return unwrap(await (fn as (input: Any) => unknown | Promise<unknown>)(payload));
 }
 
-async function invokeFirst(rootApi: Any | null, bridges: string[], payloads: Any[]): Promise<any> {
+async function invokeFirst(rootApi: Any | null, bridges: string[], payloads: Any[]): Promise<unknown> {
   let found = false;
   let lastError: unknown = null;
 
@@ -136,8 +142,7 @@ async function invokeFirst(rootApi: Any | null, bridges: string[], payloads: Any
 }
 
 function childrenOf(node: Any): unknown[] {
-  const candidates = [node.children, node.entries, node.items, node.files, node.tree, node.workspaceTree, node.fileTree];
-  return candidates.find(Array.isArray) ?? [];
+  return [node.children, node.entries, node.items, node.files, node.tree, node.workspaceTree, node.fileTree].find(Array.isArray) ?? [];
 }
 
 function pathOf(node: Any): string | null {
@@ -174,9 +179,9 @@ function collectEntries(payloads: unknown[]): Entry[] {
 
   walk(payloads);
 
-  const dedup = new Map<string, Entry>();
-  for (const entry of out) dedup.set(`${entry.isDir ? "d" : "f"}:${entry.path}`, entry);
-  return Array.from(dedup.values()).sort((a, b) => a.path.localeCompare(b.path));
+  const unique = new Map<string, Entry>();
+  for (const entry of out) unique.set(`${entry.isDir ? "d" : "f"}:${entry.path}`, entry);
+  return Array.from(unique.values()).sort((a, b) => a.path.localeCompare(b.path));
 }
 
 function isNoise(path: unknown): boolean {
@@ -230,9 +235,9 @@ function score(path: unknown): number {
   const b = basename(p).toLowerCase();
   let s = 0;
 
-  if (p.endsWith("/packages/adjutorix-app/src/renderer/revolutionworkbench.tsx")) s += 300000;
-  if (p.endsWith("/packages/adjutorix-app/src/renderer/main.tsx")) s += 290000;
-  if (p.endsWith("/packages/adjutorix-app/src/main/index.ts")) s += 280000;
+  if (p.endsWith("/packages/adjutorix-app/src/renderer/revolutionworkbench.tsx")) s += 400000;
+  if (p.endsWith("/packages/adjutorix-app/src/renderer/main.tsx")) s += 390000;
+  if (p.endsWith("/packages/adjutorix-app/src/main/index.ts")) s += 380000;
   if (p.includes("/src/renderer/")) s += 90000;
   if (p.includes("/src/main/")) s += 85000;
   if (p.includes("/src/preload/")) s += 80000;
@@ -346,53 +351,75 @@ function makePatch(path: string, before: string, after: string): string {
   ].join("\n");
 }
 
-const TOOL_ADAPTERS: ToolAdapter[] = [
-  {
-    id: "vscode",
-    label: "Visual Studio Code",
-    description: "Open repo or current file through the local code launcher.",
-    actions: [
-      { label: "Open root", command: (root) => `code -r ${shellQuote(root ?? ".")} || open -a ${shellQuote("Visual Studio Code")} ${shellQuote(root ?? ".")}` },
-      { label: "Open file", command: (root, file) => (file ? `code -g ${shellQuote(file)} || open -a ${shellQuote("Visual Studio Code")} ${shellQuote(root ?? ".")}` : `code -r ${shellQuote(root ?? ".")}`) },
-    ],
-  },
-  {
-    id: "cursor",
-    label: "Cursor",
-    description: "Open repo or current file through Cursor if installed.",
-    actions: [
-      { label: "Open root", command: (root) => `cursor ${shellQuote(root ?? ".")} || open -a ${shellQuote("Cursor")} ${shellQuote(root ?? ".")}` },
-      { label: "Open file", command: (root, file) => (file ? `cursor ${shellQuote(file)} || open -a ${shellQuote("Cursor")} ${shellQuote(root ?? ".")}` : `cursor ${shellQuote(root ?? ".")}`) },
-    ],
-  },
-  {
-    id: "codex",
-    label: "Codex",
-    description: "Start Codex in the workspace through the command bridge.",
-    actions: [
-      { label: "Start", command: (root) => `cd ${shellQuote(root ?? ".")} && codex` },
-      { label: "Inspect file", command: (root, file) => `cd ${shellQuote(root ?? ".")} && codex ${file ? shellQuote(file) : ""}`.trim() },
-    ],
-  },
-  {
-    id: "claude",
-    label: "Claude Code",
-    description: "Start Claude in the workspace through the command bridge.",
-    actions: [
-      { label: "Start", command: (root) => `cd ${shellQuote(root ?? ".")} && claude` },
-      { label: "Inspect file", command: (root, file) => `cd ${shellQuote(root ?? ".")} && claude ${file ? shellQuote(file) : ""}`.trim() },
-    ],
-  },
-  {
-    id: "antigravity",
-    label: "Antigravity",
-    description: "Probe or launch a local Antigravity-style app/CLI without pretending it exists.",
-    actions: [
-      { label: "Probe", command: () => `command -v antigravity || mdfind "kMDItemDisplayName == 'Antigravity*'" | head -20` },
-      { label: "Open root", command: (root) => `antigravity ${shellQuote(root ?? ".")} || open -a ${shellQuote("Antigravity")} ${shellQuote(root ?? ".")}` },
-    ],
-  },
-];
+function outlineFor(buffer: BufferState | undefined): OutlineItem[] {
+  if (!buffer) return [];
+
+  return buffer.content
+    .split("\n")
+    .map((line, index): OutlineItem | null => {
+      const text = line.trim();
+      const ts =
+        text.match(/^(export\s+)?(default\s+)?(async\s+)?function\s+([A-Za-z0-9_$]+)/) ??
+        text.match(/^(export\s+)?class\s+([A-Za-z0-9_$]+)/) ??
+        text.match(/^(const|let|var)\s+([A-Za-z0-9_$]+)\s*=/) ??
+        text.match(/^type\s+([A-Za-z0-9_$]+)/) ??
+        text.match(/^interface\s+([A-Za-z0-9_$]+)/);
+      const py = text.match(/^(async\s+)?def\s+([A-Za-z0-9_]+)/) ?? text.match(/^class\s+([A-Za-z0-9_]+)/);
+      const md = text.match(/^(#{1,6})\s+(.+)/);
+
+      if (md) return { line: index + 1, kind: "section", label: md[2] ?? text };
+      if (py) return { line: index + 1, kind: text.startsWith("class ") ? "class" : "function", label: py[2] ?? py[1] ?? text };
+      if (ts) return { line: index + 1, kind: text.startsWith("class ") || text.includes(" class ") ? "class" : "symbol", label: ts[4] ?? ts[2] ?? ts[1] ?? text };
+
+      return null;
+    })
+    .filter((item): item is OutlineItem => item !== null)
+    .slice(0, 300);
+}
+
+function localProblems(buffers: Record<string, BufferState>, raw: unknown[]): ProblemItem[] {
+  const problems: ProblemItem[] = [];
+
+  for (const buffer of Object.values(buffers)) {
+    buffer.content.split("\n").forEach((line, index) => {
+      if (/\bFIXME\b|\bBUG\b|\bHACK\b|@ts-ignore|type:\s*ignore/i.test(line)) {
+        problems.push({ path: buffer.path, line: index + 1, severity: "warning", message: line.trim().slice(0, 220) });
+      }
+      if (/throw new Error\(|TODO\(critical\)/i.test(line)) {
+        problems.push({ path: buffer.path, line: index + 1, severity: "info", message: line.trim().slice(0, 220) });
+      }
+    });
+  }
+
+  const seen = new Set<unknown>();
+  const walk = (node: unknown): void => {
+    const value = unwrap(node);
+    if (!value || typeof value !== "object" || seen.has(value)) return;
+    seen.add(value);
+
+    if (Array.isArray(value)) {
+      value.forEach(walk);
+      return;
+    }
+
+    const record = asRecord(value);
+    const message = record.message ?? record.detail ?? record.error;
+    if (typeof message === "string") {
+      const path = typeof record.path === "string" ? normalize(record.path) : "runtime";
+      const line = typeof record.line === "number" ? record.line : 1;
+      problems.push({ path, line, severity: /error|failed|fatal/i.test(message) ? "error" : "info", message: message.slice(0, 240) });
+    }
+
+    Object.values(record).forEach(walk);
+  };
+
+  raw.forEach(walk);
+  return problems.slice(0, 500);
+}
+
+function shellQuote(value: unknown): string {
+  return "'" + String(value ?? "").replace(/'/g, "'\\''") + "'";
+}
 
 export default function RevolutionWorkbench(): JSX.Element {
   const [root, setRoot] = useState<string | null>(null);
@@ -405,18 +432,24 @@ export default function RevolutionWorkbench(): JSX.Element {
   const [log, setLog] = useState<string[]>([]);
   const [raw, setRaw] = useState<unknown[]>([]);
   const [busy, setBusy] = useState(false);
-  const [bottom, setBottom] = useState<BottomPanel>("log");
-  const [right, setRight] = useState<RightPanel>("tools");
-  const [command, setCommand] = useState("pnpm --filter @adjutorix/app run build");
-  const [commandResult, setCommandResult] = useState<unknown>(null);
+  const [activity, setActivity] = useState<ActivityView>("explorer");
+  const [bottom, setBottom] = useState<BottomPanel>("terminal");
+  const [right, setRight] = useState<RightPanel>("inspector");
+  const [terminalCommand, setTerminalCommand] = useState("pnpm --filter @adjutorix/app run build");
+  const [terminalOutput, setTerminalOutput] = useState<unknown>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteQuery, setPaletteQuery] = useState("");
+  const [agentIntent, setAgentIntent] = useState("Inspect current workspace state and propose the next concrete patch.");
 
   const files = useMemo(() => realFiles(entries), [entries]);
   const bridgeFunctions = useMemo(() => collectFunctionPaths(api()), [raw]);
   const selectedBuffer = selected ? buffers[selected] : undefined;
-  const dirtyCount = useMemo(() => Object.values(buffers).filter((buffer) => buffer.dirty).length, [buffers]);
+  const dirtyBuffers = useMemo(() => Object.values(buffers).filter((buffer) => buffer.dirty), [buffers]);
+  const outline = useMemo(() => outlineFor(selectedBuffer), [selectedBuffer]);
+  const problems = useMemo(() => localProblems(buffers, raw), [buffers, raw]);
 
   const addLog = useCallback((message: string) => {
-    setLog((prev) => [`${new Date().toLocaleTimeString()}  ${message}`, ...prev].slice(0, 500));
+    setLog((prev) => [`${new Date().toLocaleTimeString()}  ${message}`, ...prev].slice(0, 600));
   }, []);
 
   const openFile = useCallback(
@@ -450,8 +483,8 @@ export default function RevolutionWorkbench(): JSX.Element {
             ...prev,
             [resolved]: {
               path: resolved,
-              content,
-              original: existing?.original ?? content,
+              content: existing?.dirty ? existing.content : content,
+              original: existing?.dirty ? existing.original : content,
               dirty: existing?.dirty ?? false,
               language: languageFor(resolved),
               openedAt: existing?.openedAt ?? Date.now(),
@@ -460,9 +493,9 @@ export default function RevolutionWorkbench(): JSX.Element {
           };
         });
 
-        addLog(`OPEN: ${relative(resolved, currentRoot)}`);
+        addLog(`OPEN ${relative(resolved, currentRoot)}`);
       } catch (error) {
-        addLog(`OPEN FAILED: ${relativePath} :: ${String(error)}`);
+        addLog(`OPEN FAILED ${relativePath} :: ${String(error)}`);
       }
     },
     [addLog, root],
@@ -473,17 +506,17 @@ export default function RevolutionWorkbench(): JSX.Element {
     const rootApi = api();
 
     if (!rootApi) {
-      addLog("BLOCKED: preload bridge missing");
+      addLog("PRELOAD BRIDGE MISSING");
       setBusy(false);
       return;
     }
 
     const payloads: unknown[] = [];
-    for (const bridge of ["runtime.snapshot", "workspace.status", "workspace.tree", "workspace.scan", "diagnostics.runtime", "agent.health"]) {
+    for (const bridge of ["runtime.snapshot", "workspace.status", "workspace.tree", "workspace.scan", "diagnostics.runtime", "agent.health", "ledger.current"]) {
       try {
         payloads.push(await call(getFunction(rootApi, bridge), { schema: 1, actor: "renderer", source: "ipc" }));
       } catch (error) {
-        payloads.push({ [`${bridge}Error`]: String(error) });
+        payloads.push({ bridge, error: String(error) });
       }
     }
 
@@ -499,24 +532,24 @@ export default function RevolutionWorkbench(): JSX.Element {
       setSelected(null);
       setTabs([]);
       setBuffers({});
-      addLog(`DROP JUNK BUFFER: ${selected}`);
+      addLog(`DROP NON-SOURCE BUFFER ${selected}`);
     }
 
     if (!selected && nextFiles[0]) {
       await openFile(nextFiles[0].path, nextRoot);
     }
 
-    addLog(`REFRESH: ${nextEntries.length} entries, ${nextFiles.length} real files`);
+    addLog(`REFRESH ${nextEntries.length} entries / ${nextFiles.length} source files`);
     setBusy(false);
   }, [addLog, openFile, selected]);
 
   const openWorkspace = useCallback(async () => {
     try {
       await invokeFirst(api(), ["workspace.open", "workspace.openWorkspace"], [{ schema: 1, actor: "renderer", source: "ipc" }, {}]);
-      addLog("workspace.open completed");
+      addLog("WORKSPACE OPEN COMPLETE");
       await refresh();
     } catch (error) {
-      addLog(`workspace.open failed: ${String(error)}`);
+      addLog(`WORKSPACE OPEN FAILED ${String(error)}`);
     }
   }, [addLog, refresh]);
 
@@ -541,20 +574,12 @@ export default function RevolutionWorkbench(): JSX.Element {
         setBuffers((prev): Record<string, BufferState> => {
           const existing = prev[path];
           if (!existing) return prev;
-          return {
-            ...prev,
-            [path]: {
-              ...existing,
-              original: existing.content,
-              dirty: false,
-              savedAt: Date.now(),
-            },
-          };
+          return { ...prev, [path]: { ...existing, original: existing.content, dirty: false, savedAt: Date.now() } };
         });
 
-        addLog(`SAVE: ${relativePath}`);
+        addLog(`SAVE ${relativePath}`);
       } catch (error) {
-        addLog(`SAVE FAILED: ${relativePath} :: ${String(error)}`);
+        addLog(`SAVE FAILED ${relativePath} :: ${String(error)}`);
       }
     },
     [addLog, buffers, root],
@@ -566,13 +591,45 @@ export default function RevolutionWorkbench(): JSX.Element {
     }
   }, [buffers, saveFile]);
 
+  const runCommand = useCallback(
+    async (command: string) => {
+      const text = command.trim();
+      if (!text) return;
+
+      setTerminalCommand(text);
+      setBottom("terminal");
+
+      try {
+        const result = await invokeFirst(
+          api(),
+          COMMAND_BRIDGES,
+          [
+            { schema: 1, actor: "renderer", source: "ipc", cwd: root, command: text, intent: text },
+            { cwd: root, command: text },
+            { command: text },
+            { intent: text },
+          ],
+        );
+
+        setTerminalOutput(result);
+        addLog(`RUN ${text}`);
+      } catch (error) {
+        const blocked = { status: "blocked", reason: String(error), command: text, requiredBridge: COMMAND_BRIDGES };
+        setTerminalOutput(blocked);
+        addLog(`RUN BLOCKED ${String(error)}`);
+        void navigator.clipboard?.writeText(text).catch(() => undefined);
+      }
+    },
+    [addLog, root],
+  );
+
   const indexFiles = useCallback(async () => {
     setBusy(true);
-    let indexedCount = 0;
-    const limit = 260;
+    let count = 0;
+    const already = new Set([...Object.keys(indexed), ...Object.keys(buffers)]);
 
-    for (const file of files.slice(0, limit)) {
-      if (indexed[file.path] || buffers[file.path]) continue;
+    for (const file of files.slice(0, 350)) {
+      if (already.has(file.path)) continue;
 
       try {
         const relativePath = relative(file.path, root);
@@ -588,61 +645,41 @@ export default function RevolutionWorkbench(): JSX.Element {
 
         const text = textFromReadResult(result);
         setIndexed((prev) => ({ ...prev, [file.path]: text }));
-        indexedCount++;
-
-        if (indexedCount % 25 === 0) addLog(`INDEX: ${indexedCount}/${Math.min(files.length, limit)}`);
+        already.add(file.path);
+        count++;
       } catch {
-        // Unreadable file: continue indexing.
+        // Keep indexing usable even when individual files are denied.
       }
     }
 
-    addLog(`INDEX COMPLETE: ${indexedCount} files`);
+    addLog(`INDEXED ${count} source files`);
     setBusy(false);
   }, [addLog, buffers, files, indexed, root]);
 
-  const runCommandText = useCallback(
-    async (commandText: string) => {
-      const trimmed = commandText.trim();
-      if (!trimmed) return;
-
-      setCommand(trimmed);
-
-      try {
-        const result = await invokeFirst(
-          api(),
-          COMMAND_BRIDGES,
-          [
-            { schema: 1, actor: "renderer", source: "ipc", cwd: root, command: trimmed, intent: trimmed },
-            { cwd: root, command: trimmed },
-            { command: trimmed },
-            { intent: trimmed },
-          ],
-        );
-
-        setCommandResult(result);
-        setBottom("command");
-        addLog(`COMMAND: ${trimmed}`);
-      } catch (error) {
-        const blocked = {
-          status: "blocked",
-          error: String(error),
-          command: trimmed,
-          requiredBridge: COMMAND_BRIDGES,
-        };
-        setCommandResult(blocked);
-        setBottom("command");
-        addLog(`COMMAND BLOCKED: ${String(error)}`);
-        void navigator.clipboard?.writeText(trimmed).catch(() => undefined);
-      }
-    },
-    [addLog, root],
-  );
-
   useEffect(() => {
     void refresh();
-    // one boot refresh only
+    // boot once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        if (selected) void saveFile(selected);
+      }
+
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        setPaletteOpen(true);
+      }
+
+      if (event.key === "Escape") setPaletteOpen(false);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [saveFile, selected]);
 
   const searchHits = useMemo<SearchHit[]>(() => {
     const q = query.trim().toLowerCase();
@@ -652,9 +689,7 @@ export default function RevolutionWorkbench(): JSX.Element {
 
     for (const file of files) {
       const relPath = relative(file.path, root);
-      if (relPath.toLowerCase().includes(q)) {
-        hits.push({ path: file.path, reason: "path", preview: relPath });
-      }
+      if (relPath.toLowerCase().includes(q)) hits.push({ path: file.path, reason: "path", preview: relPath });
     }
 
     const contentSources: Record<string, string> = {};
@@ -666,114 +701,247 @@ export default function RevolutionWorkbench(): JSX.Element {
     for (const [path, text] of Object.entries(contentSources)) {
       const lines = text.split("\n");
       const index = lines.findIndex((line) => line.toLowerCase().includes(q));
-      if (index >= 0) {
-        hits.push({ path, reason: "content", line: index + 1, preview: lines[index]?.trim().slice(0, 240) ?? "" });
-      }
+      if (index >= 0) hits.push({ path, reason: "content", line: index + 1, preview: (lines[index] ?? "").trim().slice(0, 240) });
     }
 
-    return hits.slice(0, 400);
+    return hits.slice(0, 500);
   }, [buffers, files, indexed, query, root]);
 
-  const sidebarFiles = useMemo<Entry[]>(() => {
+  const visibleFiles = useMemo<Entry[]>(() => {
     if (!query.trim()) return files;
-
     const seen = new Set<string>();
     const out: Entry[] = [];
 
     for (const hit of searchHits) {
-      const match = files.find((file) => file.path === hit.path);
-      if (match && !seen.has(match.path)) {
-        seen.add(match.path);
-        out.push(match);
+      const file = files.find((candidate) => candidate.path === hit.path);
+      if (file && !seen.has(file.path)) {
+        seen.add(file.path);
+        out.push(file);
       }
     }
 
-    return out.length > 0 ? out : files;
+    return out;
   }, [files, query, searchHits]);
 
   const currentPatch = selectedBuffer ? makePatch(relative(selectedBuffer.path, root), selectedBuffer.original, selectedBuffer.content) : "";
-  const allPatch = Object.values(buffers)
-    .filter((buffer) => buffer.dirty)
-    .map((buffer) => makePatch(relative(buffer.path, root), buffer.original, buffer.content))
-    .filter(Boolean)
-    .join("\n\n");
+  const allPatch = dirtyBuffers.map((buffer) => makePatch(relative(buffer.path, root), buffer.original, buffer.content)).filter(Boolean).join("\n\n");
+
+  const agentContext = useMemo(() => {
+    const current = selectedBuffer
+      ? [
+          `CURRENT_FILE=${relative(selectedBuffer.path, root)}`,
+          "```",
+          selectedBuffer.content.slice(0, 12000),
+          "```",
+        ].join("\n")
+      : "CURRENT_FILE=none";
+
+    return [
+      "ADJUTORIX_NATIVE_AGENT_CONTEXT",
+      `ROOT=${root ?? "unknown"}`,
+      `DIRTY_FILES=${dirtyBuffers.map((buffer) => relative(buffer.path, root)).join(", ") || "none"}`,
+      `INTENT=${agentIntent}`,
+      current,
+      allPatch ? `PATCH:\n${allPatch}` : "PATCH=none",
+    ].join("\n\n");
+  }, [agentIntent, allPatch, dirtyBuffers, root, selectedBuffer]);
+
+  const commandItems = useMemo<CommandItem[]>(() => {
+    const items: CommandItem[] = [
+      { label: "Refresh workspace", detail: "Reload runtime, workspace, diagnostics and ledger evidence", run: () => void refresh() },
+      { label: "Index source", detail: "Read source files into searchable local index", run: () => void indexFiles() },
+      { label: "Save current file", detail: selected ?? "No selected file", run: () => selected && void saveFile(selected) },
+      { label: "Save all dirty files", detail: `${dirtyBuffers.length} dirty`, run: () => void saveAll() },
+      { label: "Run build", detail: "pnpm --filter @adjutorix/app run build", run: () => void runCommand("pnpm --filter @adjutorix/app run build") },
+      { label: "Run renderer tests", detail: "pnpm --filter @adjutorix/app exec vitest run tests/renderer", run: () => void runCommand("pnpm --filter @adjutorix/app exec vitest run tests/renderer --reporter=verbose") },
+      { label: "Run typecheck", detail: "pnpm typecheck", run: () => void runCommand("pnpm typecheck") },
+      { label: "Run verify", detail: "bash scripts/verify.sh", run: () => void runCommand("bash scripts/verify.sh") },
+      { label: "Copy agent context", detail: "Copy native handoff context", run: () => void navigator.clipboard?.writeText(agentContext).catch(() => undefined) },
+    ];
+
+    for (const file of files.slice(0, 80)) {
+      items.push({ label: `Open ${basename(file.path)}`, detail: relative(file.path, root), run: () => void openFile(file.path) });
+    }
+
+    return items;
+  }, [agentContext, dirtyBuffers.length, files, indexFiles, openFile, refresh, root, runCommand, saveAll, saveFile, selected]);
+
+  const filteredCommands = useMemo(() => {
+    const q = paletteQuery.trim().toLowerCase();
+    if (!q) return commandItems.slice(0, 80);
+    return commandItems.filter((item) => `${item.label} ${item.detail}`.toLowerCase().includes(q)).slice(0, 80);
+  }, [commandItems, paletteQuery]);
+
+  const runAgent = useCallback(async () => {
+    try {
+      const result = await invokeFirst(
+        api(),
+        ["agent.submit", "agent.command", "workspace.runCommand"],
+        [
+          { schema: 1, actor: "renderer", source: "ipc", intent: agentIntent, context: agentContext },
+          { intent: agentIntent, context: agentContext },
+        ],
+      );
+      setTerminalOutput(result);
+      setBottom("output");
+      addLog("AGENT HANDOFF SUBMITTED");
+    } catch (error) {
+      setTerminalOutput({ status: "blocked", reason: String(error), context: agentContext });
+      setBottom("output");
+      addLog(`AGENT HANDOFF BLOCKED ${String(error)}`);
+      void navigator.clipboard?.writeText(agentContext).catch(() => undefined);
+    }
+  }, [addLog, agentContext, agentIntent]);
+
+  const renderLeft = (): JSX.Element => {
+    if (activity === "search") {
+      return (
+        <div className="grid min-h-0 grid-rows-[96px_minmax(0,1fr)]">
+          <div className="border-b border-zinc-800 p-3">
+            <div className="mb-2 flex justify-between text-xs">
+              <span className="font-semibold uppercase tracking-[0.18em] text-zinc-500">Search</span>
+              <button onClick={() => void indexFiles()} className="text-emerald-300">Index</button>
+            </div>
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="search path + indexed content" className="w-full rounded-md border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-emerald-700" />
+          </div>
+          <div className="overflow-auto p-2">
+            {searchHits.map((hit, index) => (
+              <button key={`${hit.path}:${index}`} onClick={() => void openFile(hit.path)} className="mb-1 block w-full rounded-md border border-zinc-900 bg-black px-3 py-2 text-left text-xs hover:border-emerald-900">
+                <div className="truncate text-emerald-300">{relative(hit.path, root)}{hit.line ? `:${hit.line}` : ""}</div>
+                <div className="truncate text-zinc-500">{hit.reason}: {hit.preview}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (activity === "scm") {
+      return (
+        <div className="grid min-h-0 grid-rows-[48px_minmax(0,1fr)]">
+          <div className="border-b border-zinc-800 p-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Source Control</div>
+          <div className="overflow-auto p-2">
+            {dirtyBuffers.length === 0 && <div className="p-3 text-xs text-zinc-600">No dirty buffers.</div>}
+            {dirtyBuffers.map((buffer) => (
+              <button key={buffer.path} onClick={() => setSelected(buffer.path)} className="mb-1 block w-full rounded-md border border-zinc-900 bg-black px-3 py-2 text-left text-xs hover:border-emerald-900">
+                <div className="truncate text-amber-300">modified</div>
+                <div className="truncate text-zinc-300">{relative(buffer.path, root)}</div>
+              </button>
+            ))}
+            <button onClick={() => setBottom("patch")} className="mt-2 w-full rounded-md bg-zinc-800 px-3 py-2 text-xs hover:bg-zinc-700">Open patch</button>
+          </div>
+        </div>
+      );
+    }
+
+    if (activity === "run") {
+      const tasks = [
+        "pnpm --filter @adjutorix/app run build",
+        "pnpm --filter @adjutorix/app exec vitest run tests/renderer --reporter=verbose",
+        "pnpm --filter @adjutorix/app exec vitest run tests/main --reporter=verbose",
+        "pnpm typecheck",
+        "pnpm test",
+        "bash scripts/check.sh",
+        "bash scripts/verify.sh",
+        "bash scripts/smoke.sh",
+      ];
+
+      return (
+        <div className="grid min-h-0 grid-rows-[48px_minmax(0,1fr)]">
+          <div className="border-b border-zinc-800 p-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Run / Tasks</div>
+          <div className="overflow-auto p-2">
+            {tasks.map((task) => (
+              <button key={task} onClick={() => void runCommand(task)} className="mb-1 block w-full rounded-md border border-zinc-900 bg-black px-3 py-2 text-left text-xs hover:border-emerald-900">
+                <div className="text-emerald-300">run</div>
+                <div className="break-all text-zinc-300">{task}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (activity === "agent") {
+      return (
+        <div className="grid min-h-0 grid-rows-[48px_150px_minmax(0,1fr)]">
+          <div className="border-b border-zinc-800 p-3 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Agent</div>
+          <div className="border-b border-zinc-800 p-2">
+            <textarea value={agentIntent} onChange={(event) => setAgentIntent(event.target.value)} className="h-full w-full resize-none rounded-md border border-zinc-800 bg-black p-2 text-xs outline-none focus:border-emerald-700" />
+          </div>
+          <div className="overflow-auto p-2">
+            <button onClick={() => void runAgent()} className="mb-2 w-full rounded-md bg-emerald-900 px-3 py-2 text-xs hover:bg-emerald-800">Submit handoff</button>
+            <button onClick={() => void navigator.clipboard?.writeText(agentContext).catch(() => undefined)} className="mb-2 w-full rounded-md bg-zinc-800 px-3 py-2 text-xs hover:bg-zinc-700">Copy context</button>
+            <pre className="whitespace-pre-wrap rounded-md border border-zinc-800 bg-black p-2 text-[11px] leading-4 text-zinc-400">{agentContext.slice(0, 6000)}</pre>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid min-h-0 grid-rows-[96px_minmax(0,1fr)]">
+        <div className="border-b border-zinc-800 p-3">
+          <div className="mb-2 flex items-center justify-between text-xs">
+            <span className="font-semibold uppercase tracking-[0.18em] text-zinc-500">Explorer</span>
+            <span className="text-zinc-500">{visibleFiles.length}/{files.length}</span>
+          </div>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="filter source tree" className="w-full rounded-md border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-emerald-700" />
+        </div>
+        <div className="overflow-auto p-2">
+          {visibleFiles.map((file) => (
+            <button key={file.path} onClick={() => void openFile(file.path)} title={file.path} className={["block w-full truncate rounded-md px-2 py-1.5 text-left text-xs", selected === file.path ? "bg-emerald-950 text-emerald-100" : "text-zinc-300 hover:bg-zinc-900"].join(" ")}>
+              <span className="mr-2 text-zinc-600">{buffers[file.path]?.dirty ? "●" : buffers[file.path] ? "•" : "·"}</span>
+              {relative(file.path, root)}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-black text-zinc-100">
-      <div className="grid h-full grid-rows-[44px_minmax(0,1fr)]">
+      <div className="grid h-full grid-rows-[42px_minmax(0,1fr)]">
         <header className="flex items-center justify-between border-b border-zinc-800 bg-zinc-950 px-3">
           <div className="flex min-w-0 items-center gap-3">
             <div className="rounded-md border border-emerald-700 bg-emerald-950/40 px-2 py-1 text-[11px] font-bold tracking-wide text-emerald-200">{MARKER}</div>
+            <button onClick={() => setPaletteOpen(true)} className="rounded-md border border-zinc-800 bg-black px-3 py-1.5 text-left text-xs text-zinc-400 hover:border-emerald-800">⌘P command palette</button>
             <div className="truncate text-xs text-zinc-500">{root ?? "no workspace root"}</div>
-            <div className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-400">bridge {bridgeFunctions.length}</div>
-            <div className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-400">dirty {dirtyCount}</div>
           </div>
-
           <div className="flex items-center gap-2">
+            <div className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-400">bridge {bridgeFunctions.length}</div>
+            <div className="rounded-md border border-zinc-800 px-2 py-1 text-[11px] text-zinc-400">dirty {dirtyBuffers.length}</div>
             <button onClick={() => void openWorkspace()} className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-700">Open workspace</button>
             <button onClick={() => void refresh()} className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-700">{busy ? "Working..." : "Refresh"}</button>
             <button onClick={() => void indexFiles()} className="rounded-md bg-zinc-800 px-3 py-1.5 text-xs hover:bg-zinc-700">Index</button>
             <button onClick={() => selected && void saveFile(selected)} disabled={!selectedBuffer?.dirty} className="rounded-md bg-emerald-900 px-3 py-1.5 text-xs enabled:hover:bg-emerald-800 disabled:opacity-40">Save</button>
-            <button onClick={() => void saveAll()} disabled={dirtyCount === 0} className="rounded-md bg-emerald-900 px-3 py-1.5 text-xs enabled:hover:bg-emerald-800 disabled:opacity-40">Save all</button>
+            <button onClick={() => void saveAll()} disabled={dirtyBuffers.length === 0} className="rounded-md bg-emerald-900 px-3 py-1.5 text-xs enabled:hover:bg-emerald-800 disabled:opacity-40">Save all</button>
           </div>
         </header>
 
-        <main className="grid min-h-0 grid-cols-[330px_minmax(0,1fr)_380px]">
-          <aside className="grid min-h-0 grid-rows-[96px_minmax(0,1fr)] border-r border-zinc-800 bg-zinc-950">
-            <div className="border-b border-zinc-800 p-3">
-              <div className="mb-2 flex items-center justify-between text-xs">
-                <span className="font-semibold uppercase tracking-[0.18em] text-zinc-500">Source</span>
-                <span className="text-zinc-500">{sidebarFiles.length}/{files.length}</span>
-              </div>
-              <input
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  if (event.target.value.trim()) setBottom("search");
-                }}
-                placeholder="search path + indexed content"
-                className="w-full rounded-md border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-emerald-700"
-              />
-            </div>
+        <main className="grid min-h-0 grid-cols-[48px_330px_minmax(0,1fr)_390px]">
+          <nav className="flex flex-col items-center gap-2 border-r border-zinc-800 bg-zinc-950 py-2">
+            {(["explorer", "search", "scm", "run", "agent"] as const).map((view) => (
+              <button key={view} onClick={() => setActivity(view)} className={["h-9 w-9 rounded-md text-xs uppercase", activity === view ? "bg-emerald-950 text-emerald-200" : "bg-black text-zinc-500 hover:bg-zinc-900"].join(" ")} title={view}>
+                {view.slice(0, 2)}
+              </button>
+            ))}
+          </nav>
 
-            <div className="overflow-auto p-2">
-              {sidebarFiles.map((file) => (
-                <button
-                  key={file.path}
-                  onClick={() => void openFile(file.path)}
-                  title={file.path}
-                  className={[
-                    "block w-full truncate rounded-md px-2 py-1.5 text-left text-xs",
-                    selected === file.path ? "bg-emerald-950 text-emerald-100" : "text-zinc-300 hover:bg-zinc-900",
-                  ].join(" ")}
-                >
-                  <span className="mr-2 text-zinc-600">{buffers[file.path]?.dirty ? "●" : buffers[file.path] ? "•" : "·"}</span>
-                  {relative(file.path, root)}
+          <aside className="min-h-0 border-r border-zinc-800 bg-zinc-950">{renderLeft()}</aside>
+
+          <section className="grid min-h-0 grid-rows-[36px_28px_minmax(0,1fr)_auto]">
+            <div className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-zinc-800 bg-zinc-950 px-2">
+              {tabs.length === 0 ? <span className="text-xs text-zinc-600">No open files</span> : tabs.map((path) => (
+                <button key={path} onClick={() => setSelected(path)} className={["h-7 max-w-72 truncate rounded-md px-3 text-xs", selected === path ? "bg-zinc-800 text-zinc-100" : "bg-black text-zinc-400"].join(" ")} title={path}>
+                  {buffers[path]?.dirty ? "● " : ""}
+                  {basename(path)}
                 </button>
               ))}
             </div>
-          </aside>
 
-          <section className="grid min-h-0 grid-rows-[38px_minmax(0,1fr)_auto]">
-            <div className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-zinc-800 bg-zinc-950 px-2">
-              {tabs.length === 0 ? (
-                <span className="text-xs text-zinc-600">No open files</span>
-              ) : (
-                tabs.map((path) => (
-                  <button
-                    key={path}
-                    onClick={() => setSelected(path)}
-                    className={[
-                      "h-7 max-w-72 truncate rounded-md px-3 text-xs",
-                      selected === path ? "bg-zinc-800 text-zinc-100" : "bg-black text-zinc-400",
-                    ].join(" ")}
-                    title={path}
-                  >
-                    {buffers[path]?.dirty ? "● " : ""}
-                    {basename(path)}
-                  </button>
-                ))
-              )}
+            <div className="flex min-w-0 items-center gap-2 border-b border-zinc-900 bg-black px-3 text-[11px] text-zinc-500">
+              <span className="truncate">{selected ? dirname(relative(selected, root)) : "no file"}</span>
+              {selectedBuffer && <span className="rounded bg-zinc-900 px-2 py-0.5">{selectedBuffer.language}</span>}
             </div>
 
             <div className="min-h-0">
@@ -784,33 +952,19 @@ export default function RevolutionWorkbench(): JSX.Element {
                   path={selectedBuffer.path}
                   language={selectedBuffer.language}
                   value={selectedBuffer.content}
-                  options={{
-                    automaticLayout: true,
-                    fontSize: 13,
-                    minimap: { enabled: true },
-                    scrollBeyondLastLine: false,
-                    wordWrap: "off",
-                    renderWhitespace: "selection",
-                  }}
+                  options={{ automaticLayout: true, fontSize: 13, minimap: { enabled: true }, scrollBeyondLastLine: false, wordWrap: "off", renderWhitespace: "selection" }}
                   onChange={(value) => {
                     const path = selectedBuffer.path;
                     const next = value ?? "";
                     setBuffers((prev): Record<string, BufferState> => {
                       const current = prev[path];
                       if (!current) return prev;
-                      return {
-                        ...prev,
-                        [path]: {
-                          ...current,
-                          content: next,
-                          dirty: next !== current.original,
-                        },
-                      };
+                      return { ...prev, [path]: { ...current, content: next, dirty: next !== current.original } };
                     });
                   }}
                 />
               ) : (
-                <div className="grid h-full place-items-center text-sm text-zinc-600">Open a real source file.</div>
+                <div className="grid h-full place-items-center text-sm text-zinc-600">Open a source file.</div>
               )}
             </div>
 
@@ -818,58 +972,40 @@ export default function RevolutionWorkbench(): JSX.Element {
               <div className="h-64 border-t border-zinc-800 bg-zinc-950">
                 <div className="flex h-8 items-center justify-between border-b border-zinc-800 px-3 text-xs">
                   <div className="flex gap-4">
-                    {(["log", "search", "command", "patch", "raw"] as const).map((panel) => (
+                    {(["terminal", "output", "problems", "patch", "raw"] as const).map((panel) => (
                       <button key={panel} onClick={() => setBottom(panel)} className={bottom === panel ? "text-emerald-300" : "text-zinc-500"}>{panel}</button>
                     ))}
                   </div>
                   <button onClick={() => setBottom("closed")} className="text-zinc-500">Close</button>
                 </div>
 
-                {bottom === "command" && (
+                {bottom === "terminal" && (
                   <div className="grid h-[calc(100%-32px)] grid-rows-[44px_minmax(0,1fr)]">
                     <div className="flex gap-2 p-2">
-                      <input value={command} onChange={(event) => setCommand(event.target.value)} className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-emerald-700" />
-                      <button onClick={() => void runCommandText(command)} className="rounded-md bg-zinc-800 px-3 py-2 text-xs hover:bg-zinc-700">Run bridge</button>
+                      <input value={terminalCommand} onChange={(event) => setTerminalCommand(event.target.value)} className="min-w-0 flex-1 rounded-md border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-emerald-700" />
+                      <button onClick={() => void runCommand(terminalCommand)} className="rounded-md bg-zinc-800 px-3 py-2 text-xs hover:bg-zinc-700">Run</button>
                     </div>
-                    <pre className="overflow-auto p-3 text-xs leading-5 text-zinc-300">{JSON.stringify(commandResult, null, 2)}</pre>
+                    <pre className="overflow-auto p-3 text-xs leading-5 text-zinc-300">{JSON.stringify(terminalOutput, null, 2)}</pre>
                   </div>
                 )}
 
-                {bottom === "search" && (
-                  <div className="h-[calc(100%-32px)] overflow-auto p-2">
-                    {searchHits.map((hit, index) => (
-                      <button key={`${hit.path}:${index}`} onClick={() => void openFile(hit.path)} className="mb-1 block w-full rounded-md border border-zinc-900 bg-black px-3 py-2 text-left text-xs hover:border-emerald-900">
-                        <div className="text-emerald-300">{relative(hit.path, root)}{hit.line ? `:${hit.line}` : ""}</div>
-                        <div className="text-zinc-500">{hit.reason}: {hit.preview}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {bottom === "patch" && (
-                  <pre className="h-[calc(100%-32px)] overflow-auto p-3 text-xs leading-5 text-zinc-300">{allPatch || currentPatch || "No dirty patch."}</pre>
-                )}
-
-                {bottom === "raw" && (
-                  <pre className="h-[calc(100%-32px)] overflow-auto p-3 text-xs leading-5 text-zinc-300">{JSON.stringify(raw, null, 2)}</pre>
-                )}
-
-                {bottom === "log" && (
-                  <pre className="h-[calc(100%-32px)] overflow-auto p-3 text-xs leading-5 text-zinc-300">{log.join("\n")}</pre>
-                )}
+                {bottom === "output" && <pre className="h-[calc(100%-32px)] overflow-auto p-3 text-xs leading-5 text-zinc-300">{log.join("\n")}</pre>}
+                {bottom === "problems" && <pre className="h-[calc(100%-32px)] overflow-auto p-3 text-xs leading-5 text-zinc-300">{problems.map((p) => `${p.severity.toUpperCase()} ${relative(p.path, root)}:${p.line} ${p.message}`).join("\n") || "No problems."}</pre>}
+                {bottom === "patch" && <pre className="h-[calc(100%-32px)] overflow-auto p-3 text-xs leading-5 text-zinc-300">{allPatch || currentPatch || "No patch."}</pre>}
+                {bottom === "raw" && <pre className="h-[calc(100%-32px)] overflow-auto p-3 text-xs leading-5 text-zinc-300">{JSON.stringify(raw, null, 2)}</pre>}
               </div>
             )}
           </section>
 
           <aside className="grid min-h-0 grid-rows-[38px_minmax(0,1fr)] border-l border-zinc-800 bg-zinc-950">
-            <div className="flex items-center gap-1 border-b border-zinc-800 px-2">
-              {(["file", "patch", "tools", "bridge"] as const).map((panel) => (
-                <button key={panel} onClick={() => setRight(panel)} className={["rounded-md px-3 py-1.5 text-xs", right === panel ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:bg-zinc-900"].join(" ")}>{panel}</button>
+            <div className="flex items-center gap-1 overflow-x-auto border-b border-zinc-800 px-2">
+              {(["inspector", "outline", "problems", "patch", "agent", "runtime"] as const).map((panel) => (
+                <button key={panel} onClick={() => setRight(panel)} className={["rounded-md px-2 py-1.5 text-xs", right === panel ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:bg-zinc-900"].join(" ")}>{panel}</button>
               ))}
             </div>
 
             <div className="overflow-auto p-3 text-xs">
-              {right === "file" && (
+              {right === "inspector" && (
                 <div className="space-y-3">
                   <div className="rounded-lg border border-zinc-800 bg-black p-3">
                     <div className="mb-1 text-zinc-500">Current file</div>
@@ -879,51 +1015,48 @@ export default function RevolutionWorkbench(): JSX.Element {
                     <div className="rounded-lg border border-zinc-800 bg-black p-3"><div className="text-zinc-500">entries</div><div>{entries.length}</div></div>
                     <div className="rounded-lg border border-zinc-800 bg-black p-3"><div className="text-zinc-500">files</div><div>{files.length}</div></div>
                     <div className="rounded-lg border border-zinc-800 bg-black p-3"><div className="text-zinc-500">indexed</div><div>{Object.keys(indexed).length}</div></div>
-                    <div className="rounded-lg border border-zinc-800 bg-black p-3"><div className="text-zinc-500">dirty</div><div>{dirtyCount}</div></div>
+                    <div className="rounded-lg border border-zinc-800 bg-black p-3"><div className="text-zinc-500">problems</div><div>{problems.length}</div></div>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (!selectedBuffer) return;
-                      setBuffers((prev): Record<string, BufferState> => {
-                        const current = prev[selectedBuffer.path];
-                        if (!current) return prev;
-                        return { ...prev, [selectedBuffer.path]: { ...current, content: current.original, dirty: false } };
-                      });
-                    }}
-                    disabled={!selectedBuffer?.dirty}
-                    className="w-full rounded-md bg-zinc-800 px-3 py-2 text-xs enabled:hover:bg-zinc-700 disabled:opacity-40"
-                  >
-                    Revert current buffer
-                  </button>
+                  <button onClick={() => selectedBuffer && setBuffers((prev) => ({ ...prev, [selectedBuffer.path]: { ...selectedBuffer, content: selectedBuffer.original, dirty: false } }))} disabled={!selectedBuffer?.dirty} className="w-full rounded-md bg-zinc-800 px-3 py-2 text-xs enabled:hover:bg-zinc-700 disabled:opacity-40">Revert current</button>
                 </div>
               )}
 
-              {right === "patch" && (
-                <pre className="whitespace-pre-wrap rounded-lg border border-zinc-800 bg-black p-3 leading-5 text-zinc-300">{currentPatch || "Current file has no patch."}</pre>
-              )}
-
-              {right === "tools" && (
-                <div className="space-y-3">
-                  {TOOL_ADAPTERS.map((tool) => (
-                    <div key={tool.id} className="rounded-lg border border-zinc-800 bg-black p-3">
-                      <div className="font-semibold text-zinc-100">{tool.label}</div>
-                      <div className="mt-1 text-zinc-500">{tool.description}</div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {tool.actions.map((action) => {
-                          const commandText = action.command(root, selected);
-                          return (
-                            <button key={`${tool.id}:${action.label}`} onClick={() => void runCommandText(commandText)} title={commandText} className="rounded-md bg-zinc-800 px-2 py-1 text-[11px] hover:bg-zinc-700">
-                              {action.label}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+              {right === "outline" && (
+                <div className="space-y-1">
+                  {outline.map((item) => (
+                    <button key={`${item.line}:${item.label}`} className="block w-full rounded-md bg-black px-3 py-2 text-left hover:bg-zinc-900">
+                      <div className="text-emerald-300">{item.kind}</div>
+                      <div className="truncate text-zinc-300">{item.label}</div>
+                      <div className="text-zinc-600">line {item.line}</div>
+                    </button>
                   ))}
                 </div>
               )}
 
-              {right === "bridge" && (
+              {right === "problems" && (
+                <div className="space-y-1">
+                  {problems.map((problem, index) => (
+                    <button key={`${problem.path}:${problem.line}:${index}`} onClick={() => void openFile(problem.path)} className="block w-full rounded-md border border-zinc-900 bg-black px-3 py-2 text-left hover:border-emerald-900">
+                      <div className={problem.severity === "error" ? "text-red-300" : problem.severity === "warning" ? "text-amber-300" : "text-zinc-400"}>{problem.severity}</div>
+                      <div className="truncate text-zinc-300">{relative(problem.path, root)}:{problem.line}</div>
+                      <div className="text-zinc-500">{problem.message}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {right === "patch" && <pre className="whitespace-pre-wrap rounded-lg border border-zinc-800 bg-black p-3 leading-5 text-zinc-300">{currentPatch || "Current file has no patch."}</pre>}
+
+              {right === "agent" && (
+                <div className="space-y-3">
+                  <textarea value={agentIntent} onChange={(event) => setAgentIntent(event.target.value)} className="h-28 w-full resize-none rounded-md border border-zinc-800 bg-black p-2 text-xs outline-none focus:border-emerald-700" />
+                  <button onClick={() => void runAgent()} className="w-full rounded-md bg-emerald-900 px-3 py-2 text-xs hover:bg-emerald-800">Submit handoff</button>
+                  <button onClick={() => void navigator.clipboard?.writeText(agentContext).catch(() => undefined)} className="w-full rounded-md bg-zinc-800 px-3 py-2 text-xs hover:bg-zinc-700">Copy context</button>
+                  <pre className="whitespace-pre-wrap rounded-lg border border-zinc-800 bg-black p-3 leading-4 text-zinc-400">{agentContext.slice(0, 8000)}</pre>
+                </div>
+              )}
+
+              {right === "runtime" && (
                 <div className="space-y-2">
                   <div className="rounded-lg border border-zinc-800 bg-black p-3">
                     <div className="text-zinc-500">Detected bridge functions</div>
@@ -938,6 +1071,22 @@ export default function RevolutionWorkbench(): JSX.Element {
           </aside>
         </main>
       </div>
+
+      {paletteOpen && (
+        <div className="absolute inset-0 z-50 bg-black/70 p-20">
+          <div className="mx-auto grid max-h-[70vh] w-[760px] grid-rows-[48px_minmax(0,1fr)] overflow-hidden rounded-xl border border-zinc-700 bg-zinc-950 shadow-2xl">
+            <input autoFocus value={paletteQuery} onChange={(event) => setPaletteQuery(event.target.value)} placeholder="Run command or open file" className="border-b border-zinc-800 bg-black px-4 text-sm outline-none focus:border-emerald-700" />
+            <div className="overflow-auto p-2">
+              {filteredCommands.map((item) => (
+                <button key={`${item.label}:${item.detail}`} onClick={() => { item.run(); setPaletteOpen(false); }} className="mb-1 block w-full rounded-md px-3 py-2 text-left hover:bg-zinc-900">
+                  <div className="text-sm text-zinc-100">{item.label}</div>
+                  <div className="truncate text-xs text-zinc-500">{item.detail}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
