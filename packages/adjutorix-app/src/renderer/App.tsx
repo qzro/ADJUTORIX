@@ -856,7 +856,7 @@ export default function App(): React.JSX.Element {
       currentView={currentView}
       commandPaletteOpen={commandPaletteOpen}
       leftRailCollapsed={false}
-      rightRailCollapsed={false}
+      rightRailCollapsed={true}
       bottomPanelVisible={currentView === "workspace"}
       statusChips={[
         { label: "Phase", value: phase, tone: /ready/i.test(phase) ? "good" : "neutral" },
