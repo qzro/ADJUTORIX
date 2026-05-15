@@ -1552,3 +1552,29 @@ ipcMain.handle(ADJUTORIX_AGENT_STATUS_CHANNEL_V7, async () => {
     }
   };
 });
+
+
+// ADJUTORIX_AGENT_STATUS_HANDLER_V8
+const ADJUTORIX_AGENT_STATUS_CHANNEL_V8 = "adjutorix:agent:status";
+
+try {
+  ipcMain.removeHandler(ADJUTORIX_AGENT_STATUS_CHANNEL_V8);
+} catch {
+  // handler may not exist yet
+}
+
+ipcMain.handle(ADJUTORIX_AGENT_STATUS_CHANNEL_V8, async () => {
+  return {
+    ok: true,
+    status: "ready",
+    agent: {
+      mode: "native-workbench-v8",
+      executable: true,
+      marker: "ADJUTORIX_AGENT_STATUS_HANDLER_V8",
+      pid: process.pid,
+      cwd: process.cwd(),
+      workspaceRoot: process.env.ADJUTORIX_WORKSPACE_ROOT ?? process.cwd(),
+      time: new Date().toISOString()
+    }
+  };
+});
