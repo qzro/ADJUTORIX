@@ -1523,3 +1523,32 @@ if (!(globalThis as any).__adjutorixNativeCommandBridgeV5Registered) {
     });
   });
 }
+
+
+// ADJUTORIX_AGENT_STATUS_HANDLER_V7
+// Renderer compatibility: V7 workbench introspects agent state.
+// This prevents Electron from throwing "No handler registered for 'adjutorix:agent:status'".
+const ADJUTORIX_AGENT_STATUS_CHANNEL_V7 = "adjutorix:agent:status";
+
+try {
+  ipcMain.removeHandler(ADJUTORIX_AGENT_STATUS_CHANNEL_V7);
+} catch {
+  // ignore: channel may not exist yet
+}
+
+ipcMain.handle(ADJUTORIX_AGENT_STATUS_CHANNEL_V7, async () => {
+  return {
+    ok: true,
+    status: "ready",
+    agent: {
+      mode: "native-workbench",
+      executable: true,
+      shellBridge: true,
+      marker: "ADJUTORIX_AGENT_STATUS_HANDLER_V7",
+      pid: process.pid,
+      cwd: process.cwd(),
+      workspaceRoot: process.env.ADJUTORIX_WORKSPACE_ROOT ?? process.cwd(),
+      time: new Date().toISOString()
+    }
+  };
+});

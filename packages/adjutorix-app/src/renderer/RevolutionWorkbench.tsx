@@ -2,7 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Editor from "@monaco-editor/react";
 
-const MARKER = "ADJUTORIX_NATIVE_IDE_WORKBENCH_V6";
+const MARKER = "ADJUTORIX_NATIVE_IDE_WORKBENCH_V7";
 
 type Any = any;
 
@@ -434,7 +434,7 @@ export default function RevolutionWorkbench() {
   const [bottomTab, setBottomTab] = useState("terminal");
   const [activity, setActivity] = useState("explorer");
   const [terminalCommand, setTerminalCommand] = useState("pnpm --filter @adjutorix/app run build");
-  const [terminalOutput, setTerminalOutput] = useState<Any>({ status: "ready", stdout: "Run a command. Primary substrate: shell.execute. Fallbacks: shell.run / command.run / terminal.execute / runtime.runCommand.", stderr: "" });
+  const [terminalOutput, setTerminalOutput] = useState<Any>({ status: "ready", stdout: "Run a command. Primary substrate: shell.execute. Fallbacks: shell.run / command.run / terminal.execute / runtime.runCommand. CSS pipeline: native-workbench.css.", stderr: "" });
   const [snapshots, setSnapshots] = useState<Any[]>([]);
   const [functions, setFunctions] = useState<string[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
