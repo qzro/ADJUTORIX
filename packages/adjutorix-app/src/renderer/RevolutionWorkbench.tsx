@@ -49,24 +49,40 @@ type CommandItem = {
   run: () => void;
 };
 
-const MARKER = "ADJUTORIX_NATIVE_IDE_WORKBENCH_V4";
+const MARKER = "ADJUTORIX_NATIVE_IDE_WORKBENCH_V5";
 
 const COMMAND_BRIDGES = [
-  "shell.run",
   "shell.execute",
-  "terminal.run",
-  "terminal.execute",
+  "shell.run",
   "command.run",
   "commands.run",
+  "terminal.execute",
+  "terminal.run",
   "runtime.runCommand",
   "workspace.runCommand",
-  "agent.command",
-  "agent.submit",
 ];
 
 function api(): Any | null {
   const w = window as Any;
-  return w.adjutorixApi ?? w.adjutorix ?? null;
+  const raw = w.adjutorix ?? {};
+  const exposed = w.adjutorixApi ?? {};
+
+  // V5 rule: never hide privileged-but-allowed raw bridge methods behind the ergonomic API.
+  // The V4 terminal returned null because adjutorixApi existed but did not expose shell/command.
+  return {
+    ...exposed,
+    ...raw,
+    shell: raw.shell ?? exposed.shell,
+    command: raw.command ?? exposed.command,
+    commands: raw.commands ?? exposed.commands,
+    workspace: { ...(exposed.workspace ?? {}), ...(raw.workspace ?? {}) },
+    runtime: { ...(exposed.runtime ?? {}), ...(raw.runtime ?? {}) },
+    diagnostics: { ...(exposed.diagnostics ?? {}), ...(raw.diagnostics ?? {}) },
+    verify: { ...(exposed.verify ?? {}), ...(raw.verify ?? {}) },
+    patch: { ...(exposed.patch ?? {}), ...(raw.patch ?? {}) },
+    ledger: { ...(exposed.ledger ?? {}), ...(raw.ledger ?? {}) },
+    agent: { ...(exposed.agent ?? {}), ...(raw.agent ?? {}) },
+  };
 }
 
 function normalize(value: unknown): string {
@@ -436,7 +452,7 @@ export default function RevolutionWorkbench(): JSX.Element {
   const [bottom, setBottom] = useState<BottomPanel>("terminal");
   const [right, setRight] = useState<RightPanel>("inspector");
   const [terminalCommand, setTerminalCommand] = useState("pnpm --filter @adjutorix/app run build");
-  const [terminalOutput, setTerminalOutput] = useState<unknown>(null);
+  const [terminalOutput, setTerminalOutput] = useState<unknown>({ status: "ready", note: "V5 native shell bridge required: shell.execute" });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [agentIntent, setAgentIntent] = useState("Inspect current workspace state and propose the next concrete patch.");
@@ -612,7 +628,7 @@ export default function RevolutionWorkbench(): JSX.Element {
         );
 
         setTerminalOutput(result);
-        addLog(`RUN ${text}`);
+        addLog(`RUN ${text}`); await refresh();
       } catch (error) {
         const blocked = { status: "blocked", reason: String(error), command: text, requiredBridge: COMMAND_BRIDGES };
         setTerminalOutput(blocked);

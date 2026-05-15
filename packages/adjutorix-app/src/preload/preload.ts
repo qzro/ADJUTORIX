@@ -74,6 +74,7 @@ type Envelope<T extends JsonValue = JsonValue> = InvokeEnvelope<T> | ErrorEnvelo
 // -----------------------------------------------------------------------------
 
 const CHANNELS = BRIDGE_CHANNELS;
+const ADJUTORIX_SHELL_EXECUTE_CHANNEL = "adjutorix:shell:execute";
 
 const INVOKE_CHANNEL_ALLOWLIST = new Set<string>([
   CHANNELS.runtimeSnapshot,
@@ -106,6 +107,7 @@ const INVOKE_CHANNEL_ALLOWLIST = new Set<string>([
   CHANNELS.agentStatus,
   CHANNELS.agentStart,
   CHANNELS.agentStop,
+  ADJUTORIX_SHELL_EXECUTE_CHANNEL,
 ]);
 
 const EVENT_CHANNEL_ALLOWLIST = new Set<string>([
@@ -626,6 +628,33 @@ function normalizeAgentControlRequest(input: unknown): AgentControlRequest {
   };
 }
 
+function normalizeShellExecuteRequest(input: unknown): JsonObject {
+  const obj = requireJsonRecord(input ?? {}, "shell_execute_request");
+  const command =
+    typeof obj.command === "string"
+      ? obj.command.trim()
+      : typeof obj.intent === "string"
+        ? obj.intent.trim()
+        : "";
+
+  assert(command.length > 0, "command_required");
+  assert(command.length <= 8000, "command_too_large");
+
+  const cwd =
+    typeof obj.cwd === "string" && obj.cwd.trim()
+      ? obj.cwd.trim()
+      : undefined;
+
+  return {
+    schema: 1,
+    actor: "renderer",
+    source: "ipc",
+    command,
+    ...(cwd ? { cwd } : {}),
+    ...(typeof obj.timeoutMs === "number" ? { timeoutMs: obj.timeoutMs } : {}),
+  };
+}
+
 // -----------------------------------------------------------------------------
 // IPC INVOKE / EVENT ADAPTERS
 // -----------------------------------------------------------------------------
@@ -733,6 +762,19 @@ const bridge = {
     events: deepFreeze({
       subscribe: (callback: EventCallback) => guardedSubscribe(CHANNELS.uiAgentEvent, callback),
     }),
+  }),
+
+  shell: deepFreeze({
+    execute: async (input: unknown) => guardedInvoke(ADJUTORIX_SHELL_EXECUTE_CHANNEL, normalizeShellExecuteRequest(input)),
+    run: async (input: unknown) => guardedInvoke(ADJUTORIX_SHELL_EXECUTE_CHANNEL, normalizeShellExecuteRequest(input)),
+  }),
+
+  command: deepFreeze({
+    run: async (input: unknown) => guardedInvoke(ADJUTORIX_SHELL_EXECUTE_CHANNEL, normalizeShellExecuteRequest(input)),
+  }),
+
+  commands: deepFreeze({
+    run: async (input: unknown) => guardedInvoke(ADJUTORIX_SHELL_EXECUTE_CHANNEL, normalizeShellExecuteRequest(input)),
   }),
 } as const;
 
