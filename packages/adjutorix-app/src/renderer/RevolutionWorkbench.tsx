@@ -2,90 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Editor from "@monaco-editor/react";
 
-const MARKER = "ADJUTORIX_NATIVE_IDE_WORKBENCH_V10";
-
-const MAX_EDITOR_BYTES = 512_000;
-
-const SOURCE_TEXT_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-  ".json", ".jsonc", ".md", ".mdx", ".txt",
-  ".py", ".sh", ".bash", ".zsh",
-  ".css", ".scss", ".html", ".xml",
-  ".yml", ".yaml", ".toml", ".ini",
-  ".sql", ".go", ".rs", ".java", ".kt", ".swift",
-  ".c", ".cc", ".cpp", ".h", ".hpp",
-]);
-
-const HARD_BINARY_OR_ARTIFACT_EXTENSIONS = new Set([
-  ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".icns",
-  ".woff", ".woff2", ".ttf", ".otf",
-  ".zip", ".gz", ".tgz", ".tar", ".rar", ".7z",
-  ".pdf", ".mp4", ".mov", ".mp3", ".wav",
-  ".sqlite", ".db", ".lock",
-  ".map",
-]);
-
-const HARD_IGNORED_SEGMENTS = [
-  "/.git/",
-  "/node_modules/",
-  "/dist/",
-  "/build/",
-  "/coverage/",
-  "/.cache/",
-  "/.vite/",
-  "/.turbo/",
-  "/__pycache__/",
-  "/.pytest_cache/",
-  "/.mypy_cache/",
-  "/.ruff_cache/",
-  "/.venv/",
-  "/venv/",
-  "/site-packages/",
-];
-
-function extensionOf(path: string): string {
-  const name = path.split("/").pop() ?? "";
-  const index = name.lastIndexOf(".");
-  return index >= 0 ? name.slice(index).toLowerCase() : "";
-}
-
-function isLikelySourceText(path: string): boolean {
-  const p = `/${String(path ?? "").replace(/\/g, "/").toLowerCase()}`;
-  if (!p.trim()) return false;
-  if (HARD_IGNORED_SEGMENTS.some((segment) => p.includes(segment))) return false;
-  const ext = extensionOf(p);
-  if (HARD_BINARY_OR_ARTIFACT_EXTENSIONS.has(ext)) return false;
-  if (SOURCE_TEXT_EXTENSIONS.has(ext)) return true;
-  return [
-    "README",
-    "LICENSE",
-    "Makefile",
-    "Dockerfile",
-    ".gitignore",
-    ".npmrc",
-    ".editorconfig",
-  ].some((name) => p.endsWith(`/${name.toLowerCase()}`));
-}
-
-function entryIsOpenableSource(entry: Entry): boolean {
-  if (!entry || entry.isDir) return false;
-  if (typeof entry.size === "number" && entry.size > MAX_EDITOR_BYTES) return false;
-  return isLikelySourceText(entry.path);
-}
-
-function classifyOpenRejection(entry: Entry | null | undefined): string | null {
-  if (!entry) return "missing_entry";
-  if (entry.isDir) return "directory";
-  if (typeof entry.size === "number" && entry.size > MAX_EDITOR_BYTES) return "too_large";
-  if (!isLikelySourceText(entry.path)) return "binary_or_artifact";
-  return null;
-}
-
-function isExpectedReadRejection(error: unknown): boolean {
-  const text = String(error instanceof Error ? error.message : error);
-  return /workspace_file_read_(too_large|directory_rejected|binary_rejected)|too_large|directory|binary_or_artifact/i.test(text);
-}
-
+const MARKER = "ADJUTORIX_NATIVE_IDE_WORKBENCH_V9";
 
 type Any = any;
 
@@ -236,8 +153,8 @@ PY`,
 ];
 
 const CAPABILITIES = [
-  ["Editor", "Monaco editor, guarded text buffers, tabs, dirty buffers, save, save-all, patch review"],
-  ["Explorer", "ranked safe-source index with directory/binary/large-file rejection"],
+  ["Editor", "Monaco editor, tabs, dirty buffers, save, save-all, patch review"],
+  ["Explorer", "ranked source index with noise filtering"],
   ["Search", "file search, loaded-content search, command-backed grep"],
   ["SCM", "status, diff, branches, timeline"],
   ["Terminal", "native command bridge via shell substrate"],
@@ -528,9 +445,17 @@ function score(path: string): number {
 }
 
 function sourceFiles(entries: Entry[]): Entry[] {
-  return entries
-    .filter(entryIsOpenableSource)
-    .sort((a, b) => (Number(b.score ?? 0) - Number(a.score ?? 0)) || a.path.localeCompare(b.path));
+  const seen = new Set<string>();
+  const out: Entry[] = [];
+
+  for (const entry of entries) {
+    const path = p(entry.path);
+    if (!path || entry.isDir || noise(path) || binary(path) || seen.has(path)) continue;
+    seen.add(path);
+    out.push({ ...entry, path, score: score(path) });
+  }
+
+  return out.sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || a.path.localeCompare(b.path));
 }
 
 function commandResult(value: Any, command: string): Any {
@@ -792,22 +717,6 @@ export default function RevolutionWorkbench() {
 
   const openFile = useCallback(
     async (pathLike: string, explicitRoot?: string | null) => {
-    const requestedPath = typeof pathLike: string === "string" ? pathLike: string : String((pathLike: string as Any)?.path ?? "");
-    const requestedEntry = entries.find((entry) => normalizePath(entry.path) === normalizePath(requestedPath)) ?? null;
-    const rejection = classifyOpenRejection(requestedEntry);
-    if (rejection) {
-      addLog(`SKIP OPEN ${rejection} ${requestedPath}`);
-      setTerminalOutput({
-        ok: false,
-        status: "open_rejected",
-        reason: rejection,
-        path: requestedPath,
-        stdout: "",
-        stderr: "",
-      });
-      return;
-    }
-
       const base = explicitRoot ?? root ?? null;
       const full = p(pathLike);
       const relative = rel(full, base);
