@@ -521,3 +521,34 @@ button {
     display: none;
   }
 }
+
+
+/* V10: real IDE safety surface */
+button[disabled],
+.adj-disabled,
+.adj-skipped,
+[data-openable="false"] {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.adj-file-row__meta,
+.adj-skip-reason,
+.adj-size-pill {
+  color: #71717a;
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.adj-danger-soft {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(127, 29, 29, 0.16);
+}
+
+.adj-safe-source {
+  border-left: 2px solid rgba(16, 185, 129, 0.7);
+}
+
+.adj-artifact-source {
+  border-left: 2px solid rgba(113, 113, 122, 0.45);
+}
