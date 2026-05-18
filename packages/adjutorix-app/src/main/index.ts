@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { registerNativeControlPlaneV13 } from "./native-control-plane-v13";
+import { registerNativeControlPlaneV13 } from "./native-control-plane-v13.js";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import path from "node:path";
 import fs from "node:fs";
