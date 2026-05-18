@@ -833,3 +833,19 @@ if (!(globalThis as any).__ADJUTORIX_NATIVE_EXTERNAL_WORKSPACE_V16_PRELOAD__) {
   }));
 }
 
+
+// ADJUTORIX_NATIVE_PORTFOLIO_HOST_V18_PRELOAD
+try {
+  const __portfolioInvokeV18 = (channel: string, payload?: unknown) => ipcRenderer.invoke(channel, payload ?? {});
+  contextBridge.exposeInMainWorld("adjutorixPortfolioV18", {
+    marker: "ADJUTORIX_NATIVE_PORTFOLIO_HOST_V18",
+    state: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:state", payload),
+    discover: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:discover", payload),
+    selectRoot: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:selectRoot", payload),
+    openFolder: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:openFolder", payload),
+    files: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:files", payload),
+    read: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:read", payload),
+    write: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:write", payload),
+    run: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:run", payload),
+  });
+} catch {}
