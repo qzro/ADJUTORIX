@@ -292,6 +292,64 @@ type ApplyGateObject = {
   };
 };
 
+
+type ApplyReceiptObject = {
+  object_type: "ADJUTORIX_APPLY_RECEIPT_OBJECT";
+  schema_version: "1.0.0";
+  apply_receipt_id: string;
+  created_at: string;
+  plan_id: string;
+  patch_custody_id: string;
+  verification_gate_id: string;
+  verify_receipt_id: string;
+  apply_gate_id: string;
+  workspace_root: string;
+  selected_path: string | null;
+  custody: {
+    source: "LOCAL_OPERATOR_COCKPIT";
+    workspace_bound: true;
+    plan_bound: true;
+    patch_custody_bound: true;
+    verification_gate_bound: true;
+    verify_receipt_bound: true;
+    apply_gate_bound: true;
+    may_mutate_files: false;
+    may_apply_patch: false;
+  };
+  basis: {
+    plan_object_type: "ADJUTORIX_INTENT_PLAN_OBJECT";
+    patch_custody_object_type: "ADJUTORIX_PATCH_CUSTODY_OBJECT";
+    verification_gate_object_type: "ADJUTORIX_VERIFICATION_GATE_OBJECT";
+    verify_receipt_object_type: "ADJUTORIX_VERIFY_RECEIPT_OBJECT";
+    apply_gate_object_type: "ADJUTORIX_APPLY_GATE_OBJECT";
+    plan_id: string;
+    patch_custody_id: string;
+    verification_gate_id: string;
+    verify_receipt_id: string;
+    apply_gate_id: string;
+  };
+  execution: {
+    mode: "OPERATOR_TRIGGERED";
+    executed: true;
+    operator_triggered: true;
+    files_mutated: false;
+  };
+  result: {
+    status: "APPLY_RECEIPT_CREATED";
+    applied: true;
+    reason: string;
+  };
+  rollback_gate: {
+    rollback_available: true;
+    requires_rollback_receipt: true;
+    basis_apply_receipt_id: string;
+  };
+  evidence: {
+    receipt_type: "apply_receipt";
+    timeline_event: "apply.receipt.created";
+  };
+};
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
 }
@@ -436,7 +494,8 @@ function createIntentPlanObject(input: {
         "node scripts/product/assert-patch-custody-object.mjs",
         "node scripts/product/assert-verification-gate-object.mjs",
         "node scripts/product/assert-verify-receipt-object.mjs",
-        "node scripts/product/assert-apply-gate-object.mjs"
+        "node scripts/product/assert-apply-gate-object.mjs",
+        "node scripts/product/assert-apply-receipt-object.mjs"
       ],
       requires_runtime: true,
       requires_diagnostics: true,
@@ -546,6 +605,126 @@ function createPatchCustodyObject(plan: IntentPlanObject): PatchCustodyObject {
 
 
 
+
+
+function createApplyReceiptObject(input: {
+  plan: IntentPlanObject;
+  patch: PatchCustodyObject;
+  verificationGate: VerificationGateObject;
+  verifyReceipt: VerifyReceiptObject;
+  applyGate: ApplyGateObject;
+}): ApplyReceiptObject {
+  const applyReceiptId = makeId("apply-receipt");
+
+  return {
+    object_type: "ADJUTORIX_APPLY_RECEIPT_OBJECT",
+    schema_version: "1.0.0",
+    apply_receipt_id: applyReceiptId,
+    created_at: new Date().toISOString(),
+    plan_id: input.plan.plan_id,
+    patch_custody_id: input.patch.patch_custody_id,
+    verification_gate_id: input.verificationGate.verification_gate_id,
+    verify_receipt_id: input.verifyReceipt.verify_receipt_id,
+    apply_gate_id: input.applyGate.apply_gate_id,
+    workspace_root: input.patch.workspace_root,
+    selected_path: input.patch.selected_path,
+    custody: {
+      source: "LOCAL_OPERATOR_COCKPIT",
+      workspace_bound: true,
+      plan_bound: true,
+      patch_custody_bound: true,
+      verification_gate_bound: true,
+      verify_receipt_bound: true,
+      apply_gate_bound: true,
+      may_mutate_files: false,
+      may_apply_patch: false,
+    },
+    basis: {
+      plan_object_type: "ADJUTORIX_INTENT_PLAN_OBJECT",
+      patch_custody_object_type: "ADJUTORIX_PATCH_CUSTODY_OBJECT",
+      verification_gate_object_type: "ADJUTORIX_VERIFICATION_GATE_OBJECT",
+      verify_receipt_object_type: "ADJUTORIX_VERIFY_RECEIPT_OBJECT",
+      apply_gate_object_type: "ADJUTORIX_APPLY_GATE_OBJECT",
+      plan_id: input.plan.plan_id,
+      patch_custody_id: input.patch.patch_custody_id,
+      verification_gate_id: input.verificationGate.verification_gate_id,
+      verify_receipt_id: input.verifyReceipt.verify_receipt_id,
+      apply_gate_id: input.applyGate.apply_gate_id,
+    },
+    execution: {
+      mode: "OPERATOR_TRIGGERED",
+      executed: true,
+      operator_triggered: true,
+      files_mutated: false,
+    },
+    result: {
+      status: "APPLY_RECEIPT_CREATED",
+      applied: true,
+      reason: "Apply receipt created from unlocked Apply Gate object; rollback is now available.",
+    },
+    rollback_gate: {
+      rollback_available: true,
+      requires_rollback_receipt: true,
+      basis_apply_receipt_id: applyReceiptId,
+    },
+    evidence: {
+      receipt_type: "apply_receipt",
+      timeline_event: "apply.receipt.created",
+    },
+  };
+}
+
+function validateApplyReceiptObject(
+  receipt: ApplyReceiptObject,
+  plan: IntentPlanObject | null,
+  patch: PatchCustodyObject | null,
+  verificationGate: VerificationGateObject | null,
+  verifyReceipt: VerifyReceiptObject | null,
+  applyGate: ApplyGateObject | null,
+): string[] {
+  const failures: string[] = [];
+
+  if (receipt.object_type !== "ADJUTORIX_APPLY_RECEIPT_OBJECT") failures.push("object_type");
+  if (receipt.schema_version !== "1.0.0") failures.push("schema_version");
+  if (!receipt.apply_receipt_id || receipt.apply_receipt_id.length < 12) failures.push("apply_receipt_id");
+  if (!receipt.plan_id) failures.push("plan_id");
+  if (!receipt.patch_custody_id) failures.push("patch_custody_id");
+  if (!receipt.verification_gate_id) failures.push("verification_gate_id");
+  if (!receipt.verify_receipt_id) failures.push("verify_receipt_id");
+  if (!receipt.apply_gate_id) failures.push("apply_gate_id");
+  if (!receipt.workspace_root) failures.push("workspace_root");
+  if (receipt.custody.source !== "LOCAL_OPERATOR_COCKPIT") failures.push("custody.source");
+  if (receipt.custody.workspace_bound !== true) failures.push("custody.workspace_bound");
+  if (receipt.custody.plan_bound !== true) failures.push("custody.plan_bound");
+  if (receipt.custody.patch_custody_bound !== true) failures.push("custody.patch_custody_bound");
+  if (receipt.custody.verification_gate_bound !== true) failures.push("custody.verification_gate_bound");
+  if (receipt.custody.verify_receipt_bound !== true) failures.push("custody.verify_receipt_bound");
+  if (receipt.custody.apply_gate_bound !== true) failures.push("custody.apply_gate_bound");
+  if (receipt.custody.may_mutate_files !== false) failures.push("custody.may_mutate_files");
+  if (receipt.custody.may_apply_patch !== false) failures.push("custody.may_apply_patch");
+  if (receipt.basis.plan_object_type !== "ADJUTORIX_INTENT_PLAN_OBJECT") failures.push("basis.plan_object_type");
+  if (receipt.basis.patch_custody_object_type !== "ADJUTORIX_PATCH_CUSTODY_OBJECT") failures.push("basis.patch_custody_object_type");
+  if (receipt.basis.verification_gate_object_type !== "ADJUTORIX_VERIFICATION_GATE_OBJECT") failures.push("basis.verification_gate_object_type");
+  if (receipt.basis.verify_receipt_object_type !== "ADJUTORIX_VERIFY_RECEIPT_OBJECT") failures.push("basis.verify_receipt_object_type");
+  if (receipt.basis.apply_gate_object_type !== "ADJUTORIX_APPLY_GATE_OBJECT") failures.push("basis.apply_gate_object_type");
+  if (plan && receipt.basis.plan_id !== plan.plan_id) failures.push("basis.plan_id");
+  if (patch && receipt.basis.patch_custody_id !== patch.patch_custody_id) failures.push("basis.patch_custody_id");
+  if (verificationGate && receipt.basis.verification_gate_id !== verificationGate.verification_gate_id) failures.push("basis.verification_gate_id");
+  if (verifyReceipt && receipt.basis.verify_receipt_id !== verifyReceipt.verify_receipt_id) failures.push("basis.verify_receipt_id");
+  if (applyGate && receipt.basis.apply_gate_id !== applyGate.apply_gate_id) failures.push("basis.apply_gate_id");
+  if (receipt.execution.mode !== "OPERATOR_TRIGGERED") failures.push("execution.mode");
+  if (receipt.execution.executed !== true) failures.push("execution.executed");
+  if (receipt.execution.operator_triggered !== true) failures.push("execution.operator_triggered");
+  if (receipt.execution.files_mutated !== false) failures.push("execution.files_mutated");
+  if (receipt.result.status !== "APPLY_RECEIPT_CREATED") failures.push("result.status");
+  if (receipt.result.applied !== true) failures.push("result.applied");
+  if (receipt.rollback_gate.rollback_available !== true) failures.push("rollback_gate.rollback_available");
+  if (receipt.rollback_gate.requires_rollback_receipt !== true) failures.push("rollback_gate.requires_rollback_receipt");
+  if (receipt.rollback_gate.basis_apply_receipt_id !== receipt.apply_receipt_id) failures.push("rollback_gate.basis_apply_receipt_id");
+  if (receipt.evidence.receipt_type !== "apply_receipt") failures.push("evidence.receipt_type");
+
+  return failures;
+}
 
 function createApplyGateObject(input: {
   plan: IntentPlanObject;
@@ -926,6 +1105,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
   const [verifyReceiptFailures, setVerifyReceiptFailures] = React.useState<string[]>([]);
   const [applyGateObject, setApplyGateObject] = React.useState<ApplyGateObject | null>(null);
   const [applyGateFailures, setApplyGateFailures] = React.useState<string[]>([]);
+  const [applyReceiptObject, setApplyReceiptObject] = React.useState<ApplyReceiptObject | null>(null);
+  const [applyReceiptFailures, setApplyReceiptFailures] = React.useState<string[]>([]);
   const [lastReceipt, setLastReceipt] = React.useState<Record<string, unknown> | null>(null);
   const [lastError, setLastError] = React.useState<string | null>(null);
   const [eventLog, setEventLog] = React.useState<EventItem[]>([]);
@@ -936,6 +1117,7 @@ export default function LocalOperatorCockpit(): JSX.Element {
   const verificationGateReady = Boolean(verificationGateObject && verificationGateFailures.length === 0);
   const verifyReceiptReady = Boolean(verifyReceiptObject && verifyReceiptFailures.length === 0 && verifyReceiptObject.verdict.passed === true);
   const applyGateObjectReady = Boolean(applyGateObject && applyGateFailures.length === 0 && applyGateObject.gate_state.apply_unlocked === true);
+  const applyReceiptReady = Boolean(applyReceiptObject && applyReceiptFailures.length === 0 && applyReceiptObject.result.applied === true);
   const verificationReady = workspaceBound && planReady && patchCustodyReady && verificationGateReady && runtimeReady && diagnosticsReady;
   const applyGateReady = applyGateObjectReady && operatorState !== "VERIFY_FAILED";
 
@@ -1063,6 +1245,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
       setVerifyReceiptFailures([]);
       setApplyGateObject(null);
       setApplyGateFailures([]);
+      setApplyReceiptObject(null);
+      setApplyReceiptFailures([]);
 
       const api = bridge();
       const workspace = asRecord(api.workspace);
@@ -1133,6 +1317,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
     setVerifyReceiptFailures([]);
     setApplyGateObject(null);
     setApplyGateFailures([]);
+    setApplyReceiptObject(null);
+    setApplyReceiptFailures([]);
 
     const plan = createIntentPlanObject({
       workspaceRoot,
@@ -1183,6 +1369,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
     setVerifyReceiptFailures([]);
     setApplyGateObject(null);
     setApplyGateFailures([]);
+    setApplyReceiptObject(null);
+    setApplyReceiptFailures([]);
 
     const receipt = {
       receipt_type: "patch_custody_receipt",
@@ -1225,6 +1413,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
     setVerifyReceiptFailures([]);
     setApplyGateObject(null);
     setApplyGateFailures([]);
+    setApplyReceiptObject(null);
+    setApplyReceiptFailures([]);
 
     const receipt = {
       receipt_type: "verification_gate_receipt",
@@ -1266,6 +1456,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
     setVerifyReceiptFailures(failures);
     setApplyGateObject(null);
     setApplyGateFailures([]);
+    setApplyReceiptObject(null);
+    setApplyReceiptFailures([]);
 
     const receipt = {
       receipt_type: "verify_receipt",
@@ -1305,6 +1497,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
 
     setApplyGateObject(gate);
     setApplyGateFailures(failures);
+    setApplyReceiptObject(null);
+    setApplyReceiptFailures([]);
 
     const receipt = {
       receipt_type: "apply_gate_receipt",
@@ -1331,31 +1525,63 @@ export default function LocalOperatorCockpit(): JSX.Element {
   };
 
   const issueApplyReceipt = () => {
-    if (!applyGateReady || !applyGateObject) return;
+    if (
+      !applyGateReady ||
+      !planObject ||
+      !patchCustodyObject ||
+      !verificationGateObject ||
+      !verifyReceiptObject ||
+      !applyGateObject
+    ) return;
+
+    const receiptObject = createApplyReceiptObject({
+      plan: planObject,
+      patch: patchCustodyObject,
+      verificationGate: verificationGateObject,
+      verifyReceipt: verifyReceiptObject,
+      applyGate: applyGateObject,
+    });
+
+    const failures = validateApplyReceiptObject(
+      receiptObject,
+      planObject,
+      patchCustodyObject,
+      verificationGateObject,
+      verifyReceiptObject,
+      applyGateObject,
+    );
+
+    setApplyReceiptObject(receiptObject);
+    setApplyReceiptFailures(failures);
 
     const receipt = {
       receipt_type: "apply_receipt",
       timestamp: new Date().toISOString(),
-      plan_id: planObject?.plan_id ?? null,
-      patch_custody_id: patchCustodyObject?.patch_custody_id ?? null,
-      verification_gate_id: verificationGateObject?.verification_gate_id ?? null,
-      verify_receipt_id: verifyReceiptObject?.verify_receipt_id ?? null,
-      apply_gate_id: applyGateObject?.apply_gate_id ?? null,
+      apply_receipt_id: receiptObject.apply_receipt_id,
+      plan_id: planObject.plan_id,
+      patch_custody_id: patchCustodyObject.patch_custody_id,
+      verification_gate_id: verificationGateObject.verification_gate_id,
+      verify_receipt_id: verifyReceiptObject.verify_receipt_id,
+      apply_gate_id: applyGateObject.apply_gate_id,
       workspace_root: workspaceRoot,
       selected_path: selectedPath,
-      intent: intentDraft.trim(),
-      verification_bound: true,
-      rollback_available: true,
+      apply_receipt_valid: failures.length === 0,
+      apply_receipt_failures: failures,
+      applied: failures.length === 0,
+      rollback_available: failures.length === 0,
+      next_state: failures.length === 0 ? "ROLLBACK_AVAILABLE" : "READY_TO_APPLY",
     };
 
     setLastReceipt(receipt);
+    record("apply.receipt.created", receiptObject);
     record("apply.receipt", receipt);
-    setOperatorState("APPLIED_WITH_RECEIPT");
-    setTimeout(() => setOperatorState("ROLLBACK_AVAILABLE"), 0);
+
+    setOperatorState(failures.length === 0 ? "APPLIED_WITH_RECEIPT" : "READY_TO_APPLY");
+    if (failures.length === 0) setTimeout(() => setOperatorState("ROLLBACK_AVAILABLE"), 0);
   };
 
   const issueRollbackReceipt = () => {
-    if (operatorState !== "ROLLBACK_AVAILABLE" && operatorState !== "APPLIED_WITH_RECEIPT") return;
+    if (!applyReceiptReady || (operatorState !== "ROLLBACK_AVAILABLE" && operatorState !== "APPLIED_WITH_RECEIPT")) return;
 
     const receipt = {
       receipt_type: "rollback_receipt",
@@ -1365,6 +1591,7 @@ export default function LocalOperatorCockpit(): JSX.Element {
       verification_gate_id: verificationGateObject?.verification_gate_id ?? null,
       verify_receipt_id: verifyReceiptObject?.verify_receipt_id ?? null,
       apply_gate_id: applyGateObject?.apply_gate_id ?? null,
+      apply_receipt_id: applyReceiptObject?.apply_receipt_id ?? null,
       workspace_root: workspaceRoot,
       selected_path: selectedPath,
       rollback_complete: true,
@@ -1385,8 +1612,9 @@ export default function LocalOperatorCockpit(): JSX.Element {
     ["Verification object", verificationReady ? "ready" : "blocked", verificationReady ? "Runtime, diagnostics, plan, patch custody, and verification gate evidence present." : "Requires plan, patch custody, verification gate, runtime, and diagnostics."],
     ["Verify receipt", verifyReceiptReady ? "complete" : verificationGateReady ? "ready" : "blocked", verifyReceiptReady ? `Verify receipt ${verifyReceiptObject?.verify_receipt_id} passed.` : "Create verify receipt from the verification gate."],
     ["Apply Gate object", applyGateObjectReady ? "complete" : verifyReceiptReady ? "ready" : "blocked", applyGateObjectReady ? `Apply Gate object ${applyGateObject?.apply_gate_id} unlocked.` : "Create apply gate from the passed verify receipt."],
+    ["Apply Receipt object", applyReceiptReady ? "complete" : applyGateReady ? "ready" : "blocked", applyReceiptReady ? `Apply Receipt object ${applyReceiptObject?.apply_receipt_id} created.` : "Create apply receipt from the Apply Gate object."],
     ["Apply gate", applyGateReady ? "ready" : "blocked", applyGateReady ? "Apply receipt can be issued." : "Apply blocked until Apply Gate object exists."],
-    ["Rollback receipt", operatorState === "ROLLBACK_AVAILABLE" || operatorState === "ROLLBACK_COMPLETE" ? "ready" : "blocked", "Rollback is first-class evidence, not terminal cleanup."],
+    ["Rollback receipt", applyReceiptReady && (operatorState === "ROLLBACK_AVAILABLE" || operatorState === "ROLLBACK_COMPLETE") ? "ready" : "blocked", "Rollback is first-class evidence and requires apply receipt."],
   ] as const;
 
   return (
@@ -1445,6 +1673,12 @@ export default function LocalOperatorCockpit(): JSX.Element {
                 <span className="text-zinc-500">apply gate object</span>
                 <span className={applyGateObjectReady ? "text-emerald-300" : "text-amber-300"}>
                   {applyGateObjectReady ? "READY" : "MISSING"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-zinc-500">apply receipt</span>
+                <span className={applyReceiptReady ? "text-emerald-300" : "text-amber-300"}>
+                  {applyReceiptReady ? "CREATED" : "MISSING"}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-4">
@@ -1526,6 +1760,13 @@ export default function LocalOperatorCockpit(): JSX.Element {
           </section>
         ) : null}
 
+        {applyReceiptFailures.length > 0 ? (
+          <section className="rounded-3xl border border-red-500/40 bg-red-950/30 p-5 text-red-100">
+            <div className="text-xs uppercase tracking-[0.24em] text-red-300">Apply Receipt object invalid</div>
+            <pre className="mt-3 whitespace-pre-wrap text-sm">{JSON.stringify(applyReceiptFailures, null, 2)}</pre>
+          </section>
+        ) : null}
+
         <section className="grid gap-4 xl:grid-cols-4">
           {steps.map(([label, state, description], index) => (
             <article key={label} className={cx("rounded-2xl border p-4", surfaceClass(state as any))}>
@@ -1546,7 +1787,7 @@ export default function LocalOperatorCockpit(): JSX.Element {
             <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Intent capture</div>
             <h2 className="mt-2 text-xl font-semibold text-zinc-50">Bounded change request</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              This creates an ADJUTORIX_INTENT_PLAN_OBJECT, then a non-mutating ADJUTORIX_PATCH_CUSTODY_OBJECT, then an ADJUTORIX_VERIFICATION_GATE_OBJECT, then an ADJUTORIX_VERIFY_RECEIPT_OBJECT, then an ADJUTORIX_APPLY_GATE_OBJECT. Files remain untouched until later governed patch materialization, Apply Gate object readiness, and apply receipt.
+              This creates an ADJUTORIX_INTENT_PLAN_OBJECT, then a non-mutating ADJUTORIX_PATCH_CUSTODY_OBJECT, then an ADJUTORIX_VERIFICATION_GATE_OBJECT, then an ADJUTORIX_VERIFY_RECEIPT_OBJECT, then an ADJUTORIX_APPLY_GATE_OBJECT, then an ADJUTORIX_APPLY_RECEIPT_OBJECT. Rollback remains blocked until apply receipt exists.
             </p>
             <textarea
               value={intentDraft}
@@ -1623,7 +1864,7 @@ export default function LocalOperatorCockpit(): JSX.Element {
           </article>
         </section>
 
-        <section className="grid gap-6 2xl:grid-cols-7">
+        <section className="grid gap-6 2xl:grid-cols-8">
           <article className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5">
             <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Latest receipt</div>
             <pre className="mt-4 max-h-[24rem] overflow-auto rounded-2xl border border-zinc-800 bg-black/40 p-4 text-xs leading-6 text-zinc-300">
@@ -1663,6 +1904,13 @@ export default function LocalOperatorCockpit(): JSX.Element {
             <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Apply Gate object</div>
             <pre className="mt-4 max-h-[24rem] overflow-auto rounded-2xl border border-zinc-800 bg-black/40 p-4 text-xs leading-6 text-zinc-300">
               {JSON.stringify(applyGateObject ?? { apply_gate_object: "none" }, null, 2)}
+            </pre>
+          </article>
+
+          <article className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5">
+            <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Apply Receipt object</div>
+            <pre className="mt-4 max-h-[24rem] overflow-auto rounded-2xl border border-zinc-800 bg-black/40 p-4 text-xs leading-6 text-zinc-300">
+              {JSON.stringify(applyReceiptObject ?? { apply_receipt_object: "none" }, null, 2)}
             </pre>
           </article>
 
