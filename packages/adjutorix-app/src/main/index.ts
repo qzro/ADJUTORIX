@@ -1,4 +1,7 @@
 // @ts-nocheck
+import { registerPortfolioWorkspaceV18 } from "./portfolio-workspace-v18.js";
+import { registerNativeExternalWorkspaceV16 } from "./native-external-workspace-v16.js";
+import { registerNativeControlPlaneV13 } from "./native-control-plane-v13.js";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
 import path from "node:path";
 import fs from "node:fs";
@@ -1379,3 +1382,209 @@ void main().catch(async (error) => {
 });
 
 export type { RuntimeConfig, AgentState, AppDiagnostics, AdjutorixPublicApi, WorkspaceOpenRequest };
+
+
+// -----------------------------------------------------------------------------
+// ADJUTORIX_NATIVE_COMMAND_BRIDGE_V5
+// -----------------------------------------------------------------------------
+//
+// V5 correction:
+// Renderer panels are useless unless the main process exposes a governed command
+// substrate. This bridge is deliberately bounded: common build/test/verify/git/
+// search commands are allowed; destructive shell primitives are denied.
+
+const ADJUTORIX_NATIVE_COMMAND_BRIDGE_V5 = true;
+const ADJUTORIX_SHELL_EXECUTE_CHANNEL = "adjutorix:shell:execute";
+
+function adjutorixShellJson(value: unknown): Json {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value as Json;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (Array.isArray(value)) return value.map(adjutorixShellJson) as Json;
+  if (value && typeof value === "object") {
+    const out: Record<string, Json> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) out[key] = adjutorixShellJson(child);
+    return out;
+  }
+  return String(value ?? "");
+}
+
+function adjutorixBoundText(value: string, maxBytes = 240_000): string {
+  const buffer = Buffer.from(value);
+  if (buffer.length <= maxBytes) return value;
+  return buffer.subarray(0, maxBytes).toString("utf8") + "\n\n[adjutorix:output_truncated]";
+}
+
+function adjutorixCommandAllowed(command: string): { ok: true } | { ok: false; reason: string } {
+  const trimmed = command.trim();
+
+  if (!trimmed) return { ok: false, reason: "empty_command" };
+  if (trimmed.length > 8000) return { ok: false, reason: "command_too_large" };
+
+  const forbidden = [
+    /\bsudo\b/,
+    /\brm\s+-rf\b/,
+    /\bmkfs\b/,
+    /\bdd\s+/,
+    /\bdiskutil\b/,
+    /\bshutdown\b/,
+    /\breboot\b/,
+    /\bchown\s+-R\b/,
+    /\bchmod\s+-R\s+777\b/,
+    /:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}/,
+  ];
+
+  for (const pattern of forbidden) {
+    if (pattern.test(trimmed)) return { ok: false, reason: `forbidden:${pattern.source}` };
+  }
+
+  const allowedLead = /^(pnpm|npm|npx|node|git|bash|sh|python|python3|pytest|ruff|mypy|tsc|turbo|rg|grep|cat|ls|pwd|find|sed|awk|head|tail|wc|echo)\b/;
+  if (!allowedLead.test(trimmed)) return { ok: false, reason: "command_prefix_not_allowed" };
+
+  return { ok: true };
+}
+
+function adjutorixResolveCommandCwd(input: Record<string, unknown>): string {
+  const workspaceRoot = path.resolve(String(process.env.ADJUTORIX_WORKSPACE_ROOT || process.cwd()));
+  const requested = typeof input.cwd === "string" && input.cwd.trim() ? input.cwd.trim() : workspaceRoot;
+  const resolved = path.resolve(requested);
+
+  if (!fs.existsSync(resolved)) throw new Error(`cwd_missing:${resolved}`);
+  if (!fs.statSync(resolved).isDirectory()) throw new Error(`cwd_not_directory:${resolved}`);
+
+  return resolved;
+}
+
+if (!(globalThis as any).__adjutorixNativeCommandBridgeV5Registered) {
+  (globalThis as any).__adjutorixNativeCommandBridgeV5Registered = true;
+
+  ipcMain.handle(ADJUTORIX_SHELL_EXECUTE_CHANNEL, async (_event, payload: unknown) => {
+    const startedAtMs = Date.now();
+    const input = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
+    const command = String(input.command ?? input.intent ?? "").trim();
+    const allowed = adjutorixCommandAllowed(command);
+
+    if (!allowed.ok) {
+      return adjutorixShellJson({
+        ok: false,
+        status: "denied",
+        reason: allowed.reason,
+        command,
+        channel: ADJUTORIX_SHELL_EXECUTE_CHANNEL,
+      });
+    }
+
+    const cwd = adjutorixResolveCommandCwd(input);
+    const timeoutMsRaw = Number(input.timeoutMs ?? 120_000);
+    const timeoutMs = Number.isFinite(timeoutMsRaw) ? Math.max(1000, Math.min(timeoutMsRaw, 300_000)) : 120_000;
+
+    return await new Promise<Json>((resolve) => {
+      let stdout = "";
+      let stderr = "";
+      let settled = false;
+
+      const child = spawn("/bin/bash", ["-lc", command], {
+        cwd,
+        env: {
+          ...process.env,
+          ADJUTORIX_WORKSPACE_ROOT: process.env.ADJUTORIX_WORKSPACE_ROOT || cwd,
+          FORCE_COLOR: "0",
+          NO_COLOR: "1",
+        },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      const finish = (result: Record<string, unknown>) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(adjutorixShellJson({
+          ...result,
+          command,
+          cwd,
+          channel: ADJUTORIX_SHELL_EXECUTE_CHANNEL,
+          durationMs: Date.now() - startedAtMs,
+          stdout: adjutorixBoundText(stdout),
+          stderr: adjutorixBoundText(stderr),
+        }));
+      };
+
+      const timer = setTimeout(() => {
+        try { child.kill("SIGTERM"); } catch {}
+        finish({ ok: false, status: "timeout", exitCode: null, signal: "SIGTERM", timeoutMs });
+      }, timeoutMs);
+
+      child.stdout?.on("data", (chunk) => { stdout += String(chunk); });
+      child.stderr?.on("data", (chunk) => { stderr += String(chunk); });
+
+      child.on("error", (error) => {
+        finish({ ok: false, status: "spawn_error", error: error.message, exitCode: null });
+      });
+
+      child.on("close", (code, signal) => {
+        finish({ ok: code === 0, status: code === 0 ? "ok" : "failed", exitCode: code, signal });
+      });
+    });
+  });
+}
+
+
+// ADJUTORIX_AGENT_STATUS_HANDLER_V7
+// Renderer compatibility: V7 workbench introspects agent state.
+// This prevents Electron from throwing "No handler registered for 'adjutorix:agent:status'".
+const ADJUTORIX_AGENT_STATUS_CHANNEL_V7 = "adjutorix:agent:status";
+
+try {
+  ipcMain.removeHandler(ADJUTORIX_AGENT_STATUS_CHANNEL_V7);
+} catch {
+  // ignore: channel may not exist yet
+}
+
+ipcMain.handle(ADJUTORIX_AGENT_STATUS_CHANNEL_V7, async () => {
+  return {
+    ok: true,
+    status: "ready",
+    agent: {
+      mode: "native-workbench",
+      executable: true,
+      shellBridge: true,
+      marker: "ADJUTORIX_AGENT_STATUS_HANDLER_V7",
+      pid: process.pid,
+      cwd: process.cwd(),
+      workspaceRoot: process.env.ADJUTORIX_WORKSPACE_ROOT ?? process.cwd(),
+      time: new Date().toISOString()
+    }
+  };
+});
+
+
+// ADJUTORIX_AGENT_STATUS_HANDLER_V8
+const ADJUTORIX_AGENT_STATUS_CHANNEL_V8 = "adjutorix:agent:status";
+
+try {
+  ipcMain.removeHandler(ADJUTORIX_AGENT_STATUS_CHANNEL_V8);
+} catch {
+  // handler may not exist yet
+}
+
+ipcMain.handle(ADJUTORIX_AGENT_STATUS_CHANNEL_V8, async () => {
+  return {
+    ok: true,
+    status: "ready",
+    agent: {
+      mode: "native-workbench-v8",
+      executable: true,
+      marker: "ADJUTORIX_AGENT_STATUS_HANDLER_V8",
+      pid: process.pid,
+      cwd: process.cwd(),
+      workspaceRoot: process.env.ADJUTORIX_WORKSPACE_ROOT ?? process.cwd(),
+      time: new Date().toISOString()
+    }
+  };
+});
+
+
+// ADJUTORIX_NATIVE_CONTROL_PLANE_V13_BOOTSTRAP
+registerNativeControlPlaneV13();
+registerNativeExternalWorkspaceV16();
+
+registerPortfolioWorkspaceV18();

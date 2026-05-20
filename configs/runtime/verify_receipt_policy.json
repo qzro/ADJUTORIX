@@ -1,0 +1,33 @@
+{
+  "schema_version": "1.0.0",
+  "policy_type": "ADJUTORIX_VERIFY_RECEIPT_POLICY",
+  "verify_receipt_object_type": "ADJUTORIX_VERIFY_RECEIPT_OBJECT",
+  "source": "LOCAL_OPERATOR_COCKPIT",
+  "requires_plan_object": true,
+  "requires_patch_custody_object": true,
+  "requires_verification_gate_object": true,
+  "requires_workspace_bound": true,
+  "verify_receipt_may_not_mutate_files": true,
+  "verify_receipt_may_not_apply_patch": true,
+  "verify_receipt_unlocks_apply_only_on_pass": true,
+  "apply_requires_verify_receipt_pass": true,
+  "apply_requires_apply_receipt": true,
+  "rollback_requires_apply_receipt": true,
+  "required_checks": [
+    "pnpm verify",
+    "node scripts/product/assert-local-operator-cockpit.mjs",
+    "node scripts/product/assert-intent-plan-object.mjs",
+    "node scripts/product/assert-patch-custody-object.mjs",
+    "node scripts/product/assert-verification-gate-object.mjs",
+    "node scripts/product/assert-verify-receipt-object.mjs"
+  ],
+  "receipt_sequence": [
+    "intent_receipt",
+    "plan_receipt",
+    "patch_custody_receipt",
+    "verification_gate_receipt",
+    "verify_receipt",
+    "apply_receipt",
+    "rollback_receipt"
+  ]
+}

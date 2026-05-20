@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { contextBridge as __adjutorixContextBridgeV13, ipcRenderer as __adjutorixIpcRendererV13 } from "electron";
 import { contextBridge, ipcRenderer } from "electron";
 import { BRIDGE_CHANNELS } from "./bridge.js";
 import { createExposedApi } from "./exposed_api.js";
@@ -74,6 +75,7 @@ type Envelope<T extends JsonValue = JsonValue> = InvokeEnvelope<T> | ErrorEnvelo
 // -----------------------------------------------------------------------------
 
 const CHANNELS = BRIDGE_CHANNELS;
+const ADJUTORIX_SHELL_EXECUTE_CHANNEL = "adjutorix:shell:execute";
 
 const INVOKE_CHANNEL_ALLOWLIST = new Set<string>([
   CHANNELS.runtimeSnapshot,
@@ -106,6 +108,7 @@ const INVOKE_CHANNEL_ALLOWLIST = new Set<string>([
   CHANNELS.agentStatus,
   CHANNELS.agentStart,
   CHANNELS.agentStop,
+  ADJUTORIX_SHELL_EXECUTE_CHANNEL,
 ]);
 
 const EVENT_CHANNEL_ALLOWLIST = new Set<string>([
@@ -626,6 +629,33 @@ function normalizeAgentControlRequest(input: unknown): AgentControlRequest {
   };
 }
 
+function normalizeShellExecuteRequest(input: unknown): JsonObject {
+  const obj = requireJsonRecord(input ?? {}, "shell_execute_request");
+  const command =
+    typeof obj.command === "string"
+      ? obj.command.trim()
+      : typeof obj.intent === "string"
+        ? obj.intent.trim()
+        : "";
+
+  assert(command.length > 0, "command_required");
+  assert(command.length <= 8000, "command_too_large");
+
+  const cwd =
+    typeof obj.cwd === "string" && obj.cwd.trim()
+      ? obj.cwd.trim()
+      : undefined;
+
+  return {
+    schema: 1,
+    actor: "renderer",
+    source: "ipc",
+    command,
+    ...(cwd ? { cwd } : {}),
+    ...(typeof obj.timeoutMs === "number" ? { timeoutMs: obj.timeoutMs } : {}),
+  };
+}
+
 // -----------------------------------------------------------------------------
 // IPC INVOKE / EVENT ADAPTERS
 // -----------------------------------------------------------------------------
@@ -734,6 +764,19 @@ const bridge = {
       subscribe: (callback: EventCallback) => guardedSubscribe(CHANNELS.uiAgentEvent, callback),
     }),
   }),
+
+  shell: deepFreeze({
+    execute: async (input: unknown) => guardedInvoke(ADJUTORIX_SHELL_EXECUTE_CHANNEL, normalizeShellExecuteRequest(input)),
+    run: async (input: unknown) => guardedInvoke(ADJUTORIX_SHELL_EXECUTE_CHANNEL, normalizeShellExecuteRequest(input)),
+  }),
+
+  command: deepFreeze({
+    run: async (input: unknown) => guardedInvoke(ADJUTORIX_SHELL_EXECUTE_CHANNEL, normalizeShellExecuteRequest(input)),
+  }),
+
+  commands: deepFreeze({
+    run: async (input: unknown) => guardedInvoke(ADJUTORIX_SHELL_EXECUTE_CHANNEL, normalizeShellExecuteRequest(input)),
+  }),
 } as const;
 
 const exposedApi = createExposedApi(bridge);
@@ -754,3 +797,55 @@ declare global {
 
 export type AdjutorixPreloadBridge = typeof bridge;
 export type AdjutorixExposedApi = typeof exposedApi;
+
+
+// ADJUTORIX_NATIVE_PRELOAD_V13
+const __adjutorixNativeV13 = {
+  marker: "ADJUTORIX_NATIVE_PRELOAD_V13",
+  snapshot: () => __adjutorixIpcRendererV13.invoke("adjutorix:v13:snapshot", {}),
+  listWorkspace: () => __adjutorixIpcRendererV13.invoke("adjutorix:v13:workspace:list", {}),
+  readFile: (payload: any) => __adjutorixIpcRendererV13.invoke("adjutorix:v13:file:read", payload),
+  writeFile: (payload: any) => __adjutorixIpcRendererV13.invoke("adjutorix:v13:file:write", payload),
+  runCommand: (payload: any) => __adjutorixIpcRendererV13.invoke("adjutorix:v13:command:run", payload),
+};
+
+try {
+  __adjutorixContextBridgeV13.exposeInMainWorld("adjutorixNativeV13", __adjutorixNativeV13);
+} catch {
+  // already exposed in this renderer context
+}
+
+
+// ADJUTORIX_NATIVE_EXTERNAL_WORKSPACE_V16_PRELOAD
+if (!(globalThis as any).__ADJUTORIX_NATIVE_EXTERNAL_WORKSPACE_V16_PRELOAD__) {
+  (globalThis as any).__ADJUTORIX_NATIVE_EXTERNAL_WORKSPACE_V16_PRELOAD__ = true;
+
+  const invokeExternalWorkspaceV16 = (channel: string, payload: unknown = {}) =>
+    ipcRenderer.invoke(channel, payload);
+
+  contextBridge.exposeInMainWorld("adjutorixExternalWorkspaceV16", Object.freeze({
+    marker: "ADJUTORIX_NATIVE_EXTERNAL_WORKSPACE_V16",
+    openFolder: () => invokeExternalWorkspaceV16("adjutorix:v16:dialog:openFolder", {}),
+    scan: (payload: unknown = {}) => invokeExternalWorkspaceV16("adjutorix:v16:workspace:scan", payload),
+    readFile: (payload: unknown = {}) => invokeExternalWorkspaceV16("adjutorix:v16:file:read", payload),
+    writeFile: (payload: unknown = {}) => invokeExternalWorkspaceV16("adjutorix:v16:file:write", payload),
+    execute: (payload: unknown = {}) => invokeExternalWorkspaceV16("adjutorix:v16:shell:execute", payload),
+  }));
+}
+
+
+// ADJUTORIX_NATIVE_PORTFOLIO_HOST_V18_PRELOAD
+try {
+  const __portfolioInvokeV18 = (channel: string, payload?: unknown) => ipcRenderer.invoke(channel, payload ?? {});
+  contextBridge.exposeInMainWorld("adjutorixPortfolioV18", {
+    marker: "ADJUTORIX_NATIVE_PORTFOLIO_HOST_V18",
+    state: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:state", payload),
+    discover: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:discover", payload),
+    selectRoot: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:selectRoot", payload),
+    openFolder: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:openFolder", payload),
+    files: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:files", payload),
+    read: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:read", payload),
+    write: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:write", payload),
+    run: (payload?: unknown) => __portfolioInvokeV18("adjutorix:v18:run", payload),
+  });
+} catch {}

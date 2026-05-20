@@ -1,0 +1,79 @@
+ADJUTORIX_SMOKE_FAILURE_CONTEXT
+timestamp=2026-05-20T19:22:28Z
+
+=== .tmp/verify/reports/phases.tsv ===
+phase	status	started	finished	duration_ms
+repo_layout	PASS	2026-05-20T19:16:26Z	2026-05-20T19:16:26Z	21
+toolchain	PASS	2026-05-20T19:16:26Z	2026-05-20T19:16:26Z	20
+git_state	PASS	2026-05-20T19:16:26Z	2026-05-20T19:16:26Z	29
+constitution	PASS	2026-05-20T19:16:26Z	2026-05-20T19:16:26Z	87
+contracts	PASS	2026-05-20T19:16:26Z	2026-05-20T19:16:26Z	45
+ipc_channel_registry	PASS	2026-05-20T19:16:26Z	2026-05-20T19:16:27Z	1037
+ipc_channel_registry_selftest	PASS	2026-05-20T19:16:27Z	2026-05-20T19:16:43Z	15963
+policy	PASS	2026-05-20T19:16:43Z	2026-05-20T19:16:43Z	43
+runtime_config	PASS	2026-05-20T19:16:43Z	2026-05-20T19:16:43Z	45
+observability	PASS	2026-05-20T19:16:43Z	2026-05-20T19:16:43Z	52
+root_lint	PASS	2026-05-20T19:16:44Z	2026-05-20T19:16:46Z	2669
+root_typecheck	PASS	2026-05-20T19:16:46Z	2026-05-20T19:16:48Z	2170
+root_tests	PASS	2026-05-20T19:16:48Z	2026-05-20T19:17:40Z	51666
+app_checks	PASS	2026-05-20T19:17:40Z	2026-05-20T19:18:48Z	68102
+agent_checks	PASS	2026-05-20T19:18:48Z	2026-05-20T19:18:48Z	271
+cli_checks	PASS	2026-05-20T19:18:49Z	2026-05-20T19:18:49Z	272
+invariants	PASS	2026-05-20T19:18:49Z	2026-05-20T19:18:49Z	258
+smoke	FAIL	2026-05-20T19:18:49Z	2026-05-20T19:18:54Z	5377
+
+=== .tmp/smoke/logs/tests.log ===
+npm warn Unknown env config "prefer-workspace-packages". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "_verifrax-registry". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "save-workspace-protocol". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "verify-deps-before-run". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown env config "shared-workspace-lockfile". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "auto-install-peers". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "strict-peer-dependencies". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "prefer-workspace-packages". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "shared-workspace-lockfile". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+npm warn Unknown project config "save-workspace-protocol". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> @adjutorix/app@0.1.0 test
+> vitest run tests/renderer/editor_buffers.test.ts tests/renderer/file_tree_pane.test.tsx tests/renderer/diagnostic_parser.test.ts tests/renderer/about_panel.test.tsx tests/renderer/release_surface_guard.test.ts tests/renderer/interaction_contract.test.tsx tests/smoke
+
+
+[1m[7m[36m RUN [39m[27m[22m [36mv2.1.9 [39m[90m/Users/midiakiasat/Downloads/Apps/midiakiasat/qzro/ADJUTORIX/packages/adjutorix-app[39m
+
+ [32m✓[39m tests/renderer/diagnostic_parser.test.ts [2m([22m[2m19 tests[22m[2m)[22m[90m 16[2mms[22m[39m
+ [32m✓[39m tests/renderer/file_tree_pane.test.tsx [2m([22m[2m24 tests[22m[2m)[22m[33m 319[2mms[22m[39m
+ [32m✓[39m tests/renderer/about_panel.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 393[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m57 passed[39m[22m[90m (57)[39m
+[2m   Start at [22m 23:03:15
+[2m   Duration [22m 2.30s[2m (transform 240ms, setup 0ms, collect 872ms, tests 728ms, environment 2.27s, prepare 270ms)[22m
+
+
+=== .tmp/smoke/reports/summary.txt ===
+ADJUTORIX smoke summary
+program: smoke.sh
+started_at: 2026-05-07T21:03:08Z
+repo_root: /Users/midiakiasat/Downloads/Apps/midiakiasat/qzro/ADJUTORIX
+runtime_mode: test
+channel: dev
+agent_url: http://127.0.0.1:8000
+target: tests/smoke
+overall_failures: 0
+
+phase results:
+  - repo_and_toolchain:PASS:44
+  - git_state:PASS:59
+  - load_environment:PASS:41
+  - install_if_requested:PASS:37
+  - prepare_ports:PASS:45
+  - start_agent:PASS:1095
+  - start_app:PASS:5065
+  - run_smoke_tests:PASS:2892
+  - post_assertions:PASS:48
+
+logs:
+  - boot:  /Users/midiakiasat/Downloads/Apps/midiakiasat/qzro/ADJUTORIX/.tmp/smoke/logs/smoke.log
+  - agent: /Users/midiakiasat/Downloads/Apps/midiakiasat/qzro/ADJUTORIX/.tmp/smoke/logs/agent.log
+  - app:   /Users/midiakiasat/Downloads/Apps/midiakiasat/qzro/ADJUTORIX/.tmp/smoke/logs/app.log
+  - tests: /Users/midiakiasat/Downloads/Apps/midiakiasat/qzro/ADJUTORIX/.tmp/smoke/logs/tests.log
