@@ -9,6 +9,7 @@ type OperatorState =
   | "PLAN_PENDING"
   | "PATCH_CUSTODY_PENDING"
   | "PATCH_READY"
+  | "VERIFICATION_GATE_PENDING"
   | "VERIFY_RUNNING"
   | "VERIFY_FAILED"
   | "READY_TO_APPLY"
@@ -115,6 +116,62 @@ type PatchCustodyObject = {
   evidence: {
     receipt_type: "patch_custody_receipt";
     timeline_event: "patch.custody.created";
+  };
+};
+
+
+type VerificationGateObject = {
+  object_type: "ADJUTORIX_VERIFICATION_GATE_OBJECT";
+  schema_version: "1.0.0";
+  verification_gate_id: string;
+  created_at: string;
+  plan_id: string;
+  patch_custody_id: string;
+  workspace_root: string;
+  selected_path: string | null;
+  custody: {
+    source: "LOCAL_OPERATOR_COCKPIT";
+    workspace_bound: true;
+    plan_bound: true;
+    patch_custody_bound: true;
+    may_mutate_files: false;
+    may_apply_patch: false;
+  };
+  basis: {
+    plan_object_type: "ADJUTORIX_INTENT_PLAN_OBJECT";
+    patch_custody_object_type: "ADJUTORIX_PATCH_CUSTODY_OBJECT";
+    plan_id: string;
+    patch_custody_id: string;
+  };
+  inputs: {
+    runtime_ready: boolean;
+    diagnostics_ready: boolean;
+    plan_valid: true;
+    patch_custody_valid: true;
+  };
+  required_checks: string[];
+  gate_state: {
+    state: "GATE_CREATED_NOT_EXECUTED" | "VERIFY_INPUTS_INCOMPLETE" | "VERIFY_READY_TO_RUN";
+    verify_executed: false;
+    apply_unlocked: false;
+  };
+  execution: {
+    mode: "OPERATOR_TRIGGERED";
+    executed: false;
+    receipt_required: true;
+  };
+  result: {
+    verdict: "PENDING";
+    verify_receipt_required: true;
+  };
+  apply_gate: {
+    blocked: true;
+    blocked_until_verify_pass: true;
+    requires_apply_receipt: true;
+  };
+  evidence: {
+    receipt_type: "verification_gate_receipt";
+    timeline_event: "verification.gate.created";
   };
 };
 
@@ -259,7 +316,8 @@ function createIntentPlanObject(input: {
         "pnpm verify",
         "node scripts/product/assert-local-operator-cockpit.mjs",
         "node scripts/product/assert-intent-plan-object.mjs",
-        "node scripts/product/assert-patch-custody-object.mjs"
+        "node scripts/product/assert-patch-custody-object.mjs",
+        "node scripts/product/assert-verification-gate-object.mjs"
       ],
       requires_runtime: true,
       requires_diagnostics: true,
@@ -367,6 +425,111 @@ function createPatchCustodyObject(plan: IntentPlanObject): PatchCustodyObject {
   };
 }
 
+
+function createVerificationGateObject(input: {
+  plan: IntentPlanObject;
+  patch: PatchCustodyObject;
+  runtimeReady: boolean;
+  diagnosticsReady: boolean;
+}): VerificationGateObject {
+  const checks = Array.from(new Set([
+    ...input.plan.verification_plan.commands,
+    "node scripts/product/assert-verification-gate-object.mjs",
+  ]));
+
+  const readyToRun = input.runtimeReady && input.diagnosticsReady;
+
+  return {
+    object_type: "ADJUTORIX_VERIFICATION_GATE_OBJECT",
+    schema_version: "1.0.0",
+    verification_gate_id: makeId("verification-gate"),
+    created_at: new Date().toISOString(),
+    plan_id: input.plan.plan_id,
+    patch_custody_id: input.patch.patch_custody_id,
+    workspace_root: input.patch.workspace_root,
+    selected_path: input.patch.selected_path,
+    custody: {
+      source: "LOCAL_OPERATOR_COCKPIT",
+      workspace_bound: true,
+      plan_bound: true,
+      patch_custody_bound: true,
+      may_mutate_files: false,
+      may_apply_patch: false,
+    },
+    basis: {
+      plan_object_type: "ADJUTORIX_INTENT_PLAN_OBJECT",
+      patch_custody_object_type: "ADJUTORIX_PATCH_CUSTODY_OBJECT",
+      plan_id: input.plan.plan_id,
+      patch_custody_id: input.patch.patch_custody_id,
+    },
+    inputs: {
+      runtime_ready: input.runtimeReady,
+      diagnostics_ready: input.diagnosticsReady,
+      plan_valid: true,
+      patch_custody_valid: true,
+    },
+    required_checks: checks,
+    gate_state: {
+      state: readyToRun ? "VERIFY_READY_TO_RUN" : "VERIFY_INPUTS_INCOMPLETE",
+      verify_executed: false,
+      apply_unlocked: false,
+    },
+    execution: {
+      mode: "OPERATOR_TRIGGERED",
+      executed: false,
+      receipt_required: true,
+    },
+    result: {
+      verdict: "PENDING",
+      verify_receipt_required: true,
+    },
+    apply_gate: {
+      blocked: true,
+      blocked_until_verify_pass: true,
+      requires_apply_receipt: true,
+    },
+    evidence: {
+      receipt_type: "verification_gate_receipt",
+      timeline_event: "verification.gate.created",
+    },
+  };
+}
+
+function validateVerificationGateObject(gate: VerificationGateObject, plan: IntentPlanObject | null, patch: PatchCustodyObject | null): string[] {
+  const failures: string[] = [];
+
+  if (gate.object_type !== "ADJUTORIX_VERIFICATION_GATE_OBJECT") failures.push("object_type");
+  if (gate.schema_version !== "1.0.0") failures.push("schema_version");
+  if (!gate.verification_gate_id || gate.verification_gate_id.length < 12) failures.push("verification_gate_id");
+  if (!gate.plan_id) failures.push("plan_id");
+  if (!gate.patch_custody_id) failures.push("patch_custody_id");
+  if (!gate.workspace_root) failures.push("workspace_root");
+  if (gate.custody.source !== "LOCAL_OPERATOR_COCKPIT") failures.push("custody.source");
+  if (gate.custody.workspace_bound !== true) failures.push("custody.workspace_bound");
+  if (gate.custody.plan_bound !== true) failures.push("custody.plan_bound");
+  if (gate.custody.patch_custody_bound !== true) failures.push("custody.patch_custody_bound");
+  if (gate.custody.may_mutate_files !== false) failures.push("custody.may_mutate_files");
+  if (gate.custody.may_apply_patch !== false) failures.push("custody.may_apply_patch");
+  if (gate.basis.plan_object_type !== "ADJUTORIX_INTENT_PLAN_OBJECT") failures.push("basis.plan_object_type");
+  if (gate.basis.patch_custody_object_type !== "ADJUTORIX_PATCH_CUSTODY_OBJECT") failures.push("basis.patch_custody_object_type");
+  if (plan && gate.basis.plan_id !== plan.plan_id) failures.push("basis.plan_id");
+  if (patch && gate.basis.patch_custody_id !== patch.patch_custody_id) failures.push("basis.patch_custody_id");
+  if (gate.inputs.plan_valid !== true) failures.push("inputs.plan_valid");
+  if (gate.inputs.patch_custody_valid !== true) failures.push("inputs.patch_custody_valid");
+  if (!gate.required_checks.includes("pnpm verify")) failures.push("required_checks.pnpm_verify");
+  if (!gate.required_checks.includes("node scripts/product/assert-verification-gate-object.mjs")) failures.push("required_checks.assert_verification_gate");
+  if (gate.gate_state.verify_executed !== false) failures.push("gate_state.verify_executed");
+  if (gate.gate_state.apply_unlocked !== false) failures.push("gate_state.apply_unlocked");
+  if (gate.execution.mode !== "OPERATOR_TRIGGERED") failures.push("execution.mode");
+  if (gate.execution.executed !== false) failures.push("execution.executed");
+  if (gate.result.verdict !== "PENDING") failures.push("result.verdict");
+  if (gate.apply_gate.blocked !== true) failures.push("apply_gate.blocked");
+  if (gate.apply_gate.blocked_until_verify_pass !== true) failures.push("apply_gate.blocked_until_verify_pass");
+  if (gate.evidence.receipt_type !== "verification_gate_receipt") failures.push("evidence.receipt_type");
+
+  return failures;
+}
+
 function validatePatchCustodyObject(patch: PatchCustodyObject, plan: IntentPlanObject | null): string[] {
   const failures: string[] = [];
 
@@ -412,6 +575,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
   const [planFailures, setPlanFailures] = React.useState<string[]>([]);
   const [patchCustodyObject, setPatchCustodyObject] = React.useState<PatchCustodyObject | null>(null);
   const [patchCustodyFailures, setPatchCustodyFailures] = React.useState<string[]>([]);
+  const [verificationGateObject, setVerificationGateObject] = React.useState<VerificationGateObject | null>(null);
+  const [verificationGateFailures, setVerificationGateFailures] = React.useState<string[]>([]);
   const [lastReceipt, setLastReceipt] = React.useState<Record<string, unknown> | null>(null);
   const [lastError, setLastError] = React.useState<string | null>(null);
   const [eventLog, setEventLog] = React.useState<EventItem[]>([]);
@@ -419,7 +584,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
   const workspaceBound = Boolean(workspaceRoot);
   const planReady = Boolean(planObject && planFailures.length === 0);
   const patchCustodyReady = Boolean(patchCustodyObject && patchCustodyFailures.length === 0);
-  const verificationReady = workspaceBound && planReady && patchCustodyReady && runtimeReady && diagnosticsReady;
+  const verificationGateReady = Boolean(verificationGateObject && verificationGateFailures.length === 0);
+  const verificationReady = workspaceBound && planReady && patchCustodyReady && verificationGateReady && runtimeReady && diagnosticsReady;
   const applyGateReady = verificationReady && operatorState !== "VERIFY_FAILED";
 
   const record = React.useCallback((kind: string, detail: unknown) => {
@@ -540,6 +706,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
       setPlanFailures([]);
       setPatchCustodyObject(null);
       setPatchCustodyFailures([]);
+      setVerificationGateObject(null);
+      setVerificationGateFailures([]);
 
       const api = bridge();
       const workspace = asRecord(api.workspace);
@@ -604,6 +772,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
     setOperatorState("PLAN_PENDING");
     setPatchCustodyObject(null);
     setPatchCustodyFailures([]);
+    setVerificationGateObject(null);
+    setVerificationGateFailures([]);
 
     const plan = createIntentPlanObject({
       workspaceRoot,
@@ -648,6 +818,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
 
     setPatchCustodyObject(patch);
     setPatchCustodyFailures(failures);
+    setVerificationGateObject(null);
+    setVerificationGateFailures([]);
 
     const receipt = {
       receipt_type: "patch_custody_receipt",
@@ -670,8 +842,46 @@ export default function LocalOperatorCockpit(): JSX.Element {
     setOperatorState(failures.length === 0 ? "PATCH_READY" : "PATCH_CUSTODY_PENDING");
   };
 
+  const createVerificationGate = () => {
+    if (!planObject || !patchCustodyObject || planFailures.length > 0 || patchCustodyFailures.length > 0) return;
+
+    setOperatorState("VERIFICATION_GATE_PENDING");
+
+    const gate = createVerificationGateObject({
+      plan: planObject,
+      patch: patchCustodyObject,
+      runtimeReady,
+      diagnosticsReady,
+    });
+
+    const failures = validateVerificationGateObject(gate, planObject, patchCustodyObject);
+
+    setVerificationGateObject(gate);
+    setVerificationGateFailures(failures);
+
+    const receipt = {
+      receipt_type: "verification_gate_receipt",
+      timestamp: new Date().toISOString(),
+      plan_id: planObject.plan_id,
+      patch_custody_id: patchCustodyObject.patch_custody_id,
+      verification_gate_id: gate.verification_gate_id,
+      verification_gate_valid: failures.length === 0,
+      verification_gate_failures: failures,
+      runtime_ready: runtimeReady,
+      diagnostics_ready: diagnosticsReady,
+      apply_unlocked: false,
+      next_state: failures.length === 0 ? "VERIFY_RUNNING" : "VERIFICATION_GATE_PENDING",
+    };
+
+    setLastReceipt(receipt);
+    record("verification.gate.created", gate);
+    record("verification.gate.receipt", receipt);
+
+    setOperatorState(failures.length === 0 ? "VERIFY_RUNNING" : "VERIFICATION_GATE_PENDING");
+  };
+
   const bindVerification = () => {
-    if (!workspaceBound || !planReady || !patchCustodyReady) return;
+    if (!workspaceBound || !planReady || !patchCustodyReady || !verificationGateReady) return;
 
     setOperatorState("VERIFY_RUNNING");
 
@@ -680,6 +890,7 @@ export default function LocalOperatorCockpit(): JSX.Element {
       timestamp: new Date().toISOString(),
       plan_id: planObject?.plan_id ?? null,
       patch_custody_id: patchCustodyObject?.patch_custody_id ?? null,
+      verification_gate_id: verificationGateObject?.verification_gate_id ?? null,
       workspace_root: workspaceRoot,
       runtime_ready: runtimeReady,
       diagnostics_ready: diagnosticsReady,
@@ -699,6 +910,7 @@ export default function LocalOperatorCockpit(): JSX.Element {
       timestamp: new Date().toISOString(),
       plan_id: planObject?.plan_id ?? null,
       patch_custody_id: patchCustodyObject?.patch_custody_id ?? null,
+      verification_gate_id: verificationGateObject?.verification_gate_id ?? null,
       workspace_root: workspaceRoot,
       selected_path: selectedPath,
       intent: intentDraft.trim(),
@@ -720,6 +932,7 @@ export default function LocalOperatorCockpit(): JSX.Element {
       timestamp: new Date().toISOString(),
       plan_id: planObject?.plan_id ?? null,
       patch_custody_id: patchCustodyObject?.patch_custody_id ?? null,
+      verification_gate_id: verificationGateObject?.verification_gate_id ?? null,
       workspace_root: workspaceRoot,
       selected_path: selectedPath,
       rollback_complete: true,
@@ -736,7 +949,8 @@ export default function LocalOperatorCockpit(): JSX.Element {
     ["Intent capture", intentDraft.trim() ? "ready" : workspaceBound ? "pending" : "blocked", intentDraft.trim() ? "Intent staged." : "Awaiting bounded intent."],
     ["Plan object", planReady ? "complete" : operatorState === "PLAN_PENDING" ? "pending" : "blocked", planReady ? `Plan ${planObject?.plan_id} is valid.` : "Create a valid intent plan object."],
     ["Patch object custody", patchCustodyReady ? "complete" : planReady ? "ready" : "blocked", patchCustodyReady ? `Patch object custody ${patchCustodyObject?.patch_custody_id} is valid.` : "Create patch custody from the plan object."],
-    ["Verification object", verificationReady ? "ready" : "blocked", verificationReady ? "Runtime, diagnostics, plan, and patch custody evidence present." : "Requires plan, patch custody, runtime, and diagnostics."],
+    ["Verification Gate object", verificationGateReady ? "complete" : patchCustodyReady ? "ready" : "blocked", verificationGateReady ? `Verification Gate object ${verificationGateObject?.verification_gate_id} is valid.` : "Create verification gate from patch custody."],
+    ["Verification object", verificationReady ? "ready" : "blocked", verificationReady ? "Runtime, diagnostics, plan, patch custody, and verification gate evidence present." : "Requires plan, patch custody, verification gate, runtime, and diagnostics."],
     ["Apply gate", applyGateReady ? "ready" : "blocked", applyGateReady ? "Apply receipt can be issued." : "Apply blocked until verification passes."],
     ["Rollback receipt", operatorState === "ROLLBACK_AVAILABLE" || operatorState === "ROLLBACK_COMPLETE" ? "ready" : "blocked", "Rollback is first-class evidence, not terminal cleanup."],
   ] as const;
@@ -782,6 +996,12 @@ export default function LocalOperatorCockpit(): JSX.Element {
                 </span>
               </div>
               <div className="flex items-center justify-between gap-4">
+                <span className="text-zinc-500">verification gate</span>
+                <span className={verificationGateReady ? "text-emerald-300" : "text-amber-300"}>
+                  {verificationGateReady ? "BOUND" : "MISSING"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
                 <span className="text-zinc-500">apply gate</span>
                 <span className={applyGateReady ? "text-emerald-300" : "text-amber-300"}>
                   {applyGateReady ? "READY" : "BLOCKED"}
@@ -800,7 +1020,10 @@ export default function LocalOperatorCockpit(): JSX.Element {
             <button type="button" onClick={createPatchCustody} disabled={!planReady} className="rounded-2xl border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40">
               Create patch custody
             </button>
-            <button type="button" onClick={bindVerification} disabled={!patchCustodyReady} className="rounded-2xl border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40">
+            <button type="button" onClick={createVerificationGate} disabled={!patchCustodyReady} className="rounded-2xl border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40">
+              Create verification gate
+            </button>
+            <button type="button" onClick={bindVerification} disabled={!verificationGateReady} className="rounded-2xl border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40">
               Bind verification
             </button>
             <button type="button" onClick={issueApplyReceipt} disabled={!applyGateReady} className="rounded-2xl border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40">
@@ -833,6 +1056,13 @@ export default function LocalOperatorCockpit(): JSX.Element {
           </section>
         ) : null}
 
+        {verificationGateFailures.length > 0 ? (
+          <section className="rounded-3xl border border-red-500/40 bg-red-950/30 p-5 text-red-100">
+            <div className="text-xs uppercase tracking-[0.24em] text-red-300">Verification Gate object invalid</div>
+            <pre className="mt-3 whitespace-pre-wrap text-sm">{JSON.stringify(verificationGateFailures, null, 2)}</pre>
+          </section>
+        ) : null}
+
         <section className="grid gap-4 xl:grid-cols-4">
           {steps.map(([label, state, description], index) => (
             <article key={label} className={cx("rounded-2xl border p-4", surfaceClass(state as any))}>
@@ -853,7 +1083,7 @@ export default function LocalOperatorCockpit(): JSX.Element {
             <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Intent capture</div>
             <h2 className="mt-2 text-xl font-semibold text-zinc-50">Bounded change request</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              This creates an ADJUTORIX_INTENT_PLAN_OBJECT, then a non-mutating ADJUTORIX_PATCH_CUSTODY_OBJECT. Files remain untouched until later governed patch materialization, verification, and apply receipt.
+              This creates an ADJUTORIX_INTENT_PLAN_OBJECT, then a non-mutating ADJUTORIX_PATCH_CUSTODY_OBJECT, then an ADJUTORIX_VERIFICATION_GATE_OBJECT. Files remain untouched until later governed patch materialization, verification pass, and apply receipt.
             </p>
             <textarea
               value={intentDraft}
@@ -930,7 +1160,7 @@ export default function LocalOperatorCockpit(): JSX.Element {
           </article>
         </section>
 
-        <section className="grid gap-6 2xl:grid-cols-4">
+        <section className="grid gap-6 2xl:grid-cols-5">
           <article className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5">
             <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Latest receipt</div>
             <pre className="mt-4 max-h-[24rem] overflow-auto rounded-2xl border border-zinc-800 bg-black/40 p-4 text-xs leading-6 text-zinc-300">
@@ -949,6 +1179,13 @@ export default function LocalOperatorCockpit(): JSX.Element {
             <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Patch custody object</div>
             <pre className="mt-4 max-h-[24rem] overflow-auto rounded-2xl border border-zinc-800 bg-black/40 p-4 text-xs leading-6 text-zinc-300">
               {JSON.stringify(patchCustodyObject ?? { patch_custody_object: "none" }, null, 2)}
+            </pre>
+          </article>
+
+          <article className="rounded-3xl border border-zinc-800 bg-zinc-950/60 p-5">
+            <div className="text-xs uppercase tracking-[0.24em] text-zinc-500">Verification Gate object</div>
+            <pre className="mt-4 max-h-[24rem] overflow-auto rounded-2xl border border-zinc-800 bg-black/40 p-4 text-xs leading-6 text-zinc-300">
+              {JSON.stringify(verificationGateObject ?? { verification_gate_object: "none" }, null, 2)}
             </pre>
           </article>
 
