@@ -1,0 +1,10 @@
+{
+  "tag": "adjutorix-local-operator-cockpit-v0.2.0",
+  "main_sha": "b39a7736809d94e79bdcd445071e2c55401c585b",
+  "generated_at": "2026-05-21T17:19:15Z",
+  "assets": [
+    {"path":"packages/adjutorix-app/release/Adjutorix-0.1.0-arm64.dmg","sha256":"913a6c120f8edf5012bf36c8856d309d1e8a9f1dae4e7799499f68286fd17f10","bytes":117352857},
+    {"path":"packages/adjutorix-app/release/Adjutorix-0.1.0-arm64.dmg.blockmap","sha256":"a4f7026c5daabcbd366ddc47b7a489baad555c20f291e127be7591e26f4d1842","bytes":122815},
+    {"path":"packages/adjutorix-app/release/builder-effective-config.yaml","sha256":"e9b895583154534c34632ac410541d5bc5786ca1f43dcb075368ff9807b21040","bytes":337}
+  ]
+}
