@@ -1,0 +1,17 @@
+{
+  "product": "ADJUTORIX_OPERATOR_KERNEL_MANDATORY_GATE",
+  "verdict": "PASS",
+  "schema": "adjutorix.operator_kernel_mandatory_gate_readiness.v1",
+  "checked_at": "2026-05-24T06:16:00.692Z",
+  "perimeter_hash": "00f922a7ff6bd81b766dd69e5dd1641a144e47e52b669352e02c665e78793cb5",
+  "guarantees": [
+    "real operator kernel source exists",
+    "operator kernel IPC registration exists",
+    "main process wires operator kernel IPC",
+    "preload exposes governed operator kernel bridge",
+    "renderer IPC contract test is included",
+    "renderer mandatory gate contract test is included",
+    "runtime policy declares non-bypassable operator kernel gate"
+  ],
+  "failures": []
+}
