@@ -1,0 +1,29 @@
+{
+  "schema": "adjutorix.operator_kernel_mandatory_gate_policy.v1",
+  "product": "ADJUTORIX",
+  "release": "v0.3.2",
+  "gate": "MANDATORY_OPERATOR_KERNEL_GATE",
+  "status": "ENFORCED_BY_PRODUCT_ASSERTION",
+  "non_bypassable_operations": [
+    "operatorKernel.createReceipt",
+    "operatorKernel.lastHash",
+    "patch.apply",
+    "rollback",
+    "workspace write/execute authority"
+  ],
+  "required_guarantees": [
+    "real operator kernel source exists",
+    "operator kernel IPC is registered from main",
+    "operator kernel preload surface is exposed",
+    "operator kernel IPC contract test is included",
+    "kernel readiness assertion fails if IPC/preload/main/test linkage is removed",
+    "kernel receipt hash remains part of the executable authority perimeter"
+  ],
+  "failure_semantics": {
+    "missing_kernel_source": "FAIL",
+    "missing_main_registration": "FAIL",
+    "missing_preload_surface": "FAIL",
+    "missing_contract_test": "FAIL",
+    "missing_runtime_policy": "FAIL"
+  }
+}
