@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "schema": "adjutorix-operator-execution-runway-surface-readiness-v1",
+  "surface": "ADJUTORIX_OPERATOR_EXECUTION_RUNWAY_SURFACE",
+  "checkedAt": "2026-05-24T15:00:07.378Z",
+  "failures": []
+}

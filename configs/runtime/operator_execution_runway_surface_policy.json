@@ -1,0 +1,17 @@
+{
+  "schema": "adjutorix-operator-execution-runway-surface-policy-v1",
+  "surface": "ADJUTORIX_OPERATOR_EXECUTION_RUNWAY_SURFACE",
+  "status": "required",
+  "purpose": "Make the governed operator path user-visible from Mission Control.",
+  "requiredUserPath": [
+    "operatorKernel.createReceipt",
+    "patch.apply payload carries operatorKernelReceiptId",
+    "pnpm run verify",
+    "clean main tag and release"
+  ],
+  "forbiddenState": [
+    "anonymous patch apply",
+    "hidden operator receipt dependency",
+    "release without clean verified main"
+  ]
+}
