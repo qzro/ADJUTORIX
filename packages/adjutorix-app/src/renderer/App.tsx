@@ -297,6 +297,13 @@ export default function App(): React.JSX.Element {
   const [raw, setRaw] = useState<unknown>(null);
   const [showRaw, setShowRaw] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [operatorIntent, setOperatorIntent] = useState("");
+  const [operatorKernelReceipt, setOperatorKernelReceipt] = useState<AnyRecord | null>(null);
+  const [operatorKernelPreviousHash, setOperatorKernelPreviousHash] = useState<string | null>(null);
+  const [operatorKernelPatchId, setOperatorKernelPatchId] = useState("");
+  const [operatorKernelPreviewHash, setOperatorKernelPreviewHash] = useState("");
+  const [operatorKernelRequestHash, setOperatorKernelRequestHash] = useState("");
+  const [operatorKernelBusy, setOperatorKernelBusy] = useState(false);
 
   const push = useCallback((kind: Toast["kind"], title: string, detail: string) => {
     setActivity((items) => [{ id: nowId(), kind, title, detail }, ...items].slice(0, 50));
@@ -308,6 +315,125 @@ export default function App(): React.JSX.Element {
   }, []);
 
   const shellReady = Boolean(shellApi && (isFn(shellApi.run) || isFn(shellApi.execute) || isFn(shellApi.start)));
+
+  const operatorKernelApi = useMemo(() => {
+    const g = globalThis as AnyRecord;
+    return asRecord(g.adjutorixOperatorKernel) ?? asRecord(bridge().operatorKernel);
+  }, []);
+
+  const operatorKernelReady = Boolean(operatorKernelApi && isFn(operatorKernelApi.createReceipt));
+  const operatorKernelReceiptId = firstString(
+    operatorKernelReceipt?.receiptId,
+    operatorKernelReceipt?.id,
+    operatorKernelReceipt?.receipt_id,
+  ) ?? "";
+  const operatorKernelReceiptHash = firstString(
+    operatorKernelReceipt?.receiptHash,
+    operatorKernelReceipt?.kernelHash,
+    operatorKernelReceipt?.hash,
+    operatorKernelReceipt?.previousKernelHash,
+  ) ?? "";
+  const operatorKernelApplyReady = Boolean(
+    operatorKernelReceiptHash &&
+    operatorKernelPatchId.trim() &&
+    operatorKernelPreviewHash.trim() &&
+    operatorKernelRequestHash.trim(),
+  );
+
+  const createOperatorKernelReceipt = useCallback(async () => {
+    if (!operatorKernelReady || !operatorKernelApi) {
+      push("error", "Operator kernel unavailable", "adjutorixOperatorKernel bridge is not exposed.");
+      return;
+    }
+
+    const workspaceRoot = rootPath ?? dirname(selectedPath ?? "");
+    if (!workspaceRoot || workspaceRoot === ".") {
+      push("warn", "Workspace root required", "Open or index a workspace before creating the kernel receipt.");
+      return;
+    }
+
+    const intent =
+      operatorIntent.trim() ||
+      `Governed operation for ${selectedPath ? rel(selectedPath, rootPath) : workspaceRoot}`;
+
+    setOperatorKernelBusy(true);
+    try {
+      const lastOutput = await callMethod(operatorKernelApi, ["lastHash"], { workspaceRoot });
+      const lastRecord = asRecord(unwrap(lastOutput)) ?? {};
+      const previousKernelHash = firstString(
+        lastRecord.previousKernelHash,
+        lastRecord.kernelHash,
+        lastRecord.hash,
+      );
+
+      const output = await callMethod(operatorKernelApi, ["createReceipt"], {
+        workspaceRoot,
+        selectedPath,
+        operatorIntent: intent,
+        planId: "adjutorix-live-operator-surface-v0.4.0",
+        commands: terminalInput.trim() ? [terminalInput.trim()] : [],
+        previousKernelHash,
+      });
+
+      const receipt = asRecord(unwrap(output)) ?? asRecord(output) ?? {};
+      setOperatorKernelReceipt(receipt);
+      setOperatorKernelPreviousHash(previousKernelHash ?? firstString(receipt.previousKernelHash, receipt.kernelHash));
+      push("ok", "Operator kernel receipt created", firstString(receipt.receiptHash, receipt.kernelHash, receipt.hash, receipt.id) ?? "receipt-ready");
+    } catch (error) {
+      push("error", "Operator kernel receipt failed", error instanceof Error ? error.message : String(error));
+    } finally {
+      setOperatorKernelBusy(false);
+    }
+  }, [operatorIntent, operatorKernelApi, operatorKernelReady, push, rootPath, selectedPath, terminalInput]);
+
+  const applyKernelGatedPatch = useCallback(async () => {
+    const patchApi = asRecord(bridge().patch);
+
+    if (!patchApi || !isFn(patchApi.apply)) {
+      push("error", "Patch apply unavailable", "adjutorix.patch.apply is not exposed.");
+      return;
+    }
+
+    if (!operatorKernelApplyReady) {
+      push("warn", "Kernel-gated apply blocked", "Create a receipt and provide patchId, previewHash, and requestHash.");
+      return;
+    }
+
+    setOperatorKernelBusy(true);
+    try {
+      const output = await patchApi.apply({
+        schema: 1,
+        actor: "renderer",
+        patchId: operatorKernelPatchId.trim(),
+        previewHash: operatorKernelPreviewHash.trim(),
+        requestHash: operatorKernelRequestHash.trim(),
+        operatorKernelReceiptId: operatorKernelReceiptId || operatorKernelReceiptHash,
+        operatorKernelHash: operatorKernelReceiptHash,
+        operatorKernel: operatorKernelReceipt ?? {
+          receiptHash: operatorKernelReceiptHash,
+          previousKernelHash: operatorKernelPreviousHash,
+        },
+      });
+
+      setRaw(output ?? raw);
+      push("ok", "Kernel-gated apply submitted", operatorKernelPatchId.trim());
+    } catch (error) {
+      push("error", "Kernel-gated apply failed", error instanceof Error ? error.message : String(error));
+    } finally {
+      setOperatorKernelBusy(false);
+    }
+  }, [
+    operatorKernelApplyReady,
+    operatorKernelPatchId,
+    operatorKernelPreviewHash,
+    operatorKernelReceipt,
+    operatorKernelReceiptHash,
+    operatorKernelReceiptId,
+    operatorKernelRequestHash,
+    operatorKernelPreviousHash,
+    push,
+    raw,
+  ]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -550,7 +676,7 @@ export default function App(): React.JSX.Element {
           </div>
         </aside>
 
-        <section className="grid min-h-0 grid-rows-[42px_minmax(0,1fr)_auto] bg-[#0b0b0d]">
+        <section className="grid min-h-0 grid-rows-[42px_auto_minmax(0,1fr)_auto] bg-[#0b0b0d]">
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto border-b border-zinc-800 bg-[#111113] px-2">
             {tabs.length === 0 ? (
               <div className="text-xs text-zinc-500">No open files</div>
@@ -569,6 +695,91 @@ export default function App(): React.JSX.Element {
                 </button>
               ))
             )}
+          </div>
+
+
+          <div
+            data-testid="operator-kernel-live-surface"
+            className="border-b border-emerald-900/60 bg-emerald-950/10 px-3 py-2"
+          >
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">
+                  Operator Kernel Live Cockpit
+                </div>
+                <div className="mt-1 text-xs text-zinc-500">
+                  User-visible receipt creation and kernel-gated apply evidence. No invisible mutation.
+                </div>
+              </div>
+              <div className={`rounded-md px-2 py-1 text-xs ${operatorKernelReady ? "bg-emerald-950 text-emerald-300" : "bg-red-950 text-red-300"}`}>
+                {operatorKernelReady ? "kernel bridge ready" : "kernel bridge missing"}
+              </div>
+            </div>
+
+            <div className="grid gap-2 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+              <div className="grid gap-2">
+                <input
+                  value={operatorIntent}
+                  onChange={(event) => setOperatorIntent(event.target.value)}
+                  placeholder="Operator intent required before governed apply"
+                  className="w-full rounded-lg border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-emerald-700"
+                />
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <input
+                    value={operatorKernelPatchId}
+                    onChange={(event) => setOperatorKernelPatchId(event.target.value)}
+                    placeholder="patchId"
+                    className="rounded-lg border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-emerald-700"
+                  />
+                  <input
+                    value={operatorKernelPreviewHash}
+                    onChange={(event) => setOperatorKernelPreviewHash(event.target.value)}
+                    placeholder="previewHash"
+                    className="rounded-lg border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-emerald-700"
+                  />
+                  <input
+                    value={operatorKernelRequestHash}
+                    onChange={(event) => setOperatorKernelRequestHash(event.target.value)}
+                    placeholder="requestHash"
+                    className="rounded-lg border border-zinc-800 bg-black px-3 py-2 text-xs outline-none focus:border-emerald-700"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-zinc-500">
+                  <div className="truncate rounded-md border border-zinc-800 bg-black px-2 py-1">
+                    root: {rootPath ?? "none"}
+                  </div>
+                  <div className="truncate rounded-md border border-zinc-800 bg-black px-2 py-1">
+                    selected: {selectedPath ? rel(selectedPath, rootPath) : "none"}
+                  </div>
+                  <div className="truncate rounded-md border border-zinc-800 bg-black px-2 py-1">
+                    previousKernelHash: {operatorKernelPreviousHash ?? "none"}
+                  </div>
+                  <div className="truncate rounded-md border border-zinc-800 bg-black px-2 py-1">
+                    receiptHash: {operatorKernelReceiptHash || "none"}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => void createOperatorKernelReceipt()}
+                    disabled={!operatorKernelReady || operatorKernelBusy}
+                    className="rounded-lg bg-emerald-900 px-3 py-2 text-xs font-semibold text-emerald-100 enabled:hover:bg-emerald-800 disabled:opacity-40"
+                  >
+                    Create kernel receipt
+                  </button>
+                  <button
+                    onClick={() => void applyKernelGatedPatch()}
+                    disabled={!operatorKernelApplyReady || operatorKernelBusy}
+                    className="rounded-lg bg-zinc-100 px-3 py-2 text-xs font-semibold text-black enabled:hover:bg-white disabled:opacity-30"
+                  >
+                    Kernel-gated apply
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="min-h-0">
