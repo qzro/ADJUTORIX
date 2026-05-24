@@ -23,6 +23,21 @@ describe("operator kernel enforcement contract", () => {
     expect(enforcement).toContain("operatorKernelHash");
   });
 
+  it("closes every known main-process patch apply handler", () => {
+    const patchIpc = read("src/main/ipc/patch_ipc.ts");
+    const mainIndex = read("src/main/index.ts");
+    const runtimeBootstrap = read("src/main/runtime/bootstrap.ts");
+
+    expect(patchIpc).toContain("assertMandatoryOperatorKernelGate");
+    expect(mainIndex).toContain("assertMandatoryOperatorKernelGate");
+    expect(mainIndex).toContain("requirePatchIdFromKernelGatedPayload");
+
+    if (runtimeBootstrap.includes("adjutorix:patch:apply")) {
+      expect(runtimeBootstrap).toContain("assertMandatoryOperatorKernelGate");
+      expect(runtimeBootstrap).toContain("requirePatchIdFromKernelGatedPayload");
+    }
+  });
+
   it("keeps the mandatory gate policy and IPC contract tests in the implemented suite", () => {
     const config = read("vitest.config.mjs");
 

@@ -25,6 +25,22 @@ const checks = [
     ],
   },
   {
+    file: "packages/adjutorix-app/src/main/index.ts",
+    phrases: [
+      "assertMandatoryOperatorKernelGate",
+      "requirePatchIdFromKernelGatedPayload",
+      "adjutorix:patch:apply",
+    ],
+  },
+  {
+    file: "packages/adjutorix-app/src/main/runtime/bootstrap.ts",
+    phrases: [
+      "assertMandatoryOperatorKernelGate",
+      "requirePatchIdFromKernelGatedPayload",
+      "adjutorix:patch:apply",
+    ],
+  },
+  {
     file: "packages/adjutorix-app/tests/renderer/operator_kernel_enforcement_contract.test.ts",
     phrases: [
       "operator kernel enforcement contract",

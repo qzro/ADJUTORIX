@@ -30,3 +30,21 @@ export function assertMandatoryOperatorKernelGate(payload: OperatorKernelGatePay
     );
   }
 }
+
+
+export function requirePatchIdFromKernelGatedPayload(payload: unknown): string {
+  if (payload === null || typeof payload !== "object") {
+    throw new Error(
+      "ADJUTORIX_OPERATOR_KERNEL_GATE_REQUIRED: patch apply payload must be an object carrying operator kernel evidence",
+    );
+  }
+
+  const record = payload as Record<string, unknown>;
+  const patchId = record.patchId;
+
+  if (!hasNonEmptyString(patchId)) {
+    throw new Error("ADJUTORIX_OPERATOR_KERNEL_GATE_REQUIRED: patch apply payload missing patchId");
+  }
+
+  return patchId.trim();
+}
