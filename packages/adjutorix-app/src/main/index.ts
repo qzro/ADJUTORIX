@@ -10,6 +10,11 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { spawn, ChildProcess } from "node:child_process";
 import { registerOperatorKernelIpc } from "./ipc/operator_kernel_ipc";
+import {
+  assertMandatoryOperatorKernelGate,
+  requirePatchIdFromKernelGatedPayload,
+  type OperatorKernelGatePayload,
+} from "./operator/operator_kernel_enforcement";
 
 /**
  * ADJUTORIX APP — MAIN / index.ts
@@ -1234,7 +1239,9 @@ function buildRendererWorkspaceTreeProjection(rootPath: string | null): Json {
     return rpcInvoke("patch.preview", { intent });
   });
 
-  safeHandle("adjutorix:patch:apply", async (patchId: string) => {
+  safeHandle("adjutorix:patch:apply", async (payload: unknown) => {
+    assertMandatoryOperatorKernelGate(payload as OperatorKernelGatePayload);
+    const patchId = requirePatchIdFromKernelGatedPayload(payload);
     assert(typeof patchId === "string" && patchId.length > 0, "invalid_patch_id");
     return rpcInvoke("patch.apply", { patch_id: patchId });
   });

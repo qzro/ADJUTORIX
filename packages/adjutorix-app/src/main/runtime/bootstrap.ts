@@ -2,6 +2,11 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, protocol } from "elec
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import {
+  assertMandatoryOperatorKernelGate,
+  requirePatchIdFromKernelGatedPayload,
+  type OperatorKernelGatePayload,
+} from "../operator/operator_kernel_enforcement";
 
 import {
   loadMainEnvironment,
@@ -522,7 +527,9 @@ function registerIpc(state: BootstrapState): void {
     return rpcInvokeThroughAgent(state, "patch.preview", { intent });
   });
 
-  safeHandle("adjutorix:patch:apply", async (patchId) => {
+  safeHandle("adjutorix:patch:apply", async (payload) => {
+    assertMandatoryOperatorKernelGate(payload as OperatorKernelGatePayload);
+    const patchId = requirePatchIdFromKernelGatedPayload(payload);
     assert(typeof patchId === "string" && patchId.length > 0, "patch_id_invalid");
     return rpcInvokeThroughAgent(state, "patch.apply", { patch_id: patchId });
   });
