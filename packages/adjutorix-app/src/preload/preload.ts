@@ -168,6 +168,9 @@ type PatchApplyRequest = {
   previewHash: string;
   requestHash: string;
   traceId?: string;
+  operatorKernelReceiptId?: string;
+  operatorKernelHash?: string;
+  operatorKernel?: JsonObject;
 };
 
 type VerifyRunRequest = {
@@ -526,6 +529,12 @@ function normalizePatchApproveRequest(input: unknown): PatchApproveRequest {
 function normalizePatchApplyRequest(input: unknown): PatchApplyRequest {
   const obj = requireJsonRecord(input, "patch_apply_request");
   const traceId = requireOptionalString(obj.traceId, "traceId");
+  const operatorKernelReceiptId = requireOptionalString(obj.operatorKernelReceiptId, "operatorKernelReceiptId");
+  const operatorKernelHash = requireOptionalString(obj.operatorKernelHash, "operatorKernelHash");
+  const operatorKernel = obj.operatorKernel !== undefined
+    ? requireJsonRecord(obj.operatorKernel, "operatorKernel")
+    : undefined;
+
   return {
     schema: 1,
     actor: "renderer",
@@ -533,6 +542,9 @@ function normalizePatchApplyRequest(input: unknown): PatchApplyRequest {
     previewHash: requireString(obj.previewHash, "previewHash"),
     requestHash: requireString(obj.requestHash, "requestHash"),
     ...(traceId ? { traceId } : {}),
+    ...(operatorKernelReceiptId ? { operatorKernelReceiptId } : {}),
+    ...(operatorKernelHash ? { operatorKernelHash } : {}),
+    ...(operatorKernel ? { operatorKernel } : {}),
   };
 }
 

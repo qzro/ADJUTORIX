@@ -1,0 +1,13 @@
+{
+  "product": "ADJUTORIX_OPERATOR_KERNEL_LIVE_SURFACE",
+  "version": "0.4.0",
+  "mandatory": true,
+  "surface": "packages/adjutorix-app/src/renderer/App.tsx",
+  "rules": [
+    "operator kernel receipt creation must be visible in the renderer",
+    "kernel-gated apply must carry operatorKernelReceiptId or operatorKernelHash",
+    "preload patch.apply normalization must preserve operator kernel evidence",
+    "the operator kernel cockpit must show selected path, intent, previousKernelHash, and receipt hash",
+    "the contract suite must fail if the live surface is removed from implemented tests"
+  ]
+}

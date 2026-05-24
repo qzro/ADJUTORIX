@@ -1,0 +1,14 @@
+{
+  "product": "ADJUTORIX_OPERATOR_KERNEL_LIVE_SURFACE",
+  "version": "0.4.0",
+  "verdict": "PASS",
+  "checked_at": "2026-05-24T07:44:53.519Z",
+  "guarantees": [
+    "renderer exposes a user-visible operator kernel cockpit",
+    "operator intent creates a real kernel receipt from the renderer",
+    "patch.apply payload preserves operator kernel evidence through preload normalization",
+    "kernel-gated apply is blocked until receipt and patch evidence exist",
+    "contract test is included in the implemented renderer test suite"
+  ],
+  "failures": []
+}
