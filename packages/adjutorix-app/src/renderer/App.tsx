@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Editor from "@monaco-editor/react";
+import { OperatorMissionControlPanel } from "./components/OperatorMissionControlPanel";
 
 type AnyRecord = Record<string, any>;
 
@@ -698,7 +699,8 @@ export default function App(): React.JSX.Element {
           </div>
 
 
-          <div
+                <OperatorMissionControlPanel />
+<div
             data-testid="operator-kernel-live-surface"
             className="border-b border-emerald-900/60 bg-emerald-950/10 px-3 py-2"
           >
