@@ -1,0 +1,21 @@
+{
+  "policy": "operator-mission-control-surface",
+  "version": "0.4.2",
+  "required": true,
+  "surface": "renderer",
+  "objective": "Expose one user-visible governed path from operator intent to kernel receipt and apply readiness.",
+  "requires": [
+    "workspaceRoot visible before receipt creation",
+    "selectedPath visible before receipt creation",
+    "operatorIntent visible before receipt creation",
+    "command evidence visible before receipt creation",
+    "previousKernelHash visible before apply readiness",
+    "receiptHash visible after receipt creation",
+    "apply readiness blocked until kernel evidence exists"
+  ],
+  "forbidden": [
+    "hidden apply authority",
+    "apply readiness without operator kernel receipt",
+    "kernel evidence loss across preload normalization"
+  ]
+}
