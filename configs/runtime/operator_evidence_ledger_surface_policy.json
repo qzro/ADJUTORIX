@@ -1,0 +1,15 @@
+{
+  "schema": "adjutorix.runtime.operator_evidence_ledger_surface_policy.v1",
+  "surface": "operator_evidence_ledger_surface",
+  "required": true,
+  "purpose": "Expose governed operator evidence inspection inside the ADJUTORIX user surface.",
+  "requiredChannels": [
+    "adjutorix:ledger:timeline",
+    "adjutorix:ledger:heads",
+    "adjutorix:ledger:stats",
+    "adjutorix:ledger:entry"
+  ],
+  "mustRemainUserVisible": true,
+  "mustNotBypassOperatorKernel": true,
+  "mustNotReplaceFinalityGuards": true
+}

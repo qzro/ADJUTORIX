@@ -4,6 +4,7 @@ import Editor from "@monaco-editor/react";
 import { OperatorMissionControlPanel } from "./components/OperatorMissionControlPanel";
 import { OperatorExecutionRunwayPanel } from "./components/OperatorExecutionRunwayPanel";
 import { OperatorSurfaceSpinePanel } from "./components/OperatorSurfaceSpinePanel";
+import { OperatorEvidenceLedgerPanel } from "./components/OperatorEvidenceLedgerPanel";
 
 type AnyRecord = Record<string, any>;
 
@@ -883,7 +884,8 @@ export default function App(): React.JSX.Element {
             </div>
           )}
         </section>
-      </main>
+            <OperatorEvidenceLedgerPanel />
+    </main>
     </div>
   );
 }
