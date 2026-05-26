@@ -7,6 +7,7 @@ export default defineConfig({
     restoreMocks: true,
     clearMocks: true,
     include: [
+      "tests/renderer/operator_evidence_ledger_surface_contract.test.ts",
       "tests/renderer/about_panel.test.tsx",
       "tests/renderer/active_buffer_diff_review.test.ts",
       "tests/renderer/app_shell.composition_contract.test.tsx",

@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "schema": "adjutorix.operator_evidence_ledger_surface_readiness.v1",
+  "checkedAt": "2026-05-26T16:38:04.805Z",
+  "surface": "operator_evidence_ledger_surface",
+  "missing": []
+}
