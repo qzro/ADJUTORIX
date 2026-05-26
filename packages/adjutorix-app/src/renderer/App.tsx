@@ -5,6 +5,7 @@ import { OperatorMissionControlPanel } from "./components/OperatorMissionControl
 import { OperatorExecutionRunwayPanel } from "./components/OperatorExecutionRunwayPanel";
 import { OperatorSurfaceSpinePanel } from "./components/OperatorSurfaceSpinePanel";
 import { OperatorEvidenceLedgerPanel } from "./components/OperatorEvidenceLedgerPanel";
+import { OperatorDiagnosticsConsolePanel } from "./components/OperatorDiagnosticsConsolePanel";
 
 type AnyRecord = Record<string, any>;
 
@@ -885,6 +886,7 @@ export default function App(): React.JSX.Element {
           )}
         </section>
             <OperatorEvidenceLedgerPanel />
+      <OperatorDiagnosticsConsolePanel />
     </main>
     </div>
   );
