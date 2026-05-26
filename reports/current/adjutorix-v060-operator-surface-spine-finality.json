@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "code": "ADJUTORIX_V060_OPERATOR_SURFACE_SPINE_FINALITY_PASS",
+  "tag": "adjutorix-operator-surface-spine-v0.6.0",
+  "tagSha": "c775ce9f7b193f08bc05e928fe6aea23d4bc59b0",
+  "expectedSha": "c775ce9f7b193f08bc05e928fe6aea23d4bc59b0",
+  "lockedSurface": "operator-surface-spine",
+  "requiredFiles": [
+    "configs/runtime/operator_surface_spine_policy.json",
+    "packages/adjutorix-app/src/renderer/App.tsx",
+    "packages/adjutorix-app/src/renderer/components/OperatorSurfaceSpinePanel.tsx",
+    "packages/adjutorix-app/tests/renderer/operator_surface_spine_contract.test.ts",
+    "packages/adjutorix-app/vitest.config.mjs",
+    "scripts/product/assert-operator-surface-spine.mjs",
+    "reports/current/operator-surface-spine-readiness.json"
+  ],
+  "guardedCapabilities": [
+    "mission-control",
+    "live-operator-kernel",
+    "execution-runway",
+    "evidence-finality-posture",
+    "single-governed-user-path"
+  ],
+  "checkedAt": "2026-05-25T21:45:42.062Z"
+}
