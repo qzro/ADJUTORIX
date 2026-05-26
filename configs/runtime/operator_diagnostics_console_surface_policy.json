@@ -1,0 +1,19 @@
+{
+  "schema": "adjutorix-operator-diagnostics-console-surface-policy-v1",
+  "surface": "operator_diagnostics_console",
+  "required": true,
+  "runtimePurpose": "Expose runtime diagnostics, startup posture, logs, crash context, observability bundles, and export bundles as a governed operator surface.",
+  "requiredBridgeFamilies": [
+    "diagnostics.runtimeSnapshot",
+    "diagnostics.startupReport",
+    "diagnostics.observabilityBundle",
+    "diagnostics.logTail",
+    "diagnostics.crashContext",
+    "diagnostics.exportBundle"
+  ],
+  "nonNegotiable": [
+    "diagnostics must be user-visible",
+    "runtime failure evidence must not remain hidden behind IPC only",
+    "exportable diagnostics evidence must remain reachable from the app surface"
+  ]
+}

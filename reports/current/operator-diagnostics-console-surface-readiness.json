@@ -1,0 +1,22 @@
+{
+  "ok": true,
+  "schema": "adjutorix-operator-diagnostics-console-surface-readiness-v1",
+  "surface": "operator_diagnostics_console",
+  "required": true,
+  "bridgeFamilies": [
+    "runtimeSnapshot",
+    "startupReport",
+    "observabilityBundle",
+    "logTail",
+    "crashContext",
+    "exportBundle"
+  ],
+  "checkedFiles": [
+    "configs/runtime/operator_diagnostics_console_surface_policy.json",
+    "packages/adjutorix-app/src/renderer/App.tsx",
+    "packages/adjutorix-app/src/renderer/components/OperatorDiagnosticsConsolePanel.tsx",
+    "packages/adjutorix-app/tests/renderer/operator_diagnostics_console_surface_contract.test.ts",
+    "packages/adjutorix-app/vitest.config.mjs"
+  ],
+  "checkedAt": "2026-05-26T17:08:44.142Z"
+}
