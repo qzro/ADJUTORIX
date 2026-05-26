@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "schema": "adjutorix-v080-diagnostics-console-finality-v1",
+  "finalizedReleaseTag": "adjutorix-operator-diagnostics-console-surface-v0.8.0",
+  "finalizedReleaseSha": "99b10149d061c744bdcc23f7aab341c5bf1e5f11",
+  "surface": "operator_diagnostics_console",
+  "invariant": "V0.8.0 diagnostics console remains user-visible, policy-required, contract-tested, and bound to governed diagnostics bridge paths.",
+  "checkedFiles": [
+    "configs/runtime/operator_diagnostics_console_surface_policy.json",
+    "packages/adjutorix-app/src/renderer/App.tsx",
+    "packages/adjutorix-app/src/renderer/components/OperatorDiagnosticsConsolePanel.tsx",
+    "packages/adjutorix-app/tests/renderer/operator_diagnostics_console_surface_contract.test.ts",
+    "packages/adjutorix-app/vitest.config.mjs",
+    "reports/current/operator-diagnostics-console-surface-readiness.json",
+    "scripts/product/assert-operator-diagnostics-console-surface.mjs"
+  ],
+  "checkedAt": "2026-05-26T19:28:01.171Z"
+}
