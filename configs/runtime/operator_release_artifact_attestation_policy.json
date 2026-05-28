@@ -1,0 +1,47 @@
+{
+  "perimeter": "operator-release-artifact-attestation",
+  "required": true,
+  "schema": "adjutorix.operator_release_artifact_attestation_policy.v1",
+  "base_release": {
+    "tag": "adjutorix-operator-release-integrity-perimeter-v1.0.0",
+    "expected_commit": "9fa783f0c728d2ef2869935257b2292aa426b28b",
+    "required_release_name": "ADJUTORIX v1.0.0 — Operator Release Integrity Perimeter"
+  },
+  "required_assets": [
+    {
+      "kind": "macos_dmg",
+      "namePattern": "^Adjutorix-.*-arm64\\.dmg$",
+      "required": true
+    },
+    {
+      "kind": "macos_dmg_blockmap",
+      "namePattern": "^Adjutorix-.*-arm64\\.dmg\\.blockmap$",
+      "required": true
+    },
+    {
+      "kind": "electron_builder_effective_config",
+      "namePattern": "^builder-effective-config\\.yaml$",
+      "required": true
+    }
+  ],
+  "not_attested_assets": [
+    {
+      "kind": "electron_latest_mac",
+      "namePattern": "^latest-mac\\.yml$",
+      "reason": "The v1.0.0 GitHub release does not contain latest-mac.yml. The v1.1.0 perimeter must attest the actual release artifact set, not silently invent an updater manifest."
+    }
+  ],
+  "attestation": {
+    "download_release_assets": true,
+    "record_asset_sha256": true,
+    "record_asset_size_bytes": true,
+    "record_release_metadata": true
+  },
+  "distribution_trust": {
+    "current_customer_distribution_trust": false,
+    "auto_update_manifest_attested": false,
+    "code_signing_attested": false,
+    "notarization_attested": false,
+    "reason": "Repository release artifacts are attested. macOS customer distribution trust, notarization, Developer ID signing, and auto-update manifest trust are not attested."
+  }
+}
