@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "code": "ADJUTORIX_V110_RELEASE_ARTIFACT_ATTESTATION_FINALITY",
+  "protectedTag": "adjutorix-operator-release-artifact-attestation-perimeter-v1.1.0",
+  "protectedSha": "acf9d87105c853098b9b6d11d8f55c6b748755fb",
+  "previousTag": "adjutorix-operator-release-integrity-perimeter-v1.0.0",
+  "previousSha": "9fa783f0c728d2ef2869935257b2292aa426b28b",
+  "requiredAssets": [
+    "Adjutorix-0.1.0-arm64.dmg",
+    "Adjutorix-0.1.0-arm64.dmg.blockmap",
+    "builder-effective-config.yaml"
+  ],
+  "requiredFiles": [
+    ".github/workflows/adjutorix-v110-operator-release-artifact-attestation.yml",
+    "configs/runtime/operator_release_artifact_attestation_policy.json",
+    "reports/current/operator-release-artifact-attestation-readiness.json",
+    "scripts/product/assert-operator-release-artifact-attestation.mjs"
+  ],
+  "checks": {
+    "protectedTagImmutableByGit": true,
+    "previousTagImmutableByGit": true,
+    "policyStructural": true,
+    "readinessOk": true,
+    "requiredAssetsPresentInEvidenceSurface": true,
+    "productAssertionPresent": true,
+    "workflowPresent": true
+  },
+  "explicitNonAttestations": [
+    "latest-mac.yml auto-update manifest trust is not attested",
+    "Developer ID signing is not attested",
+    "macOS notarization is not attested",
+    "customer distribution trust is not attested"
+  ]
+}
