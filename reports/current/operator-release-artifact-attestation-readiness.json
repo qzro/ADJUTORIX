@@ -1,0 +1,82 @@
+{
+  "ok": true,
+  "schema": "adjutorix.operator_release_artifact_attestation_report.v1",
+  "perimeter": "operator-release-artifact-attestation",
+  "generated_at": "2026-05-28T21:24:36.405Z",
+  "repo": "qzro/ADJUTORIX",
+  "base_release": {
+    "tag": "adjutorix-operator-release-integrity-perimeter-v1.0.0",
+    "expected_commit": "9fa783f0c728d2ef2869935257b2292aa426b28b",
+    "actual_tag_commit": "9fa783f0c728d2ef2869935257b2292aa426b28b",
+    "release_name": "ADJUTORIX v1.0.0 — Operator Release Integrity Perimeter",
+    "release_url": "https://github.com/qzro/ADJUTORIX/releases/tag/adjutorix-operator-release-integrity-perimeter-v1.0.0",
+    "target_commitish": "main",
+    "is_draft": false,
+    "is_prerelease": false
+  },
+  "previous_perimeter": {
+    "policy_path": "configs/runtime/operator_release_integrity_perimeter_policy.json",
+    "report_path": "reports/current/operator-release-integrity-perimeter-readiness.json",
+    "workflow_path": ".github/workflows/adjutorix-v100-operator-release-integrity-perimeter.yml",
+    "report_used_as_commit_authority": false
+  },
+  "required_assets": [
+    {
+      "kind": "macos_dmg",
+      "namePattern": "^Adjutorix-.*-arm64\\.dmg$",
+      "matches": [
+        "Adjutorix-0.1.0-arm64.dmg"
+      ]
+    },
+    {
+      "kind": "macos_dmg_blockmap",
+      "namePattern": "^Adjutorix-.*-arm64\\.dmg\\.blockmap$",
+      "matches": [
+        "Adjutorix-0.1.0-arm64.dmg.blockmap"
+      ]
+    },
+    {
+      "kind": "electron_builder_effective_config",
+      "namePattern": "^builder-effective-config\\.yaml$",
+      "matches": [
+        "builder-effective-config.yaml"
+      ]
+    }
+  ],
+  "not_attested_assets": [
+    {
+      "kind": "electron_latest_mac",
+      "namePattern": "^latest-mac\\.yml$",
+      "present": false,
+      "reason": "The v1.0.0 GitHub release does not contain latest-mac.yml. The v1.1.0 perimeter must attest the actual release artifact set, not silently invent an updater manifest."
+    }
+  ],
+  "downloaded_assets": [
+    {
+      "name": "Adjutorix-0.1.0-arm64.dmg",
+      "size_bytes": 117350106,
+      "sha256": "db79d6381f83c0367413c0254c3c2e6662f666adbf22a951b138b2297d6ae153"
+    },
+    {
+      "name": "Adjutorix-0.1.0-arm64.dmg.blockmap",
+      "size_bytes": 123912,
+      "sha256": "b4a16d5bb16e37001bb1ae1b93c2cbb0dbd72a2fca8930d59959425a7aa7bcc1"
+    },
+    {
+      "name": "builder-effective-config.yaml",
+      "size_bytes": 337,
+      "sha256": "e9b895583154534c34632ac410541d5bc5786ca1f43dcb075368ff9807b21040"
+    }
+  ],
+  "distribution_trust": {
+    "repository_release_integrity_attested": true,
+    "release_artifact_download_attested": true,
+    "asset_sha256_attested": true,
+    "electron_builder_config_attested": true,
+    "auto_update_manifest_attested": false,
+    "macos_customer_distribution_trust_attested": false,
+    "code_signing_status": "not_attested",
+    "notarization_status": "not_attested",
+    "reason": "Repository release artifacts are attested. macOS customer distribution trust, notarization, Developer ID signing, and auto-update manifest trust are not attested."
+  }
+}
