@@ -1,0 +1,27 @@
+name: ADJUTORIX v1.2.0 operator release artifact digest
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operator-release-artifact-digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch --tags origin
+
+      - name: Assert operator release artifact digest perimeter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/product/assert-operator-release-artifact-digest.mjs
