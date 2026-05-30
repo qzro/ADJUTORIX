@@ -1,0 +1,49 @@
+{
+  "ok": true,
+  "schema": "adjutorix-operator-release-artifact-digest-readiness-v1",
+  "perimeter": "operator-release-artifact-digest",
+  "repository": "qzro/ADJUTORIX",
+  "protectedReleaseTag": "adjutorix-operator-release-artifact-attestation-perimeter-v1.1.0",
+  "protectedReleaseCommit": "acf9d87105c853098b9b6d11d8f55c6b748755fb",
+  "protectedFinalityTag": "adjutorix-v110-release-artifact-attestation-finality-guard-v1.1.1",
+  "protectedFinalityCommit": "3438f9e9016213846a8cf4e5471b8a177afd2c0c",
+  "releaseUrl": "https://github.com/qzro/ADJUTORIX/releases/tag/adjutorix-operator-release-artifact-attestation-perimeter-v1.1.0",
+  "releaseName": "ADJUTORIX v1.1.0 — Operator Release Artifact Attestation Perimeter",
+  "releaseDraft": false,
+  "releasePrerelease": false,
+  "assetCount": 3,
+  "requiredAssets": [
+    "Adjutorix-0.1.0-arm64.dmg",
+    "Adjutorix-0.1.0-arm64.dmg.blockmap",
+    "builder-effective-config.yaml"
+  ],
+  "forbiddenAssetsAbsent": [
+    "latest-mac.yml"
+  ],
+  "digestAlgorithm": "sha256",
+  "digests": {
+    "Adjutorix-0.1.0-arm64.dmg": {
+      "algorithm": "sha256",
+      "sha256": "b7309869c75812d47abb06f0462426462270626d030c72faac17b56b46e82403",
+      "bytes": 117350103
+    },
+    "Adjutorix-0.1.0-arm64.dmg.blockmap": {
+      "algorithm": "sha256",
+      "sha256": "343eb388e5536a2102a8f6954c7f1781c994e825ba917b0b48697263b5de3f82",
+      "bytes": 123913
+    },
+    "builder-effective-config.yaml": {
+      "algorithm": "sha256",
+      "sha256": "e9b895583154534c34632ac410541d5bc5786ca1f43dcb075368ff9807b21040",
+      "bytes": 337
+    }
+  },
+  "invariants": {
+    "protectedReleaseTagImmutableByGit": true,
+    "protectedFinalityTagImmutableByGit": true,
+    "releaseAssetsDownloadedFromGitHub": true,
+    "requiredAssetSetExact": true,
+    "forbiddenAssetsAbsent": true,
+    "byteIdentityCaptured": true
+  }
+}

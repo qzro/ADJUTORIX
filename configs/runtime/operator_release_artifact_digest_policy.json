@@ -1,0 +1,24 @@
+{
+  "schema": "adjutorix-operator-release-artifact-digest-policy-v1",
+  "perimeter": "operator-release-artifact-digest",
+  "repository": "qzro/ADJUTORIX",
+  "protectedReleaseTag": "adjutorix-operator-release-artifact-attestation-perimeter-v1.1.0",
+  "protectedReleaseCommit": "acf9d87105c853098b9b6d11d8f55c6b748755fb",
+  "protectedFinalityTag": "adjutorix-v110-release-artifact-attestation-finality-guard-v1.1.1",
+  "protectedFinalityCommit": "3438f9e9016213846a8cf4e5471b8a177afd2c0c",
+  "digestAlgorithm": "sha256",
+  "requiredAssets": [
+    "Adjutorix-0.1.0-arm64.dmg",
+    "Adjutorix-0.1.0-arm64.dmg.blockmap",
+    "builder-effective-config.yaml"
+  ],
+  "forbiddenAssets": [
+    "latest-mac.yml"
+  ],
+  "invariants": [
+    "release asset presence is not byte identity",
+    "every protected release asset must have a stable sha256 digest",
+    "unexpected assets are refused",
+    "forbidden updater metadata remains explicitly outside the attested set"
+  ]
+}
