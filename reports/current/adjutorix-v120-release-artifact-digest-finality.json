@@ -1,0 +1,44 @@
+{
+  "ok": true,
+  "schema": "adjutorix.v120_release_artifact_digest_finality.v1",
+  "finalizedTag": "adjutorix-operator-release-artifact-digest-perimeter-v1.2.0",
+  "finalizedCommit": "f38f780e37ad55551444a02326ab59b9f2ffc0aa",
+  "release": {
+    "tagName": "adjutorix-operator-release-artifact-digest-perimeter-v1.2.0",
+    "name": "ADJUTORIX v1.2.0 — Operator Release Artifact Digest Perimeter",
+    "targetCommitish": "main",
+    "isDraft": false,
+    "isPrerelease": false,
+    "url": "https://github.com/qzro/ADJUTORIX/releases/tag/adjutorix-operator-release-artifact-digest-perimeter-v1.2.0"
+  },
+  "finalizedAssets": [
+    {
+      "name": "Adjutorix-0.1.0-arm64.dmg",
+      "digest": "sha256:3a262c1ed4289b1e7f637517ddfc9dc02af971d171728cc0d13eab4cd60126a0",
+      "size": 117350119,
+      "state": "uploaded",
+      "url": "https://github.com/qzro/ADJUTORIX/releases/download/adjutorix-operator-release-artifact-digest-perimeter-v1.2.0/Adjutorix-0.1.0-arm64.dmg"
+    },
+    {
+      "name": "Adjutorix-0.1.0-arm64.dmg.blockmap",
+      "digest": "sha256:b131c3bc3ccda34af6a87a0cc53e06b7fe92dfb2c49099c3afacb21da7d763d0",
+      "size": 123874,
+      "state": "uploaded",
+      "url": "https://github.com/qzro/ADJUTORIX/releases/download/adjutorix-operator-release-artifact-digest-perimeter-v1.2.0/Adjutorix-0.1.0-arm64.dmg.blockmap"
+    },
+    {
+      "name": "builder-effective-config.yaml",
+      "digest": "sha256:e9b895583154534c34632ac410541d5bc5786ca1f43dcb075368ff9807b21040",
+      "size": 337,
+      "state": "uploaded",
+      "url": "https://github.com/qzro/ADJUTORIX/releases/download/adjutorix-operator-release-artifact-digest-perimeter-v1.2.0/builder-effective-config.yaml"
+    }
+  ],
+  "localEvidence": {
+    "policy": "configs/runtime/operator_release_artifact_digest_policy.json",
+    "productAssertion": "scripts/product/assert-operator-release-artifact-digest.mjs",
+    "workflow": ".github/workflows/adjutorix-v120-operator-release-artifact-digest.yml",
+    "readinessReport": "reports/current/operator-release-artifact-digest-readiness.json"
+  },
+  "readinessReportScope": "structural-only; canonical SHA-256 digest evidence is GitHub release asset metadata and this finality report"
+}

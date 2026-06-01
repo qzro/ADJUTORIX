@@ -343,6 +343,13 @@ PY
     record_phase "$phase" "FAIL" "$started" "$finished" "$duration_ms"
     OVERALL_FAILURES=$((OVERALL_FAILURES + 1))
     log_error "Phase failed: ${phase} (${duration_ms} ms)"
+    if [[ "${CI:-false}" == "true" ]]; then
+      {
+        echo "----- ADJUTORIX_PHASE_FAILURE_LOG_TAIL_BEGIN phase=${phase} -----"
+        tail -240 "$ADJUTORIX_VERIFY_BOOT_LOG" || true
+        echo "----- ADJUTORIX_PHASE_FAILURE_LOG_TAIL_END phase=${phase} -----"
+      } >&2
+    fi
     if [[ "$ADJUTORIX_VERIFY_FAIL_FAST" == "true" ]]; then
       exit 1
     fi

@@ -1,0 +1,25 @@
+name: ADJUTORIX v1.2.0 Release Artifact Digest Finality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  finality:
+    name: finality
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Assert ADJUTORIX v1.2.0 release artifact digest finality
+        run: node scripts/release/assert-adjutorix-v120-release-artifact-digest-finality.mjs
