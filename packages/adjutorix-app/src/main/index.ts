@@ -9,12 +9,12 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { spawn, ChildProcess } from "node:child_process";
-import { registerOperatorKernelIpc } from "./ipc/operator_kernel_ipc";
+import { registerOperatorKernelIpc } from "./ipc/operator_kernel_ipc.js";
 import {
   assertMandatoryOperatorKernelGate,
   requirePatchIdFromKernelGatedPayload,
   type OperatorKernelGatePayload,
-} from "./operator/operator_kernel_enforcement";
+} from "./operator/operator_kernel_enforcement.js";
 
 /**
  * ADJUTORIX APP — MAIN / index.ts
@@ -523,7 +523,7 @@ async function shutdownAgent(): Promise<void> {
 // WINDOW / RENDERER
 // -----------------------------------------------------------------------------
 
-function buildBrowserWindow(config: RuntimeConfig): BrowserWindow {
+async function buildBrowserWindow(config: RuntimeConfig): BrowserWindow {
   const window = new BrowserWindow({
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
@@ -1266,12 +1266,24 @@ function buildRendererWorkspaceTreeProjection(rootPath: string | null): Json {
 // -----------------------------------------------------------------------------
 
 async function createMainWindow(config: RuntimeConfig): Promise<BrowserWindow> {
-  const window = buildBrowserWindow(config);
+  // ADJUTORIX_ELECTRON_READY_GATE_CREATEMAINWINDOW
+  if (!app.isReady()) {
+    await app.whenReady();
+  }
+
+
+  const window = await buildBrowserWindow(config);
   await loadRenderer(window, config);
   return window;
 }
 
 async function bootstrap(): Promise<void> {
+  // ADJUTORIX_ELECTRON_READY_GATE_BOOTSTRAP
+  if (!app.isReady()) {
+    await app.whenReady();
+  }
+
+
   appDiagnostics.phase = "bootstrap";
   flushDiagnostics();
 
@@ -1339,7 +1351,7 @@ function registerGlobalHandlers(): void {
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0 && runtimeConfig) {
-      void createMainWindow(runtimeConfig).then((window) => {
+      void await createMainWindow(runtimeConfig).then((window) => {
         mainWindow = window;
       }).catch((error) => {
         recordCrash("activate-create-window", error);
@@ -1368,6 +1380,12 @@ function registerGlobalHandlers(): void {
 // -----------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  // ADJUTORIX_ELECTRON_READY_GATE_MAIN
+  if (!app.isReady()) {
+    await app.whenReady();
+  }
+
+
   ensureDir(LOG_ROOT);
   flushDiagnostics();
   registerGlobalHandlers();
