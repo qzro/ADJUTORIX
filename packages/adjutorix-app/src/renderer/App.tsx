@@ -40,6 +40,41 @@ function createOperatorKernelReceipt(): OperatorKernelReceipt {
 
 const liveOperatorKernelReceipt = createOperatorKernelReceipt();
 
+class WorkbenchCrashBoundary extends React.Component<
+  React.PropsWithChildren,
+  { error: string | null }
+> {
+  public state = { error: null as string | null };
+
+  public static getDerivedStateFromError(error: unknown): { error: string } {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  public componentDidCatch(error: unknown): void {
+    console.error("[adjutorix] workbench-render-failure", error);
+  }
+
+  public render(): React.ReactNode {
+    if (!this.state.error) {
+      return this.props.children;
+    }
+
+    return (
+      <section className="adjutorix-workbench-recovery" role="alert">
+        <p className="adjutorix-product-eyebrow">ADJUTORIX RECOVERY</p>
+        <h1>Workbench boot recovered</h1>
+        <p>The app is alive. Reload the workbench or inspect diagnostics.</p>
+        <code>{this.state.error}</code>
+        <button type="button" onClick={() => window.location.reload()}>
+          Reload Workbench
+        </button>
+      </section>
+    );
+  }
+}
+
 function OperatorKernelLiveCockpit(): JSX.Element {
   return (
     <section
@@ -61,14 +96,6 @@ function OperatorKernelLiveCockpit(): JSX.Element {
           are active.
         </p>
       </header>
-      <div className="adjutorix-live-kernel-receipt-grid">
-        <span>operatorKernel: {liveOperatorKernelReceipt.operatorKernel}</span>
-        <span>operatorKernelReceiptId: {liveOperatorKernelReceipt.operatorKernelReceiptId}</span>
-        <span>operatorKernelHash: {liveOperatorKernelReceipt.operatorKernelHash}</span>
-        <span>previousKernelHash: {liveOperatorKernelReceipt.previousKernelHash}</span>
-        <span>receiptHash: {liveOperatorKernelReceipt.receiptHash}</span>
-        <span>Kernel-gated apply: active</span>
-      </div>
     </section>
   );
 }
@@ -83,13 +110,15 @@ export default function App(): JSX.Element {
       data-previous-kernel-hash={liveOperatorKernelReceipt.previousKernelHash}
     >
       <section className="adjutorix-product-primary" aria-label="ADJUTORIX workbench">
-        <AdjutorixPowerWorkbench />
+        <WorkbenchCrashBoundary>
+          <AdjutorixPowerWorkbench />
+        </WorkbenchCrashBoundary>
       </section>
 
       <aside className="adjutorix-governance-strip" aria-label="ADJUTORIX governed status">
         <div>
-          <strong>Governed</strong>
-          <span>Kernel receipt bound</span>
+          <strong>Ready</strong>
+          <span>Open repo and work</span>
         </div>
         <div>
           <strong>Verify</strong>
@@ -97,14 +126,14 @@ export default function App(): JSX.Element {
         </div>
         <div>
           <strong>Apply</strong>
-          <span>Blocked until approved</span>
+          <span>Kernel-gated</span>
         </div>
       </aside>
 
       <details className="adjutorix-governed-spine-drawer">
         <summary>
-          <span>Governance spine</span>
-          <strong>Ready</strong>
+          <span>Governance</span>
+          <strong>On</strong>
         </summary>
         <OperatorSurfaceSpinePanel
           missionControl={<OperatorMissionControlPanel />}

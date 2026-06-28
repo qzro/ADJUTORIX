@@ -10,6 +10,28 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { spawn, ChildProcess } from "node:child_process";
 import { registerOperatorKernelIpc } from "./ipc/operator_kernel_ipc.js";
+import * as adjutorixRendererFs from "node:fs";
+import * as adjutorixRendererPath from "node:path";
+
+function resolveAdjutorixRendererIndexHtml(): string {
+  const candidates = [
+    adjutorixRendererPath.join(app.getAppPath(), "dist", "renderer", "index.html"),
+    adjutorixRendererPath.join(process.resourcesPath, "app.asar", "dist", "renderer", "index.html"),
+    adjutorixRendererPath.join(process.resourcesPath, "app", "dist", "renderer", "index.html"),
+    adjutorixRendererPath.join(process.cwd(), "packages", "adjutorix-app", "dist", "renderer", "index.html"),
+    adjutorixRendererPath.join(process.cwd(), "dist", "renderer", "index.html"),
+  ];
+
+  const found = candidates.find((candidate) => adjutorixRendererFs.existsSync(candidate));
+
+  if (!found) {
+    throw new Error(`ADJUTORIX_RENDERER_ENTRY_MISSING candidates=${candidates.join(" | ")}`);
+  }
+
+  console.info(`[adjutorix-app] renderer_entry=${found}`);
+  return found;
+}
+
 import {
   assertMandatoryOperatorKernelGate,
   requirePatchIdFromKernelGatedPayload,
@@ -593,7 +615,7 @@ async function buildBrowserWindow(config: RuntimeConfig): Promise<BrowserWindow>
 
 async function loadRenderer(window: BrowserWindow, config: RuntimeConfig): Promise<void> {
   assert(fs.existsSync(config.build.rendererIndex), "renderer_index_missing_at_load");
-  await window.loadFile(config.build.rendererIndex);
+  await window.loadFile(resolveAdjutorixRendererIndexHtml());
 }
 
 // -----------------------------------------------------------------------------

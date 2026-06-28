@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "=== ADJUTORIX ONE APP INSTALL ==="
+echo "=== ADJUTORIX ONE APP INSTALL / FAST EXPANDED ==="
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 APP_DIR="$ROOT/packages/adjutorix-app"
@@ -33,17 +33,18 @@ if [[ ! -f dist/renderer/index.html && -f dist/renderer/index.html/index.html ]]
   rm -rf dist/renderer
   mv dist/renderer.__normalized dist/renderer
 fi
+
 test -f dist/main/index.js
 test -f dist/renderer/index.html
 echo "RENDERER_ENTRY_READY=$APP_DIR/dist/renderer/index.html"
 
-echo "=== PACKAGE MAC APP ==="
-pnpm exec electron-builder --mac dmg --arm64 --publish never
+echo "=== PACKAGE MAC APP DIR ONLY / EXPANDED ==="
+pnpm exec electron-builder --mac --arm64 --dir --publish never --config.asar=false
 
 BUILT_APP="$(find "$APP_DIR/release" -type d -name 'Adjutorix.app' -print -quit)"
 if [[ -z "$BUILT_APP" ]]; then
   echo "ADJUTORIX_BUILT_APP_MISSING=true"
-  find "$APP_DIR/release" -maxdepth 4 -print || true
+  find "$APP_DIR/release" -maxdepth 5 -print || true
   exit 1
 fi
 
@@ -59,23 +60,13 @@ sudo chmod -R a+rX "$INSTALL_PATH" || true
 sudo xattr -dr com.apple.quarantine "$INSTALL_PATH" >/dev/null 2>&1 || true
 codesign --force --deep --sign - "$INSTALL_PATH" >/dev/null 2>&1 || true
 
-echo "=== REMOVE LOCAL BUILD COPIES AFTER INSTALL ==="
-rm -rf "$APP_DIR/release/mac" "$APP_DIR/release/mac-arm64"
-
-echo "=== VERIFY SINGLE INSTALLED APP ==="
+echo "=== VERIFY INSTALLED EXPANDED APP ==="
+RESOURCES_DIR="$INSTALL_PATH/Contents/Resources"
+test -f "$RESOURCES_DIR/app/dist/main/index.js"
+test -f "$RESOURCES_DIR/app/dist/renderer/index.html"
 test -d "$INSTALL_PATH"
 find /Applications -maxdepth 1 -name 'Adjutorix*.app' -print
-
-RESOURCES_DIR="$INSTALL_PATH/Contents/Resources"
-if [[ -f "$RESOURCES_DIR/app.asar" ]]; then
-  echo "INSTALLED_STANDARD_ASAR_APP=true"
-elif [[ -f "$RESOURCES_DIR/app/dist/main/index.js" && -f "$RESOURCES_DIR/app/dist/renderer/index.html" ]]; then
-  echo "INSTALLED_EXPANDED_APP=true"
-else
-  echo "INSTALLED_APP_RESOURCES_INVALID=true"
-  find "$RESOURCES_DIR" -maxdepth 5 -type f | sort | head -200
-  exit 1
-fi
+echo "INSTALLED_EXPANDED_APP=true"
 
 if [[ "${ADJUTORIX_NO_OPEN:-0}" != "1" ]]; then
   echo "=== OPEN APP ==="
