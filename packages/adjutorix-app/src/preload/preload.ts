@@ -1,4 +1,3 @@
-import "./power_workbench_bridge.js";
 // @ts-nocheck
 import { contextBridge as __adjutorixContextBridgeV13, ipcRenderer as __adjutorixIpcRendererV13 } from "electron";
 import { contextBridge, ipcRenderer } from "electron";
@@ -796,8 +795,62 @@ const bridge = {
 
 const exposedApi = createExposedApi(bridge as unknown as Parameters<typeof createExposedApi>[0]);
 
+/* ADJUTORIX_POWER_COMPAT_BRIDGE_BEGIN */
+function readPowerBridgeString(input: unknown, key: string): string | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const value = (input as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+const adjutorixPowerBridge = deepFreeze({
+  meta: deepFreeze({
+    version: 1 as const,
+    bridge: "adjutorix.power.compat" as const,
+    authority: "governed-preload-existing-ipc" as const,
+  }),
+
+  openRepository: async () =>
+    bridge.workspace.open({
+      schema: 1,
+      actor: "renderer",
+      source: "ipc",
+    }),
+
+  scanWorkspace: async (workspace: string) =>
+    bridge.diagnostics.runtime().then((snapshot) => ({
+      workspace,
+      snapshot,
+    })),
+
+  readFile: async (input: unknown) =>
+    bridge.workspace.readFile(input),
+
+  saveDraft: async (input: unknown) => {
+    const cwd = readPowerBridgeString(input, "workspace");
+    return bridge.shell.run({
+      command: "printf '%s\\n' ADJUTORIX_SAVE_DRAFT_REQUIRES_GOVERNED_PATCH_GATE",
+      ...(cwd ? { cwd } : {}),
+    });
+  },
+
+  createPlan: async (input: unknown) => {
+    const cwd = readPowerBridgeString(input, "workspace");
+    return bridge.shell.run({
+      command: "printf '%s\\n' ADJUTORIX_CREATE_PLAN_REQUIRES_GOVERNED_PATCH_GATE",
+      ...(cwd ? { cwd } : {}),
+    });
+  },
+
+  runCommand: async (input: unknown) =>
+    bridge.shell.run(input),
+});
+/* ADJUTORIX_POWER_COMPAT_BRIDGE_END */
+
+
+
 contextBridge.exposeInMainWorld("adjutorix", deepFreeze(bridge));
 contextBridge.exposeInMainWorld("adjutorixApi", exposedApi);
+contextBridge.exposeInMainWorld("adjutorixPower", adjutorixPowerBridge);
 
 
 export type AdjutorixPreloadBridge = typeof bridge;

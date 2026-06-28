@@ -1,76 +1,85 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$ROOT"
-
 echo "=== ADJUTORIX ONE APP INSTALL ==="
 
-osascript -e 'quit app "Adjutorix"' 2>/dev/null || true
-pkill -9 -f "Adjutorix.app" 2>/dev/null || true
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+APP_DIR="$ROOT/packages/adjutorix-app"
+INSTALL_PATH="/Applications/Adjutorix.app"
+
+cd "$ROOT"
+
+echo "=== STOP RUNNING APP ==="
+osascript -e 'tell application "Adjutorix" to quit' >/dev/null 2>&1 || true
+pkill -f "Adjutorix" >/dev/null 2>&1 || true
 sleep 1
 
 echo "=== CLEAN BUILD OUTPUT ==="
-rm -rf packages/adjutorix-app/dist packages/adjutorix-app/release .local-app
-mkdir -p .local-app
+rm -rf "$APP_DIR/dist" "$APP_DIR/release"
 
 echo "=== INSTALL DEPENDENCIES ==="
 corepack enable >/dev/null 2>&1 || true
 pnpm install --frozen-lockfile
 
 echo "=== BUILD WORKSPACE ==="
-pnpm -r run build
+pnpm -r --if-present run build
+
+cd "$APP_DIR"
+
+echo "=== VERIFY RENDERER ENTRY ==="
+if [[ ! -f dist/renderer/index.html && -f dist/renderer/index.html/index.html ]]; then
+  mkdir -p dist/renderer.__normalized
+  cp -R dist/renderer/index.html/* dist/renderer.__normalized/
+  rm -rf dist/renderer
+  mv dist/renderer.__normalized dist/renderer
+fi
+test -f dist/main/index.js
+test -f dist/renderer/index.html
+echo "RENDERER_ENTRY_READY=$APP_DIR/dist/renderer/index.html"
 
 echo "=== PACKAGE MAC APP ==="
-cd packages/adjutorix-app
+pnpm exec electron-builder --mac dmg --arm64 --publish never
 
-echo "=== NORMALIZE RENDERER ENTRY FOR PACKAGED APP ==="
-# ADJUTORIX_RENDERER_ENTRY_NORMALIZER
-APP_PACKAGE_DIR="$ROOT/packages/adjutorix-app"
-RENDERER_ENTRY="$APP_PACKAGE_DIR/dist/renderer/index.html"
-
-if [[ ! -f "$RENDERER_ENTRY" ]]; then
-  FOUND_RENDERER_ENTRY="$(find "$APP_PACKAGE_DIR/dist" -type f -name index.html | head -1 || true)"
-  if [[ -z "$FOUND_RENDERER_ENTRY" ]]; then
-    echo "NO_RENDERER_INDEX_HTML_FOUND=true"
-    find "$APP_PACKAGE_DIR/dist" -maxdepth 5 -type f | sort || true
-    exit 1
-  fi
-
-  mkdir -p "$(dirname "$RENDERER_ENTRY")"
-  cp "$FOUND_RENDERER_ENTRY" "$RENDERER_ENTRY"
-  echo "RENDERER_ENTRY_NORMALIZED_FROM=$FOUND_RENDERER_ENTRY"
+BUILT_APP="$(find "$APP_DIR/release" -type d -name 'Adjutorix.app' -print -quit)"
+if [[ -z "$BUILT_APP" ]]; then
+  echo "ADJUTORIX_BUILT_APP_MISSING=true"
+  find "$APP_DIR/release" -maxdepth 4 -print || true
+  exit 1
 fi
 
-test -f "$RENDERER_ENTRY"
-echo "RENDERER_ENTRY_READY=$RENDERER_ENTRY"
-
-
-pnpm exec electron-builder --mac dmg --arm64 --publish never
-cd "$ROOT"
-
-APP_SRC="$(find packages/adjutorix-app/release -path '*Adjutorix.app' -type d | head -n 1)"
-test -n "${APP_SRC:-}"
-test -d "$APP_SRC"
-
 echo "=== INSTALL SINGLE CANONICAL APP ==="
-# ADJUTORIX_CLEAN_APPLICATION_INSTALL
-sudo rm -rf "/Applications/Adjutorix.app"
-sudo rm -rf "/Applications/Adjutorix.app" 2>/dev/null || rm -rf "/Applications/Adjutorix.app"
-sudo ditto "$APP_SRC" "/Applications/Adjutorix.app" 2>/dev/null || ditto "$APP_SRC" "/Applications/Adjutorix.app"
-sudo chown -R "$USER":staff "/Applications/Adjutorix.app" 2>/dev/null || true
-chmod -R u+rwX "/Applications/Adjutorix.app"
-xattr -dr com.apple.quarantine "/Applications/Adjutorix.app" 2>/dev/null || true
-/usr/bin/codesign --force --deep --sign - "/Applications/Adjutorix.app" >/dev/null 2>&1 || true
+osascript -e 'tell application "Adjutorix" to quit' >/dev/null 2>&1 || true
+pkill -f "Adjutorix" >/dev/null 2>&1 || true
+sleep 1
+
+sudo rm -rf "$INSTALL_PATH"
+sudo ditto "$BUILT_APP" "$INSTALL_PATH"
+sudo chown -R root:wheel "$INSTALL_PATH" || true
+sudo chmod -R a+rX "$INSTALL_PATH" || true
+sudo xattr -dr com.apple.quarantine "$INSTALL_PATH" >/dev/null 2>&1 || true
+codesign --force --deep --sign - "$INSTALL_PATH" >/dev/null 2>&1 || true
 
 echo "=== REMOVE LOCAL BUILD COPIES AFTER INSTALL ==="
-rm -rf packages/adjutorix-app/dist packages/adjutorix-app/release .local-app
+rm -rf "$APP_DIR/release/mac" "$APP_DIR/release/mac-arm64"
 
 echo "=== VERIFY SINGLE INSTALLED APP ==="
-test -d "/Applications/Adjutorix.app"
-find /Applications "$HOME/Applications" -maxdepth 2 -name "Adjutorix.app" -type d 2>/dev/null | sort
+test -d "$INSTALL_PATH"
+find /Applications -maxdepth 1 -name 'Adjutorix*.app' -print
 
-echo "=== OPEN APP ==="
-if [[ "${ADJUTORIX_NO_OPEN:-0}" != "1" ]]; then open -n "/Applications/Adjutorix.app"; fi
+RESOURCES_DIR="$INSTALL_PATH/Contents/Resources"
+if [[ -f "$RESOURCES_DIR/app.asar" ]]; then
+  echo "INSTALLED_STANDARD_ASAR_APP=true"
+elif [[ -f "$RESOURCES_DIR/app/dist/main/index.js" && -f "$RESOURCES_DIR/app/dist/renderer/index.html" ]]; then
+  echo "INSTALLED_EXPANDED_APP=true"
+else
+  echo "INSTALLED_APP_RESOURCES_INVALID=true"
+  find "$RESOURCES_DIR" -maxdepth 5 -type f | sort | head -200
+  exit 1
+fi
+
+if [[ "${ADJUTORIX_NO_OPEN:-0}" != "1" ]]; then
+  echo "=== OPEN APP ==="
+  open "$INSTALL_PATH"
+fi
 
 echo "ADJUTORIX_SINGLE_INSTALLED_APP_OK=true"

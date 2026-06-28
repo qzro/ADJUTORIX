@@ -1,4 +1,3 @@
-import { registerPowerWorkbenchIpc } from "./ipc/power_workbench_ipc.js";
 // @ts-nocheck
 import { registerPortfolioWorkspaceV18 } from "./portfolio-workspace-v18.js";
 import { registerNativeExternalWorkspaceV16 } from "./native-external-workspace-v16.js";
@@ -16,9 +15,6 @@ import {
   requirePatchIdFromKernelGatedPayload,
   type OperatorKernelGatePayload,
 } from "./operator/operator_kernel_enforcement.js";
-
-
-registerPowerWorkbenchIpc();
 /**
  * ADJUTORIX APP — MAIN / index.ts
  *
