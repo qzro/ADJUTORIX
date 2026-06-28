@@ -168,8 +168,8 @@ export function AdjutorixPowerWorkbench(): JSX.Element {
   const [intent, setIntent] = useState<string>("");
   const [assistantInput, setAssistantInput] = useState<string>("");
   const [terminal, setTerminal] = useState<TerminalLine[]>([
-    { kind: "ok", text: "Adjutorix workbench online." },
-    { kind: "info", text: "Open a repository to activate governed coding actions." },
+    { kind: "ok", text: "Adjutorix IDE workbench online." },
+    { kind: "info", text: "Open a repository to activate explorer, editor, terminal, planning, verification, and apply gates." },
   ]);
 
   const activeFile = useMemo<WorkFile>(() => {
@@ -317,7 +317,7 @@ export function AdjutorixPowerWorkbench(): JSX.Element {
         <header className="adjx-titlebar">
           <div>
             <strong>ADJUTORIX</strong>
-            <span>governed coding workbench</span>
+            <span>Cursor-class governed IDE workbench</span>
           </div>
           <div className="adjx-title-actions">
             <button onClick={() => setCommandPaletteOpen(true)}>Command Palette</button>
