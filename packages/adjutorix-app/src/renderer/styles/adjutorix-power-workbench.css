@@ -455,6 +455,7 @@ textarea {
   }
 }
 
+
 /* ADJUTORIX_POWER_ENGINE_FEATURES_BEGIN */
 .adjutorix-cursor-powers {
   padding: 16px 18px;
@@ -484,8 +485,14 @@ textarea {
   color: #e0f2fe;
 }
 
-.adjutorix-cursor-empty button + button {
-  margin-left: 8px;
+.adjutorix-cursor-filelist button {
+  overflow: hidden;
+}
+
+.adjutorix-cursor-filelist button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .adjutorix-cursor-workbench[data-busy="true"] .adjutorix-cursor-command::after {
