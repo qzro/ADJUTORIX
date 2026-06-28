@@ -454,3 +454,49 @@ textarea {
     display: none;
   }
 }
+
+/* ADJUTORIX_POWER_ENGINE_FEATURES_BEGIN */
+.adjutorix-cursor-powers {
+  padding: 16px 18px;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.adjutorix-cursor-powers h3 {
+  margin: 0 0 12px;
+  color: #7dd3fc;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.adjutorix-cursor-powers div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.adjutorix-cursor-powers button {
+  min-height: 40px;
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.96));
+  color: #e0f2fe;
+}
+
+.adjutorix-cursor-empty button + button {
+  margin-left: 8px;
+}
+
+.adjutorix-cursor-workbench[data-busy="true"] .adjutorix-cursor-command::after {
+  content: "RUNNING";
+  margin-left: 8px;
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #7dd3fc;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+/* ADJUTORIX_POWER_ENGINE_FEATURES_END */
