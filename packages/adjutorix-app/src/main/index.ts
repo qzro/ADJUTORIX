@@ -1,3 +1,4 @@
+import { registerPowerWorkbenchIpc } from "./ipc/power_workbench_ipc.js";
 // @ts-nocheck
 import { registerPortfolioWorkspaceV18 } from "./portfolio-workspace-v18.js";
 import { registerNativeExternalWorkspaceV16 } from "./native-external-workspace-v16.js";
@@ -16,6 +17,8 @@ import {
   type OperatorKernelGatePayload,
 } from "./operator/operator_kernel_enforcement.js";
 
+
+registerPowerWorkbenchIpc();
 /**
  * ADJUTORIX APP — MAIN / index.ts
  *
@@ -523,7 +526,7 @@ async function shutdownAgent(): Promise<void> {
 // WINDOW / RENDERER
 // -----------------------------------------------------------------------------
 
-async function buildBrowserWindow(config: RuntimeConfig): BrowserWindow {
+async function buildBrowserWindow(config: RuntimeConfig): Promise<BrowserWindow> {
   const window = new BrowserWindow({
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
@@ -759,12 +762,12 @@ function buildCompatAgentHealthProjection(): Record<string, Json> {
     provider: "adjutorix-agent",
     providerName: "adjutorix-agent",
     auth,
-    authState: auth.state,
-    authStatus: auth.authStatus,
-    authenticated: auth.authenticated,
-    tokenLoaded: auth.tokenLoaded,
-    tokenLength: auth.tokenLength,
-    tokenFingerprint: auth.tokenFingerprint,
+    authState: auth.state ?? null,
+    authStatus: auth.authStatus ?? null,
+    authenticated: auth.authenticated ?? null,
+    tokenLoaded: auth.tokenLoaded ?? null,
+    tokenLength: auth.tokenLength ?? null,
+    tokenFingerprint: auth.tokenFingerprint ?? null,
   };
 }
 
@@ -894,7 +897,7 @@ function registerIpc(config: RuntimeConfig): void {
         cpu_load_avg: os.loadavg(),
       },
     };
-    const payload = { ok: true, snapshot, ...snapshot };
+    const payload = { ...snapshot, snapshot };
     return payload as Json;
   });
 

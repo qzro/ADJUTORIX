@@ -1,3 +1,4 @@
+import "./power_workbench_bridge.js";
 // @ts-nocheck
 import { contextBridge as __adjutorixContextBridgeV13, ipcRenderer as __adjutorixIpcRendererV13 } from "electron";
 import { contextBridge, ipcRenderer } from "electron";
@@ -136,6 +137,7 @@ type WorkspaceRevealRequest = {
   actor: RendererActor;
   targetPath: string;
 };
+type WorkspaceFileReadRequest = WorkspaceRevealRequest;
 
 type WorkspaceTrustSetRequest = {
   schema: 1;
@@ -566,6 +568,7 @@ function normalizeVerifyStatusRequest(input: unknown): VerifyStatusRequest {
   const verifyId = requireOptionalString(obj.verifyId, "verifyId");
   const verify_id = requireOptionalString(obj.verify_id, "verify_id");
   return {
+    schema: 1,
     ...(verifyId ? { verifyId } : {}),
     ...(verify_id ? { verify_id } : {}),
   };
@@ -705,8 +708,8 @@ function guardedSubscribe<T extends EventPayload>(channel: string, callback: Eve
 
 const bridge = {
   meta: deepFreeze({
-    version: 1,
-    bridge: "adjutorix.preload",
+    version: 1 as const,
+    bridge: "adjutorix.preload" as const,
   }),
 
   runtime: deepFreeze({
@@ -791,21 +794,11 @@ const bridge = {
   }),
 } as const;
 
-const exposedApi = createExposedApi(bridge);
+const exposedApi = createExposedApi(bridge as unknown as Parameters<typeof createExposedApi>[0]);
 
 contextBridge.exposeInMainWorld("adjutorix", deepFreeze(bridge));
 contextBridge.exposeInMainWorld("adjutorixApi", exposedApi);
 
-// -----------------------------------------------------------------------------
-// WINDOW TYPE AUGMENTATION
-// -----------------------------------------------------------------------------
-
-declare global {
-  interface Window {
-    adjutorix: typeof bridge;
-    adjutorixApi: typeof exposedApi;
-  }
-}
 
 export type AdjutorixPreloadBridge = typeof bridge;
 export type AdjutorixExposedApi = typeof exposedApi;
