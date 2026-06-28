@@ -1144,3 +1144,443 @@ body,
 }
 /* ADJUTORIX_REAL_PRODUCT_BOOT_END */
 
+
+/* ADJUTORIX_SUPER_PRODUCT_WORKBENCH_BEGIN */
+.adjutorix-super-workbench {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: 60px minmax(280px, 360px) minmax(520px, 1fr) minmax(320px, 420px);
+  grid-template-rows: 1fr 24px;
+  grid-template-areas:
+    "rail explorer editor assistant"
+    "status status status status";
+  background: #05070b;
+  color: #f8fafc;
+  overflow: hidden;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.adjutorix-activity-rail {
+  grid-area: rail;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 8px;
+  background: #070b12;
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.adjutorix-activity-rail button {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: #7b8498;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.adjutorix-activity-rail button.is-active {
+  background: #172445;
+  color: #dbeafe;
+}
+
+.adjutorix-explorer {
+  grid-area: explorer;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #080c13;
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.adjutorix-explorer header,
+.adjutorix-top-command-bar,
+.adjutorix-tabs,
+.adjutorix-terminal header,
+.adjutorix-assistant nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.adjutorix-explorer header {
+  justify-content: space-between;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 12px;
+  color: #a8b3c7;
+  font-weight: 900;
+}
+
+.adjutorix-explorer button,
+.adjutorix-top-command-bar button,
+.adjutorix-assistant button,
+.adjutorix-path-loader button,
+.adjutorix-terminal button,
+.adjutorix-command-palette button {
+  border: 0;
+  border-radius: 12px;
+  background: #e5e7eb;
+  color: #020617;
+  padding: 9px 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.adjutorix-workspace-card,
+.adjutorix-start-card {
+  margin: 14px;
+  padding: 14px;
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.84));
+}
+
+.adjutorix-workspace-card p,
+.adjutorix-start-card p {
+  margin: 0 0 8px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+}
+
+.adjutorix-workspace-card strong {
+  display: block;
+  color: #f8fafc;
+  word-break: break-word;
+}
+
+.adjutorix-workspace-card em {
+  display: inline-block;
+  margin-top: 10px;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 999px;
+  color: #86efac;
+  padding: 3px 8px;
+  font-style: normal;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.adjutorix-start-card h2 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.adjutorix-path-loader {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.adjutorix-path-loader input,
+.adjutorix-file-filter,
+.adjutorix-terminal input,
+.adjutorix-assistant input,
+.adjutorix-command-palette input {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 12px;
+  background: #05070b;
+  color: #f8fafc;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.adjutorix-file-filter {
+  width: auto;
+  margin: 0 14px 12px;
+}
+
+.adjutorix-file-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 0 8px 16px;
+}
+
+.adjutorix-file-list button {
+  width: 100%;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #cbd5e1;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+
+.adjutorix-file-list button:hover,
+.adjutorix-file-list button.is-active {
+  background: rgba(30, 41, 59, 0.92);
+}
+
+.adjutorix-file-list span {
+  color: #64748b;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.adjutorix-empty-list {
+  padding: 18px;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
+.adjutorix-editor-region {
+  grid-area: editor;
+  display: grid;
+  grid-template-rows: 64px 42px minmax(240px, 1fr) minmax(160px, 240px);
+  min-width: 0;
+  min-height: 0;
+  background: #0a0d12;
+}
+
+.adjutorix-top-command-bar {
+  min-width: 0;
+  min-height: 64px;
+}
+
+.adjutorix-top-command-bar div {
+  margin-right: auto;
+  display: grid;
+  gap: 1px;
+}
+
+.adjutorix-top-command-bar strong {
+  letter-spacing: 0.22em;
+  font-size: 18px;
+}
+
+.adjutorix-top-command-bar span {
+  color: #94a3b8;
+  font-size: 16px;
+}
+
+.adjutorix-tabs {
+  min-height: 42px;
+  padding: 0 10px;
+  overflow-x: auto;
+}
+
+.adjutorix-tabs button {
+  height: 32px;
+  border: 0;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  color: #94a3b8;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.adjutorix-tabs button.is-active {
+  background: #172445;
+  color: #f8fafc;
+}
+
+.adjutorix-editor-shell {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 34px 1fr;
+  background: #1f1f1f;
+}
+
+.adjutorix-editor-shell header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  color: #94a3b8;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.adjutorix-editor-shell textarea {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: 0;
+  outline: 0;
+  padding: 22px 30px;
+  box-sizing: border-box;
+  background: #1f1f1f;
+  color: #e5e7eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.adjutorix-terminal {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 44px 1fr;
+  background: #070a10;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.adjutorix-terminal header strong {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #dbeafe;
+}
+
+.adjutorix-terminal div {
+  overflow: auto;
+  padding: 10px 16px;
+}
+
+.adjutorix-terminal pre {
+  margin: 0 0 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  color: #cbd5e1;
+}
+
+.adjutorix-terminal pre[data-level="ok"] { color: #86efac; }
+.adjutorix-terminal pre[data-level="error"] { color: #fca5a5; }
+.adjutorix-terminal pre[data-level="warn"] { color: #facc15; }
+.adjutorix-terminal pre[data-level="cmd"] { color: #7dd3fc; }
+
+.adjutorix-assistant {
+  grid-area: assistant;
+  display: grid;
+  grid-template-rows: 48px 1fr 54px;
+  min-width: 0;
+  min-height: 0;
+  background: #06080d;
+  border-left: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.adjutorix-assistant nav button {
+  background: transparent;
+  color: #7b8498;
+  padding: 7px 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11px;
+}
+
+.adjutorix-assistant nav button.is-active {
+  background: #172445;
+  color: #dbeafe;
+}
+
+.adjutorix-assistant section {
+  padding: 18px;
+  overflow: auto;
+}
+
+.adjutorix-assistant h2 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.adjutorix-assistant p {
+  color: #a8b3c7;
+  line-height: 1.5;
+}
+
+.adjutorix-assistant textarea {
+  width: 100%;
+  min-height: 180px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  background: #05070b;
+  color: #f8fafc;
+  padding: 14px;
+  outline: none;
+}
+
+.adjutorix-assistant section button {
+  margin-top: 12px;
+}
+
+.adjutorix-assistant footer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 14px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.adjutorix-status-bar {
+  grid-area: status;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 0 10px;
+  background: #0f274a;
+  color: #f8fafc;
+  font-size: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.adjutorix-command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  justify-items: center;
+  align-items: start;
+  padding-top: 10vh;
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(12px);
+}
+
+.adjutorix-command-palette {
+  width: min(760px, calc(100vw - 40px));
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 18px;
+  background: #070b12;
+  box-shadow: 0 24px 90px rgba(0,0,0,0.48);
+  padding: 16px;
+}
+
+.adjutorix-command-palette p {
+  margin: 0 0 10px;
+  color: #dbeafe;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 900;
+}
+
+.adjutorix-command-palette div {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.adjutorix-command-palette button {
+  text-align: left;
+  background: rgba(15, 23, 42, 0.92);
+  color: #e5e7eb;
+}
+
+@media (max-width: 1180px) {
+  .adjutorix-super-workbench {
+    grid-template-columns: 54px minmax(220px, 300px) minmax(420px, 1fr);
+    grid-template-areas:
+      "rail explorer editor"
+      "status status status";
+  }
+
+  .adjutorix-assistant {
+    display: none;
+  }
+}
+/* ADJUTORIX_SUPER_PRODUCT_WORKBENCH_END */

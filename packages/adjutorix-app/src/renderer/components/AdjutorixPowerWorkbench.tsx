@@ -1,528 +1,645 @@
-import React, { useCallback, useMemo, useState } from "react";
-import Editor from "@monaco-editor/react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type TreeEntry = {
+type BridgeApi = {
+  openRepository?: () => Promise<unknown>;
+  scanWorkspace?: (workspace: string) => Promise<unknown>;
+  readFile?: (input: unknown) => Promise<unknown>;
+  saveDraft?: (input: unknown) => Promise<unknown>;
+  createPlan?: (input: unknown) => Promise<unknown>;
+  runCommand?: (input: unknown) => Promise<unknown>;
+};
+
+type FileEntry = {
+  path: string;
   name: string;
-  absolutePath: string;
-  relativePath: string;
-  kind: "file" | "directory";
-  depth: number;
-  sizeBytes?: number;
+  size?: number;
 };
 
-type OpenRepositoryResult = {
-  workspace: string;
-  tree: TreeEntry[];
-} | null;
-
-type ReadFileResult = {
-  relativePath: string;
-  body: string;
+type OpenTab = {
+  path: string;
+  content: string;
   language: string;
-};
-
-type CommandResult = {
-  command: string;
-  exitCode: number | null;
-  stdout: string;
-  stderr: string;
-};
-
-type WorkFile = {
-  id: string;
-  name: string;
-  relativePath: string;
-  language: string;
-  body: string;
   dirty: boolean;
 };
 
 type TerminalLine = {
-  kind: "cmd" | "ok" | "warn" | "error" | "info";
+  level: "ok" | "info" | "warn" | "error" | "cmd";
   text: string;
 };
 
-type AdjutorixPowerApi = {
-  openRepository: () => Promise<OpenRepositoryResult>;
-  scanWorkspace: (workspace: string) => Promise<{ workspace: string; tree: TreeEntry[] }>;
-  readFile: (request: { workspace: string; relativePath: string }) => Promise<ReadFileResult>;
-  saveDraft: (request: { workspace: string; relativePath: string; body: string }) => Promise<{ draftPath: string }>;
-  createPlan: (request: { workspace: string; intent: string }) => Promise<{ planPath: string; body: string }>;
-  runCommand: (request: { workspace: string; command: string }) => Promise<CommandResult>;
-};
-
-type Rail = "explorer" | "search" | "git" | "verify" | "ledger" | "run";
-type RightPanel = "assistant" | "governance" | "timeline";
-type BottomPanel = "terminal" | "problems" | "output";
-
-const bootFile: WorkFile = {
-  id: "boot-readme",
-  name: "ADJUTORIX.md",
-  relativePath: "ADJUTORIX.md",
-  language: "markdown",
-  dirty: false,
-  body: [
-    "# ADJUTORIX",
-    "",
-    "Real governed coding workbench.",
-    "",
-    "Open a repository. Inspect files. Edit buffers. Save drafts. Create intent plan objects. Run governed commands. Verify before mutation. Preserve receipts.",
-  ].join("\n"),
-};
-
-function getApi(): AdjutorixPowerApi | null {
-  const windowWithApi = window as unknown as { adjutorixPower?: AdjutorixPowerApi };
-  return windowWithApi.adjutorixPower ?? null;
+declare global {
+  interface Window {
+    adjutorixPower?: BridgeApi;
+  }
 }
 
-function basename(path: string): string {
-  const parts = path.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] ?? path;
+const FALLBACK_DOC = `# ADJUTORIX
+
+Real governed coding workbench.
+
+Open a repository. Inspect files. Edit buffers. Save drafts.
+Create intent plan objects. Run governed commands. Verify before mutation.
+Preserve receipts.
+`;
+
+const IGNORED_BINARY = /\.(png|jpg|jpeg|gif|webp|ico|icns|pdf|zip|tar|gz|dmg|mp4|mov|ttf|otf|woff|woff2)$/i;
+
+function safeArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
 }
 
-function languageForPath(path: string): string {
-  if (path.endsWith(".tsx") || path.endsWith(".ts")) return "typescript";
-  if (path.endsWith(".jsx") || path.endsWith(".js") || path.endsWith(".mjs")) return "javascript";
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function languageFor(path: string): string {
+  if (path.endsWith(".ts") || path.endsWith(".tsx")) return "typescript";
+  if (path.endsWith(".js") || path.endsWith(".jsx") || path.endsWith(".mjs")) return "javascript";
   if (path.endsWith(".json")) return "json";
   if (path.endsWith(".md")) return "markdown";
-  if (path.endsWith(".py")) return "python";
   if (path.endsWith(".css")) return "css";
   if (path.endsWith(".html")) return "html";
-  if (path.endsWith(".yml") || path.endsWith(".yaml")) return "yaml";
+  if (path.endsWith(".py")) return "python";
   if (path.endsWith(".sh")) return "shell";
-  return "plaintext";
+  return "text";
 }
 
-function formatCommandResult(result: CommandResult): string {
-  const pieces = [
-    `$ ${result.command}`,
-    `exit=${result.exitCode ?? "null"}`,
-  ];
+function walkStrings(value: unknown, out: string[] = []): string[] {
+  if (typeof value === "string") {
+    out.push(value);
+    return out;
+  }
 
-  if (result.stdout.trim()) pieces.push(result.stdout.trimEnd());
-  if (result.stderr.trim()) pieces.push(result.stderr.trimEnd());
+  if (!value || typeof value !== "object") {
+    return out;
+  }
 
-  return pieces.join("\n");
+  if (Array.isArray(value)) {
+    value.forEach((item) => walkStrings(item, out));
+    return out;
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of ["stdout", "stderr", "output", "text", "body", "message", "value", "data", "result", "payload"]) {
+    if (key in record) {
+      walkStrings(record[key], out);
+    }
+  }
+
+  return out;
+}
+
+function outputText(value: unknown): string {
+  return walkStrings(value).join("\n").trim();
+}
+
+function findWorkspacePath(value: unknown): string | null {
+  const seen = new Set<unknown>();
+  const queue: unknown[] = [value];
+
+  while (queue.length) {
+    const item = queue.shift();
+    if (!item || typeof item !== "object" || seen.has(item)) continue;
+    seen.add(item);
+
+    if (Array.isArray(item)) {
+      queue.push(...item);
+      continue;
+    }
+
+    const record = item as Record<string, unknown>;
+    for (const key of ["workspace", "workspacePath", "root", "rootPath", "path", "filePath"]) {
+      const found = record[key];
+      if (typeof found === "string" && found.startsWith("/")) {
+        return found;
+      }
+    }
+
+    queue.push(...Object.values(record));
+  }
+
+  return null;
+}
+
+function parseScanResult(result: unknown): FileEntry[] {
+  const strings = walkStrings(result);
+  const candidates = strings.flatMap((text) => {
+    const trimmed = text.trim();
+    const matches = trimmed.match(/\{[\s\S]*\}/g);
+    return matches ?? [trimmed];
+  });
+
+  for (const candidate of candidates.reverse()) {
+    try {
+      const parsed = JSON.parse(candidate) as unknown;
+      const files = safeArray<FileEntry>((parsed as { files?: unknown }).files);
+      if (files.length > 0) {
+        return files
+          .filter((entry) => entry && typeof entry.path === "string")
+          .map((entry) => ({
+            path: entry.path,
+            name: typeof entry.name === "string" ? entry.name : entry.path.split("/").pop() ?? entry.path,
+            size: typeof entry.size === "number" ? entry.size : undefined,
+          }));
+      }
+    } catch {
+      // Continue scanning possible stdout fragments.
+    }
+  }
+
+  return [];
+}
+
+async function runGovernedCommand(api: BridgeApi | undefined, command: string, cwd?: string): Promise<unknown> {
+  if (!api?.runCommand) {
+    throw new Error("Governed command bridge is not available.");
+  }
+
+  return api.runCommand({
+    command,
+    ...(cwd ? { cwd } : {}),
+  });
+}
+
+async function scanWorkspace(api: BridgeApi | undefined, workspace: string): Promise<FileEntry[]> {
+  if (api?.scanWorkspace) {
+    const result = await api.scanWorkspace(workspace);
+    const parsed = parseScanResult(result);
+    if (parsed.length > 0) return parsed;
+  }
+
+  const result = await runGovernedCommand(
+    api,
+    "python3 - <<'PY'\nimport json, os\nroot=os.getcwd()\nskip={'.git','node_modules','dist','release','.tmp','__pycache__','.DS_Store'}\nfiles=[]\nfor base, dirs, names in os.walk(root):\n    dirs[:] = [d for d in dirs if d not in skip]\n    relbase=os.path.relpath(base, root)\n    depth=0 if relbase=='.' else relbase.count(os.sep)+1\n    if depth > 5:\n        dirs[:] = []\n        continue\n    for name in names:\n        if name in skip:\n            continue\n        full=os.path.join(base,name)\n        try:\n            size=os.path.getsize(full)\n        except OSError:\n            size=0\n        rel=os.path.relpath(full, root)\n        files.append({'path': rel, 'name': name, 'size': size})\n        if len(files) >= 1400:\n            break\n    if len(files) >= 1400:\n        break\nprint(json.dumps({'workspace': root, 'files': files}, separators=(',', ':')))\nPY",
+    workspace,
+  );
+
+  return parseScanResult(result);
+}
+
+async function readWorkspaceFile(api: BridgeApi | undefined, workspace: string, path: string): Promise<string> {
+  if (IGNORED_BINARY.test(path)) {
+    return `Binary or preview-only file: ${path}`;
+  }
+
+  const command = `python3 - ${shellQuote(path)} <<'PY'
+import pathlib, sys
+rel = sys.argv[1]
+root = pathlib.Path.cwd().resolve()
+target = (root / rel).resolve()
+if root not in target.parents and target != root:
+    raise SystemExit("Refusing to read outside workspace")
+print(target.read_text(encoding="utf-8", errors="replace"))
+PY`;
+
+  const result = await runGovernedCommand(api, command, workspace);
+  return outputText(result) || "";
+}
+
+function filteredFiles(files: FileEntry[], query: string): FileEntry[] {
+  const q = query.trim().toLowerCase();
+  const source = safeArray<FileEntry>(files);
+  if (!q) return source.slice(0, 500);
+  return source.filter((file) => file.path.toLowerCase().includes(q)).slice(0, 500);
+}
+
+function toBase64Utf8(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
 }
 
 export function AdjutorixPowerWorkbench(): JSX.Element {
-  const [rail, setRail] = useState<Rail>("explorer");
-  const [rightPanel, setRightPanel] = useState<RightPanel>("assistant");
-  const [bottomPanel, setBottomPanel] = useState<BottomPanel>("terminal");
-  const [workspace, setWorkspace] = useState<string | null>(null);
-  const [tree, setTree] = useState<TreeEntry[]>([]);
-  const [files, setFiles] = useState<WorkFile[]>([bootFile]);
-  const [activeFileId, setActiveFileId] = useState<string>(bootFile.id);
-  const [terminalInput, setTerminalInput] = useState<string>("");
-  const [intent, setIntent] = useState<string>("");
-  const [assistantInput, setAssistantInput] = useState<string>("");
-  const [search, setSearch] = useState<string>("");
-  const [paletteOpen, setPaletteOpen] = useState<boolean>(false);
-  const [terminal, setTerminal] = useState<TerminalLine[]>([
-    { kind: "ok", text: "REAL_WORKBENCH_SPINE online." },
-    { kind: "info", text: "Main IPC + preload bridge + renderer are connected." },
+  const api = window.adjutorixPower;
+  const [workspace, setWorkspace] = useState<string>(() => localStorage.getItem("adjutorix.lastWorkspace") ?? "");
+  const [manualWorkspace, setManualWorkspace] = useState<string>(() => localStorage.getItem("adjutorix.lastWorkspace") ?? "");
+  const [files, setFiles] = useState<FileEntry[]>([]);
+  const [filter, setFilter] = useState("");
+  const [tabs, setTabs] = useState<OpenTab[]>([
+    {
+      path: "ADJUTORIX.md",
+      content: FALLBACK_DOC,
+      language: "markdown",
+      dirty: false,
+    },
   ]);
+  const [activePath, setActivePath] = useState("ADJUTORIX.md");
+  const [intent, setIntent] = useState("");
+  const [ask, setAsk] = useState("");
+  const [command, setCommand] = useState("git status --short");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [terminal, setTerminal] = useState<TerminalLine[]>([
+    { level: "ok", text: "ADJUTORIX workbench online." },
+    { level: "info", text: "Open a repository, ask for a change, verify, then apply through governed gates." },
+  ]);
+  const didAutoScan = useRef(false);
 
-  const api = getApi();
+  const activeTab = useMemo(() => tabs.find((tab) => tab.path === activePath) ?? tabs[0], [activePath, tabs]);
+  const visibleFiles = useMemo(() => filteredFiles(files, filter), [files, filter]);
 
-  const activeFile = useMemo<WorkFile>(() => {
-    return files.find((file) => file.id === activeFileId) ?? files[0] ?? bootFile;
-  }, [activeFileId, files]);
-
-  const filteredTree = useMemo<TreeEntry[]>(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return tree;
-    return tree.filter((entry) => entry.relativePath.toLowerCase().includes(q));
-  }, [search, tree]);
-
-  const appendTerminal = useCallback((kind: TerminalLine["kind"], text: string): void => {
-    setTerminal((current) => [...current.slice(-300), { kind, text }]);
+  const pushLine = useCallback((line: TerminalLine) => {
+    setTerminal((current) => [...current.slice(-300), line]);
   }, []);
 
-  const openRepository = useCallback(async (): Promise<void> => {
-    if (!api) {
-      appendTerminal("error", "adjutorixPower preload bridge is not available.");
-      return;
-    }
+  const loadWorkspace = useCallback(
+    async (nextWorkspace: string) => {
+      const trimmed = nextWorkspace.trim();
+      if (!trimmed) return;
 
-    appendTerminal("cmd", "open repository");
+      setBusy(true);
+      setWorkspace(trimmed);
+      setManualWorkspace(trimmed);
+      localStorage.setItem("adjutorix.lastWorkspace", trimmed);
+      pushLine({ level: "cmd", text: `open ${trimmed}` });
 
-    const result = await api.openRepository();
+      try {
+        const scanned = await scanWorkspace(api, trimmed);
+        setFiles(scanned);
+        pushLine({ level: "ok", text: `Workspace indexed: ${scanned.length} files` });
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        pushLine({ level: "error", text });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, pushLine],
+  );
 
-    if (!result) {
-      appendTerminal("warn", "Repository selection cancelled.");
-      return;
-    }
+  useEffect(() => {
+    if (didAutoScan.current || !workspace) return;
+    didAutoScan.current = true;
+    void loadWorkspace(workspace);
+  }, [loadWorkspace, workspace]);
 
-    setWorkspace(result.workspace);
-    setTree(result.tree);
-    appendTerminal("ok", `Workspace opened: ${result.workspace}`);
-    appendTerminal("ok", `Indexed entries: ${result.tree.length}`);
-  }, [api, appendTerminal]);
-
-  const refreshWorkspace = useCallback(async (): Promise<void> => {
-    if (!api || !workspace) return;
-
-    appendTerminal("cmd", "refresh workspace tree");
-    const result = await api.scanWorkspace(workspace);
-    setTree(result.tree);
-    appendTerminal("ok", `Workspace refreshed: ${result.tree.length} entries`);
-  }, [api, appendTerminal, workspace]);
-
-  const openFile = useCallback(async (entry: TreeEntry): Promise<void> => {
-    if (!api || !workspace) return;
-
-    if (entry.kind === "directory") {
-      appendTerminal("info", `Directory selected: ${entry.relativePath}`);
-      return;
-    }
-
-    appendTerminal("cmd", `open ${entry.relativePath}`);
+  const openRepository = useCallback(async () => {
+    setBusy(true);
+    pushLine({ level: "cmd", text: "open repository" });
 
     try {
-      const result = await api.readFile({ workspace, relativePath: entry.relativePath });
-      const id = result.relativePath;
-
-      setFiles((current) => {
-        if (current.some((file) => file.id === id)) return current;
-        return [
-          ...current,
-          {
-            id,
-            name: basename(result.relativePath),
-            relativePath: result.relativePath,
-            language: result.language,
-            body: result.body,
-            dirty: false,
-          },
-        ];
-      });
-
-      setActiveFileId(id);
-      appendTerminal("ok", `Opened file: ${result.relativePath}`);
+      const result = api?.openRepository ? await api.openRepository() : null;
+      const selected = findWorkspacePath(result);
+      if (selected) {
+        await loadWorkspace(selected);
+      } else {
+        pushLine({ level: "warn", text: "Repository dialog returned no path. Paste a workspace path and press Load." });
+      }
     } catch (error) {
-      appendTerminal("error", error instanceof Error ? error.message : String(error));
+      const text = error instanceof Error ? error.message : String(error);
+      pushLine({ level: "error", text });
+    } finally {
+      setBusy(false);
     }
-  }, [api, appendTerminal, workspace]);
+  }, [api, loadWorkspace, pushLine]);
 
-  const updateActiveBody = useCallback((body: string): void => {
-    setFiles((current) =>
-      current.map((file) =>
-        file.id === activeFile.id
-          ? { ...file, body, dirty: true }
-          : file,
-      ),
+  const openFile = useCallback(
+    async (entry: FileEntry) => {
+      if (!workspace) return;
+      setBusy(true);
+      pushLine({ level: "cmd", text: `open ${entry.path}` });
+
+      try {
+        const content = await readWorkspaceFile(api, workspace, entry.path);
+        setTabs((current) => {
+          const existing = current.find((tab) => tab.path === entry.path);
+          if (existing) {
+            return current.map((tab) => (tab.path === entry.path ? { ...tab, content, dirty: false } : tab));
+          }
+
+          return [
+            ...current,
+            {
+              path: entry.path,
+              content,
+              language: languageFor(entry.path),
+              dirty: false,
+            },
+          ];
+        });
+        setActivePath(entry.path);
+        pushLine({ level: "ok", text: `Opened ${entry.path}` });
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error);
+        pushLine({ level: "error", text });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, pushLine, workspace],
+  );
+
+  const updateActiveContent = useCallback((content: string) => {
+    setTabs((current) =>
+      current.map((tab) => (tab.path === activePath ? { ...tab, content, dirty: true } : tab)),
     );
-  }, [activeFile.id]);
+  }, [activePath]);
 
-  const saveDraft = useCallback(async (): Promise<void> => {
-    if (!api || !workspace) {
-      appendTerminal("warn", "Open a workspace before saving a draft.");
+  const saveDraft = useCallback(async () => {
+    if (!workspace || !activeTab) {
+      pushLine({ level: "warn", text: "Open a workspace and file before saving a draft." });
       return;
     }
 
-    const result = await api.saveDraft({
-      workspace,
-      relativePath: activeFile.relativePath,
-      body: activeFile.body,
-    });
+    const encoded = toBase64Utf8(activeTab.content);
+    const commandText = `python3 - ${shellQuote(activeTab.path)} ${shellQuote(encoded)} <<'PY'
+import base64, pathlib, sys, time
+rel = sys.argv[1]
+body = base64.b64decode(sys.argv[2]).decode("utf-8", errors="replace")
+root = pathlib.Path.cwd()
+draft_dir = root / ".adjutorix" / "workbench-drafts"
+draft_dir.mkdir(parents=True, exist_ok=True)
+safe = rel.replace("/", "__")
+target = draft_dir / f"{int(time.time())}__{safe}"
+target.write_text(body, encoding="utf-8")
+print(str(target))
+PY`;
 
-    appendTerminal("ok", `Draft saved: ${result.draftPath}`);
-  }, [api, appendTerminal, activeFile, workspace]);
-
-  const createPlan = useCallback(async (): Promise<void> => {
-    if (!api || !workspace) {
-      appendTerminal("warn", "Open a workspace before creating an intent plan.");
-      return;
-    }
-
-    const result = await api.createPlan({
-      workspace,
-      intent: intent.trim() || "No intent text provided.",
-    });
-
-    const relative = result.planPath.replace(workspace, "").replace(/^[/\\]/, "");
-
-    setFiles((current) => [
-      ...current,
-      {
-        id: relative,
-        name: basename(relative),
-        relativePath: relative,
-        language: "json",
-        body: result.body,
-        dirty: false,
-      },
-    ]);
-
-    setActiveFileId(relative);
-    appendTerminal("ok", `Intent plan written: ${result.planPath}`);
-    await refreshWorkspace();
-  }, [api, appendTerminal, intent, refreshWorkspace, workspace]);
-
-  const runCommand = useCallback(async (command: string): Promise<void> => {
-    if (!api || !workspace) {
-      appendTerminal("warn", "Open a workspace before running commands.");
-      return;
-    }
-
-    const trimmed = command.trim();
-    if (!trimmed) return;
-
-    setTerminalInput("");
-    appendTerminal("cmd", `$ ${trimmed}`);
+    setBusy(true);
+    pushLine({ level: "cmd", text: `save draft ${activeTab.path}` });
 
     try {
-      const result = await api.runCommand({ workspace, command: trimmed });
-      appendTerminal(result.exitCode === 0 ? "ok" : "warn", formatCommandResult(result));
+      const result = await runGovernedCommand(api, commandText, workspace);
+      pushLine({ level: "ok", text: `Draft saved: ${outputText(result)}` });
+      setTabs((current) => current.map((tab) => (tab.path === activeTab.path ? { ...tab, dirty: false } : tab)));
     } catch (error) {
-      appendTerminal("error", error instanceof Error ? error.message : String(error));
+      pushLine({ level: "error", text: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setBusy(false);
     }
-  }, [api, appendTerminal, workspace]);
+  }, [activeTab, api, pushLine, workspace]);
 
-  const quickVerify = useCallback(async (): Promise<void> => {
-    await runCommand("pnpm -r --if-present run build");
-  }, [runCommand]);
+  const createPlan = useCallback(async () => {
+    if (!workspace) {
+      pushLine({ level: "warn", text: "Open a workspace before creating a plan." });
+      return;
+    }
 
-  const quickGitStatus = useCallback(async (): Promise<void> => {
-    await runCommand("git status --short && git diff --stat");
-  }, [runCommand]);
+    const body = intent.trim() || ask.trim() || "No intent provided.";
+    const encoded = toBase64Utf8(body);
+    const commandText = `python3 - ${shellQuote(encoded)} <<'PY'
+import base64, json, pathlib, sys, time
+intent = base64.b64decode(sys.argv[1]).decode("utf-8", errors="replace")
+root = pathlib.Path.cwd()
+objects = root / ".adjutorix" / "objects"
+objects.mkdir(parents=True, exist_ok=True)
+target = objects / f"intent-plan-{int(time.time())}.json"
+target.write_text(json.dumps({
+  "schema": "adjutorix.intent_plan.v1",
+  "intent": intent,
+  "apply": "BLOCKED_UNTIL_VERIFY",
+  "created_by": "Adjutorix workbench"
+}, indent=2), encoding="utf-8")
+print(str(target))
+PY`;
 
-  const quickAgentStatus = useCallback(async (): Promise<void> => {
-    await runCommand("bash scripts/agent/status.sh || true");
-  }, [runCommand]);
+    setBusy(true);
+    pushLine({ level: "cmd", text: "create intent plan" });
 
-  const askAssistant = useCallback((): void => {
-    const message = assistantInput.trim();
-    if (!message) return;
+    try {
+      const result = await runGovernedCommand(api, commandText, workspace);
+      pushLine({ level: "ok", text: `Plan created: ${outputText(result)}` });
+      setIntent("");
+    } catch (error) {
+      pushLine({ level: "error", text: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setBusy(false);
+    }
+  }, [api, ask, intent, pushLine, workspace]);
 
-    setAssistantInput("");
-    setIntent(message);
-    appendTerminal("cmd", `assistant intent captured: ${message}`);
-    appendTerminal("info", "Intent is staged in the workbench. Create an intent plan to write the governed object.");
-  }, [appendTerminal, assistantInput]);
+  const runCommand = useCallback(
+    async (nextCommand = command) => {
+      const trimmed = nextCommand.trim();
+      if (!trimmed) return;
 
-  const status = {
-    workspace: workspace ? "OPEN" : "MISSING",
-    tree: tree.length > 0 ? "INDEXED" : "EMPTY",
-    file: activeFile.relativePath,
-    draft: activeFile.dirty ? "DIRTY" : "CLEAN",
-    bridge: api ? "CONNECTED" : "MISSING",
-    apply: "BLOCKED_UNTIL_VERIFIED",
-  };
+      setBusy(true);
+      pushLine({ level: "cmd", text: `$ ${trimmed}` });
+
+      try {
+        const result = await runGovernedCommand(api, trimmed, workspace || undefined);
+        const text = outputText(result) || "Command completed.";
+        pushLine({ level: "info", text });
+      } catch (error) {
+        pushLine({ level: "error", text: error instanceof Error ? error.message : String(error) });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api, command, pushLine, workspace],
+  );
 
   return (
-    <div className="real-adjx">
-      <aside className="real-adjx-rail">
-        {([
-          ["explorer", "▱"],
-          ["search", "⌕"],
-          ["git", "⑂"],
-          ["verify", "✓"],
-          ["ledger", "▣"],
-          ["run", "▶"],
-        ] as Array<[Rail, string]>).map(([key, icon]) => (
-          <button key={key} className={rail === key ? "active" : ""} onClick={() => setRail(key)}>{icon}</button>
-        ))}
+    <section className="adjutorix-super-workbench" data-busy={busy ? "true" : "false"}>
+      {paletteOpen ? (
+        <div className="adjutorix-command-palette-backdrop" onClick={() => setPaletteOpen(false)}>
+          <div className="adjutorix-command-palette" onClick={(event) => event.stopPropagation()}>
+            <p>Command Palette</p>
+            <input
+              autoFocus
+              value={command}
+              onChange={(event) => setCommand(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  setPaletteOpen(false);
+                  void runCommand(command);
+                }
+                if (event.key === "Escape") setPaletteOpen(false);
+              }}
+              placeholder="Run governed command..."
+            />
+            <div>
+              {["git status --short", "pnpm run verify", "pnpm -r --if-present run build", "find . -maxdepth 2 -type f | head -80"].map(
+                (item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => {
+                      setCommand(item);
+                      setPaletteOpen(false);
+                      void runCommand(item);
+                    }}
+                  >
+                    {item}
+                  </button>
+                ),
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <aside className="adjutorix-activity-rail">
+        <button type="button" className="is-active" title="Explorer">▰</button>
+        <button type="button" title="Search">⌕</button>
+        <button type="button" title="Source Control">⑂</button>
+        <button type="button" title="Verify">✓</button>
+        <button type="button" title="Run">▶</button>
       </aside>
 
-      <aside className="real-adjx-sidebar">
+      <aside className="adjutorix-explorer">
         <header>
-          <strong>{rail.toUpperCase()}</strong>
-          <button onClick={() => void openRepository()}>Open</button>
+          <span>Explorer</span>
+          <button type="button" onClick={() => void openRepository()}>
+            Open
+          </button>
         </header>
 
-        <section className="workspace-card">
-          <span>WORKSPACE</span>
-          <strong>{workspace ?? "NO WORKSPACE"}</strong>
-          <em>{api ? "BRIDGE CONNECTED" : "BRIDGE MISSING"}</em>
+        <section className="adjutorix-workspace-card">
+          <p>Workspace</p>
+          <strong>{workspace || "No workspace"}</strong>
+          <em>{busy ? "Working..." : "Bridge connected"}</em>
         </section>
 
+        {!workspace ? (
+          <section className="adjutorix-start-card">
+            <h2>Start in 3 seconds</h2>
+            <p>Open a folder or paste a path. Then ask, edit, verify, and save governed drafts.</p>
+            <button type="button" onClick={() => void openRepository()}>
+              Open Folder
+            </button>
+            <div className="adjutorix-path-loader">
+              <input
+                value={manualWorkspace}
+                onChange={(event) => setManualWorkspace(event.target.value)}
+                placeholder="/Users/.../project"
+              />
+              <button type="button" onClick={() => void loadWorkspace(manualWorkspace)}>
+                Load
+              </button>
+            </div>
+          </section>
+        ) : null}
+
         <input
-          className="sidebar-search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          className="adjutorix-file-filter"
+          value={filter}
+          onChange={(event) => setFilter(event.target.value)}
           placeholder="Search files..."
         />
 
-        <div className="tree">
-          {filteredTree.length === 0 && (
-            <div className="empty-tree">Open a repository to load the real file tree.</div>
+        <div className="adjutorix-file-list">
+          {visibleFiles.length > 0 ? (
+            visibleFiles.map((file) => (
+              <button
+                key={file.path}
+                type="button"
+                className={file.path === activePath ? "is-active" : ""}
+                onClick={() => void openFile(file)}
+              >
+                <strong>{file.name}</strong>
+                <span>{file.path}</span>
+              </button>
+            ))
+          ) : (
+            <p className="adjutorix-empty-list">
+              {workspace ? "No files found. Use command palette or refresh workspace." : "Open a repository to load the real file tree."}
+            </p>
           )}
-          {filteredTree.map((entry) => (
-            <button
-              key={entry.relativePath}
-              className={entry.kind}
-              style={{ paddingLeft: 12 + entry.depth * 14 }}
-              onClick={() => void openFile(entry)}
-              title={entry.absolutePath}
-            >
-              <span>{entry.kind === "directory" ? "▸" : "•"}</span>
-              <strong>{entry.name}</strong>
-              <small>{entry.relativePath}</small>
-            </button>
-          ))}
         </div>
       </aside>
 
-      <main className="real-adjx-main">
-        <header className="topbar">
+      <main className="adjutorix-editor-region">
+        <header className="adjutorix-top-command-bar">
           <div>
             <strong>ADJUTORIX</strong>
             <span>real governed IDE workbench</span>
           </div>
-          <nav>
-            <button onClick={() => setPaletteOpen(true)}>Command Palette</button>
-            <button onClick={() => void saveDraft()}>Save Draft</button>
-            <button onClick={() => void createPlan()}>Create Plan</button>
-            <button onClick={() => void quickGitStatus()}>Git Status</button>
-            <button onClick={() => void quickVerify()}>Verify Build</button>
-          </nav>
+          <button type="button" onClick={() => setPaletteOpen(true)}>Command Palette</button>
+          <button type="button" onClick={() => void saveDraft()}>Save Draft</button>
+          <button type="button" onClick={() => void createPlan()}>Create Plan</button>
+          <button type="button" onClick={() => void runCommand("git status --short")}>Git Status</button>
+          <button type="button" onClick={() => void runCommand("pnpm run verify")}>Verify Build</button>
         </header>
 
-        <div className="tabs">
-          {files.map((file) => (
-            <button key={file.id} className={file.id === activeFile.id ? "active" : ""} onClick={() => setActiveFileId(file.id)}>
-              {file.dirty ? "● " : ""}{file.name}
+        <nav className="adjutorix-tabs">
+          {tabs.map((tab) => (
+            <button
+              key={tab.path}
+              type="button"
+              className={tab.path === activePath ? "is-active" : ""}
+              onClick={() => setActivePath(tab.path)}
+            >
+              {tab.path.split("/").pop()}
+              {tab.dirty ? " •" : ""}
             </button>
           ))}
-        </div>
+        </nav>
 
-        <section className="editor-shell">
-          <div className="editor-meta">
-            <span>{activeFile.relativePath}</span>
-            <span>{activeFile.language}</span>
-          </div>
-          <Editor
-            height="100%"
-            language={activeFile.language || languageForPath(activeFile.relativePath)}
-            value={activeFile.body}
-            theme="vs-dark"
-            options={{
-              fontSize: 13,
-              fontLigatures: true,
-              minimap: { enabled: true },
-              smoothScrolling: true,
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
-              wordWrap: "on",
-              padding: { top: 16, bottom: 16 },
-            }}
-            onChange={(value) => updateActiveBody(value ?? "")}
+        <section className="adjutorix-editor-shell">
+          <header>
+            <span>{activeTab?.path ?? "No file"}</span>
+            <em>{activeTab?.language ?? "text"}</em>
+          </header>
+          <textarea
+            spellCheck={false}
+            value={activeTab?.content ?? ""}
+            onChange={(event) => updateActiveContent(event.target.value)}
           />
         </section>
 
-        <section className="bottom-panel">
-          <div className="panel-tabs">
-            {(["terminal", "problems", "output"] as BottomPanel[]).map((panel) => (
-              <button key={panel} className={bottomPanel === panel ? "active" : ""} onClick={() => setBottomPanel(panel)}>{panel}</button>
+        <section className="adjutorix-terminal">
+          <header>
+            <strong>Terminal</strong>
+            <input
+              value={command}
+              onChange={(event) => setCommand(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void runCommand();
+              }}
+              placeholder="real governed command..."
+            />
+          </header>
+          <div>
+            {terminal.map((line, index) => (
+              <pre key={`${line.level}-${index}`} data-level={line.level}>{line.text}</pre>
             ))}
           </div>
-
-          {bottomPanel === "terminal" && (
-            <div className="terminal">
-              <div className="terminal-log">
-                {terminal.map((line, index) => (
-                  <pre key={`${index}-${line.text}`} className={line.kind}>{line.text}</pre>
-                ))}
-              </div>
-              <form onSubmit={(event) => { event.preventDefault(); void runCommand(terminalInput); }}>
-                <span>$</span>
-                <input value={terminalInput} onChange={(event) => setTerminalInput(event.target.value)} placeholder="real governed command..." />
-              </form>
-            </div>
-          )}
-
-          {bottomPanel === "problems" && (
-            <div className="problems">
-              <div className={workspace ? "ok" : "warn"}>Workspace: {status.workspace}</div>
-              <div className={api ? "ok" : "error"}>Preload bridge: {status.bridge}</div>
-              <div className="warn">Apply is blocked until verification receipt exists.</div>
-            </div>
-          )}
-
-          {bottomPanel === "output" && (
-            <div className="output">
-              <pre>{JSON.stringify(status, null, 2)}</pre>
-            </div>
-          )}
         </section>
       </main>
 
-      <aside className="real-adjx-right">
-        <div className="panel-tabs">
-          {(["assistant", "governance", "timeline"] as RightPanel[]).map((panel) => (
-            <button key={panel} className={rightPanel === panel ? "active" : ""} onClick={() => setRightPanel(panel)}>{panel}</button>
-          ))}
-        </div>
+      <aside className="adjutorix-assistant">
+        <nav>
+          <button type="button" className="is-active">Assistant</button>
+          <button type="button" onClick={() => setPaletteOpen(true)}>Commands</button>
+          <button type="button" onClick={() => void runCommand("git status --short")}>Governance</button>
+        </nav>
 
-        {rightPanel === "assistant" && (
-          <section className="assistant">
-            <h2>Operator Assistant</h2>
-            <p>Capture intent, create plan objects, verify before mutation, and preserve receipts.</p>
-            <textarea value={intent} onChange={(event) => setIntent(event.target.value)} placeholder="Describe the code change..." />
-            <button onClick={() => void createPlan()}>Write Intent Plan Object</button>
-            <div className="chatline">
-              <input value={assistantInput} onChange={(event) => setAssistantInput(event.target.value)} onKeyDown={(event) => {
-                if (event.key === "Enter") askAssistant();
-              }} placeholder="Ask Adjutorix..." />
-              <button onClick={askAssistant}>Capture</button>
-            </div>
-          </section>
-        )}
+        <section>
+          <h2>Operator Assistant</h2>
+          <p>Describe the change. Adjutorix creates a plan object before mutation and keeps apply blocked until verification.</p>
+          <textarea
+            value={intent}
+            onChange={(event) => setIntent(event.target.value)}
+            placeholder="Describe the code change..."
+          />
+          <button type="button" onClick={() => void createPlan()}>
+            Write Intent Plan Object
+          </button>
+        </section>
 
-        {rightPanel === "governance" && (
-          <section className="governance">
-            <h2>Governance Gates</h2>
-            {Object.entries(status).map(([key, value]) => (
-              <div key={key} className="gate">
-                <span>{key}</span>
-                <strong>{value}</strong>
-              </div>
-            ))}
-            <button onClick={() => void quickAgentStatus()}>Agent Status</button>
-            <button onClick={() => void quickVerify()}>Run Build Verify</button>
-          </section>
-        )}
-
-        {rightPanel === "timeline" && (
-          <section className="timeline">
-            <h2>Evidence Timeline</h2>
-            {terminal.slice(-16).map((line, index) => (
-              <div key={`${index}-${line.text}`} className={`event ${line.kind}`}>{line.text}</div>
-            ))}
-          </section>
-        )}
+        <footer>
+          <input
+            value={ask}
+            onChange={(event) => setAsk(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") void createPlan();
+            }}
+            placeholder="Ask Adjutorix..."
+          />
+          <button type="button" onClick={() => void createPlan()}>Capture</button>
+        </footer>
       </aside>
 
-      <footer className="statusbar">
+      <footer className="adjutorix-status-bar">
         <span>Adjutorix</span>
-        <span>{workspace ?? "NO WORKSPACE"}</span>
-        <span>Bridge: {status.bridge}</span>
-        <span>Tree: {status.tree}</span>
-        <span>Apply: BLOCKED</span>
+        <span>{workspace || "No workspace"}</span>
+        <span>Bridge: connected</span>
+        <span>Tree: {files.length ? `${files.length} files` : "empty"}</span>
+        <span>Apply: blocked</span>
       </footer>
-
-      {paletteOpen && (
-        <div className="palette-backdrop" onClick={() => setPaletteOpen(false)}>
-          <div className="palette" onClick={(event) => event.stopPropagation()}>
-            <input autoFocus placeholder="Type a command..." onKeyDown={(event) => {
-              if (event.key === "Escape") setPaletteOpen(false);
-              if (event.key === "Enter") {
-                const value = (event.target as HTMLInputElement).value;
-                void runCommand(value);
-                setPaletteOpen(false);
-              }
-            }} />
-            <button onClick={() => { void openRepository(); setPaletteOpen(false); }}>Open Repository</button>
-            <button onClick={() => { void refreshWorkspace(); setPaletteOpen(false); }}>Refresh Workspace</button>
-            <button onClick={() => { void createPlan(); setPaletteOpen(false); }}>Create Intent Plan Object</button>
-            <button onClick={() => { void quickGitStatus(); setPaletteOpen(false); }}>Git Status + Diff Stat</button>
-            <button onClick={() => { void quickVerify(); setPaletteOpen(false); }}>Verify Build</button>
-            <button onClick={() => { void quickAgentStatus(); setPaletteOpen(false); }}>Agent Status</button>
-          </div>
-        </div>
-      )}
-    </div>
+    </section>
   );
 }
