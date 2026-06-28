@@ -1349,7 +1349,7 @@ function registerGlobalHandlers(): void {
     }
   });
 
-  app.on("activate", () => {
+  app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0 && runtimeConfig) {
       void await createMainWindow(runtimeConfig).then((window) => {
         mainWindow = window;

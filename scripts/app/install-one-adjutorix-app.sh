@@ -23,6 +23,29 @@ pnpm -r run build
 
 echo "=== PACKAGE MAC APP ==="
 cd packages/adjutorix-app
+
+echo "=== NORMALIZE RENDERER ENTRY FOR PACKAGED APP ==="
+# ADJUTORIX_RENDERER_ENTRY_NORMALIZER
+APP_PACKAGE_DIR="$ROOT/packages/adjutorix-app"
+RENDERER_ENTRY="$APP_PACKAGE_DIR/dist/renderer/index.html"
+
+if [[ ! -f "$RENDERER_ENTRY" ]]; then
+  FOUND_RENDERER_ENTRY="$(find "$APP_PACKAGE_DIR/dist" -type f -name index.html | head -1 || true)"
+  if [[ -z "$FOUND_RENDERER_ENTRY" ]]; then
+    echo "NO_RENDERER_INDEX_HTML_FOUND=true"
+    find "$APP_PACKAGE_DIR/dist" -maxdepth 5 -type f | sort || true
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "$RENDERER_ENTRY")"
+  cp "$FOUND_RENDERER_ENTRY" "$RENDERER_ENTRY"
+  echo "RENDERER_ENTRY_NORMALIZED_FROM=$FOUND_RENDERER_ENTRY"
+fi
+
+test -f "$RENDERER_ENTRY"
+echo "RENDERER_ENTRY_READY=$RENDERER_ENTRY"
+
+
 pnpm exec electron-builder --mac dmg --arm64 --publish never
 cd "$ROOT"
 
@@ -31,6 +54,8 @@ test -n "${APP_SRC:-}"
 test -d "$APP_SRC"
 
 echo "=== INSTALL SINGLE CANONICAL APP ==="
+# ADJUTORIX_CLEAN_APPLICATION_INSTALL
+sudo rm -rf "/Applications/Adjutorix.app"
 sudo rm -rf "/Applications/Adjutorix.app" 2>/dev/null || rm -rf "/Applications/Adjutorix.app"
 sudo ditto "$APP_SRC" "/Applications/Adjutorix.app" 2>/dev/null || ditto "$APP_SRC" "/Applications/Adjutorix.app"
 sudo chown -R "$USER":staff "/Applications/Adjutorix.app" 2>/dev/null || true
@@ -46,6 +71,6 @@ test -d "/Applications/Adjutorix.app"
 find /Applications "$HOME/Applications" -maxdepth 2 -name "Adjutorix.app" -type d 2>/dev/null | sort
 
 echo "=== OPEN APP ==="
-open -n "/Applications/Adjutorix.app"
+if [[ "${ADJUTORIX_NO_OPEN:-0}" != "1" ]]; then open -n "/Applications/Adjutorix.app"; fi
 
 echo "ADJUTORIX_SINGLE_INSTALLED_APP_OK=true"

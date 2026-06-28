@@ -90,7 +90,10 @@
     "files": [
       "dist/**/*",
       "assets/**/*",
-      "package.json"
+      "package.json",
+      "dist/main/**/*",
+      "dist/renderer/**/*",
+      "dist/preload/**/*"
     ],
     "mac": {
       "target": [
@@ -107,6 +110,7 @@
       "target": [
         "AppImage"
       ]
-    }
+    },
+    "asar": false
   }
 }
