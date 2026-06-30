@@ -544,6 +544,48 @@ async function shutdownAgent(): Promise<void> {
 // WINDOW / RENDERER
 // -----------------------------------------------------------------------------
 
+
+/* ADJUTORIX_POST_RENDER_PROBE_BEGIN */
+function installAdjutorixPostRenderProbe(window: BrowserWindow): void {
+  window.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    console.log(`[adjutorix-renderer-console:${level}] ${message} (${sourceId}:${line})`);
+  });
+
+  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[adjutorix-renderer-load-failed] code=${errorCode} description=${errorDescription} url=${validatedURL}`);
+  });
+
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error(`[adjutorix-renderer-gone] ${JSON.stringify(details)}`);
+  });
+
+  window.webContents.on("did-finish-load", () => {
+    setTimeout(() => {
+      void window.webContents.executeJavaScript(
+        `(() => {
+          const text = document.body ? document.body.innerText.trim() : "";
+          return {
+            title: document.title,
+            textLength: text.length,
+            textPreview: text.slice(0, 700),
+            hasNativeIde: Boolean(document.querySelector("[data-adjutorix-real-workbench='true']")),
+            hasAgentPrompt: text.includes("Tell it what to change."),
+            hasFeatureGrid: text.includes("ADJUTORIX FEATURES"),
+            rendererBoot: document.documentElement.dataset.adjutorixRendererBoot || null
+          };
+        })()`,
+        true,
+      ).then((snapshot) => {
+        console.log(`[adjutorix-post-render-dom] ${JSON.stringify(snapshot)}`);
+      }).catch((error: unknown) => {
+        console.error(`[adjutorix-post-render-dom-failed] ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }, 2500);
+  });
+}
+/* ADJUTORIX_POST_RENDER_PROBE_END */
+
+
 async function buildBrowserWindow(config: RuntimeConfig): Promise<BrowserWindow> {
   const window = new BrowserWindow({
     width: DEFAULT_WIDTH,
@@ -615,6 +657,7 @@ async function buildBrowserWindow(config: RuntimeConfig): Promise<BrowserWindow>
 
 async function loadRenderer(window: BrowserWindow, config: RuntimeConfig): Promise<void> {
   assert(fs.existsSync(config.build.rendererIndex), "renderer_index_missing_at_load");
+  installAdjutorixPostRenderProbe(window);
   await window.loadFile(resolveAdjutorixRendererIndexHtml());
 }
 
