@@ -1,51 +1,61 @@
 import "./styles/adjutorix-power-workbench.css";
 
-type AnyRecord = Record<string, unknown>;
+type JsonRecord = Record<string, unknown>;
 
 type FileEntry = {
   path: string;
   name: string;
-  size?: number;
+  size: number;
+  kind: "source" | "test" | "config" | "doc" | "asset" | "other";
 };
 
-type PowerBridge = {
-  openRepository?: () => Promise<unknown>;
-  scanWorkspace?: (workspace: string) => Promise<unknown>;
-  readFile?: (request: { workspace: string; path: string }) => Promise<unknown>;
-  saveDraft?: (request: { workspace: string; path: string; content: string }) => Promise<unknown>;
-  createPlan?: (request: { workspace: string; intent: string; activeFile?: string }) => Promise<unknown>;
-  runCommand?: (request: { workspace: string; command: string }) => Promise<unknown>;
+type Tab = {
+  path: string;
+  content: string;
+  dirty: boolean;
 };
 
-type RuntimeWindow = Window & {
-  adjutorixPower?: PowerBridge;
-  adjutorix?: AnyRecord;
+type BridgeWindow = Window & {
+  adjutorixPower?: {
+    runCommand?: (request: { workspace: string; command: string }) => Promise<unknown>;
+    createPlan?: (request: { workspace: string; intent: string; activeFile?: string }) => Promise<unknown>;
+    saveDraft?: (request: { workspace: string; path: string; content: string }) => Promise<unknown>;
+    scanWorkspace?: (workspace: string) => Promise<unknown>;
+  };
+  adjutorix?: JsonRecord;
 };
 
-const runtimeWindow = window as RuntimeWindow;
+const bridgeWindow = window as BridgeWindow;
 
 const state = {
   workspace:
     window.localStorage.getItem("adjutorix.workspace") ??
     "/Users/midiakiasat/Downloads/Apps/midiakiasat/E-LOGISTIC",
   files: [] as FileEntry[],
-  activeFile: "ADJUTORIX.md",
-  activeContent:
-    "# Adjutorix\n\nOpen a repository. Tell Adjutorix what to change. Generate a governed plan. Verify. Apply stays blocked until verification opens the gate.\n",
+  tabs: [] as Tab[],
+  activePath: "README.md",
+  activePanel: "agent",
   intent: "",
-  featureOutput: "Ready.",
-  terminal: ["ADJUTORIX native operator IDE online."],
+  verifyGate: "required",
+  applyGate: "blocked",
+  featureOutput: "No feature executed yet.",
+  terminal: [
+    "ADJUTORIX revolution operator surface online.",
+    "Real workspace index, command execution, plan objects, verification gate, diff, ledger, diagnostics.",
+  ],
 };
 
 function byId<T extends HTMLElement>(id: string): T {
-  const element = document.getElementById(id);
-  if (!element) {
-    throw new Error(`Missing element: ${id}`);
-  }
-  return element as T;
+  const el = document.getElementById(id);
+  if (!el) throw new Error(`Missing DOM node: ${id}`);
+  return el as T;
 }
 
-function escapeHtml(value: unknown): string {
+function record(value: unknown): JsonRecord | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : null;
+}
+
+function html(value: unknown): string {
   return String(value)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
@@ -53,27 +63,30 @@ function escapeHtml(value: unknown): string {
     .replaceAll('"', "&quot;");
 }
 
-function asRecord(value: unknown): AnyRecord | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? (value as AnyRecord) : null;
+function base64Utf8(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }
 
 function unwrap(value: unknown, depth = 0): unknown {
   if (depth > 8) return value;
-  const record = asRecord(value);
-  if (!record) return value;
+  const row = record(value);
+  if (!row) return value;
 
-  for (const key of ["stdout", "output", "text", "content", "path"]) {
-    if (typeof record[key] === "string") return record[key];
+  for (const key of ["stdout", "output", "text", "content", "path", "message"]) {
+    if (typeof row[key] === "string") return row[key];
   }
 
-  for (const key of ["data", "payload", "result", "value", "body"]) {
-    if (key in record) return unwrap(record[key], depth + 1);
+  for (const key of ["data", "payload", "result", "value", "body", "envelope"]) {
+    if (key in row) return unwrap(row[key], depth + 1);
   }
 
   return value;
 }
 
-function outputText(value: unknown): string {
+function textOf(value: unknown): string {
   const unwrapped = unwrap(value);
   if (typeof unwrapped === "string") return unwrapped;
   try {
@@ -83,306 +96,417 @@ function outputText(value: unknown): string {
   }
 }
 
-function betweenMarkers(text: string, begin: string, end: string): string | null {
+function markerText(text: string, begin: string, end: string): string | null {
   const start = text.indexOf(begin);
   const stop = text.indexOf(end);
   if (start < 0 || stop < 0 || stop <= start) return null;
   return text.slice(start + begin.length, stop).trim();
 }
 
-function log(line: string): void {
+function classify(path: string): FileEntry["kind"] {
+  if (/(\.test\.|\.spec\.|\/tests?\/|__tests__)/i.test(path)) return "test";
+  if (/(^|\/)(package\.json|pnpm-workspace\.yaml|tsconfig|vite|vitest|eslint|configs?\/|\.github\/)/i.test(path)) return "config";
+  if (/\.(md|mdx|txt)$/i.test(path)) return "doc";
+  if (/\.(png|jpg|jpeg|gif|svg|webp|ico|pdf)$/i.test(path)) return "asset";
+  if (/\.(ts|tsx|js|jsx|py|sh|css|html|json|yml|yaml|swift|rs|go)$/i.test(path)) return "source";
+  return "other";
+}
+
+function activeTab(): Tab {
+  let tab = state.tabs.find((candidate) => candidate.path === state.activePath);
+  if (!tab) {
+    tab = {
+      path: state.activePath,
+      content:
+        "# ADJUTORIX\n\nAsk for a change. Inspect the repository. Generate a governed plan. Verify before mutation. Keep apply blocked until the evidence gate opens.\n",
+      dirty: false,
+    };
+    state.tabs.push(tab);
+  }
+  return tab;
+}
+
+function terminal(line: string): void {
   state.terminal.push(line);
-  if (state.terminal.length > 200) state.terminal.splice(0, state.terminal.length - 200);
-  const terminal = document.getElementById("adjx-terminal");
-  if (terminal) terminal.textContent = state.terminal.join("\n");
+  if (state.terminal.length > 260) state.terminal.splice(0, state.terminal.length - 260);
+  const pre = document.getElementById("adj-rev-terminal");
+  if (pre) pre.textContent = state.terminal.join("\n");
 }
 
-function setOutput(title: string, value: unknown): void {
-  state.featureOutput = `${title}\n\n${outputText(value)}`;
-  const output = document.getElementById("adjx-output");
-  if (output) output.textContent = state.featureOutput;
+function output(title: string, value: unknown): void {
+  state.featureOutput = `${title}\n\n${textOf(value)}`;
+  const pre = document.getElementById("adj-rev-output");
+  if (pre) pre.textContent = state.featureOutput;
 }
 
-async function runCommand(command: string): Promise<string> {
-  log(`$ ${command}`);
-  const power = runtimeWindow.adjutorixPower;
+async function run(command: string): Promise<string> {
+  terminal(`$ ${command}`);
 
-  if (power?.runCommand) {
-    const result = await power.runCommand({ workspace: state.workspace, command });
-    const text = outputText(result);
-    log(text.slice(0, 4000));
-    return text;
+  try {
+    if (typeof bridgeWindow.adjutorixPower?.runCommand === "function") {
+      const result = await bridgeWindow.adjutorixPower.runCommand({
+        workspace: state.workspace,
+        command,
+      });
+      const text = textOf(result);
+      terminal(text.slice(0, 6000));
+      return text;
+    }
+
+    const shell = record(bridgeWindow.adjutorix?.shell);
+    const execute = shell?.execute;
+    if (typeof execute === "function") {
+      const result = await (execute as (request: { workspace: string; command: string }) => Promise<unknown>)({
+        workspace: state.workspace,
+        command,
+      });
+      const text = textOf(result);
+      terminal(text.slice(0, 6000));
+      return text;
+    }
+
+    const message = "No governed command bridge is exposed.";
+    terminal(message);
+    return message;
+  } catch (error) {
+    const message = textOf(error);
+    terminal(message);
+    return message;
   }
+}
 
-  const bridge = runtimeWindow.adjutorix;
-  const shell = asRecord(bridge?.shell);
-  const execute = shell?.execute;
+function renderStatusBase(): void {
+  byId("adj-rev-workspace").textContent = state.workspace;
+  byId("adj-rev-status-workspace").textContent = state.workspace;
+  byId("adj-rev-file-count").textContent = String(state.files.length);
+  byId("adj-rev-verify-gate").textContent = state.verifyGate;
+  byId("adj-rev-apply-gate").textContent = state.applyGate;
 
-  if (typeof execute === "function") {
-    const result = await execute({ workspace: state.workspace, command });
-    const text = outputText(result);
-    log(text.slice(0, 4000));
-    return text;
+  const footerFiles = document.getElementById("adj-rev-file-count-footer");
+  const footerVerify = document.getElementById("adj-rev-verify-footer");
+  const footerApply = document.getElementById("adj-rev-apply-footer");
+  if (footerFiles) footerFiles.textContent = String(state.files.length);
+  if (footerVerify) footerVerify.textContent = state.verifyGate;
+  if (footerApply) footerApply.textContent = state.applyGate;
+}
+
+function renderStatus(): void {
+  renderStatusBase();
+}
+
+function renderTabs(): void {
+  const tabs = byId<HTMLDivElement>("adj-rev-tabs");
+  tabs.innerHTML = state.tabs
+    .map(
+      (tab) => `
+        <button class="${tab.path === state.activePath ? "is-active" : ""}" data-open-tab="${html(tab.path)}">
+          ${html(tab.path.split("/").pop() ?? tab.path)}${tab.dirty ? " •" : ""}
+        </button>
+      `,
+    )
+    .join("");
+
+  for (const button of Array.from(tabs.querySelectorAll<HTMLButtonElement>("[data-open-tab]"))) {
+    button.addEventListener("click", () => {
+      state.activePath = button.dataset.openTab ?? state.activePath;
+      renderEditor();
+      renderTabs();
+    });
   }
+}
 
-  const message = "No governed command bridge is exposed.";
-  log(message);
-  return message;
+function renderEditor(): void {
+  const tab = activeTab();
+  byId("adj-rev-file-title").textContent = tab.path;
+  byId("adj-rev-file-kind").textContent = classify(tab.path);
+  byId<HTMLTextAreaElement>("adj-rev-editor").value = tab.content;
+  renderTabs();
 }
 
 function renderFiles(): void {
-  const list = byId<HTMLDivElement>("adjx-file-list");
-  const query = byId<HTMLInputElement>("adjx-search").value.trim().toLowerCase();
-  const files = state.files.filter((file) => {
-    if (!query) return true;
-    return file.path.toLowerCase().includes(query);
+  const query = byId<HTMLInputElement>("adj-rev-search").value.trim().toLowerCase();
+  const kindFilter = byId<HTMLSelectElement>("adj-rev-kind").value;
+  const list = byId<HTMLDivElement>("adj-rev-files");
+
+  const rows = state.files.filter((file) => {
+    const queryOk = !query || file.path.toLowerCase().includes(query);
+    const kindOk = kindFilter === "all" || file.kind === kindFilter;
+    return queryOk && kindOk;
   });
 
-  list.innerHTML = files
-    .slice(0, 600)
+  list.innerHTML = rows
+    .slice(0, 900)
     .map(
       (file) => `
-        <button class="adjx-file ${file.path === state.activeFile ? "is-active" : ""}" data-file="${escapeHtml(file.path)}">
-          <strong>${escapeHtml(file.name)}</strong>
-          <span>${escapeHtml(file.path)}</span>
+        <button class="adj-rev-file ${file.path === state.activePath ? "is-active" : ""}" data-file="${html(file.path)}">
+          <strong>${html(file.name)}</strong>
+          <span>${html(file.path)}</span>
+          <em>${html(file.kind)}</em>
         </button>
       `,
     )
     .join("");
 
   for (const button of Array.from(list.querySelectorAll<HTMLButtonElement>("[data-file]"))) {
-    button.addEventListener("click", () => {
-      void openFile(button.dataset.file ?? "");
-    });
+    button.addEventListener("click", () => void openFile(button.dataset.file ?? ""));
   }
 
-  byId("adjx-files-count").textContent = String(state.files.length);
+  renderStatus();
 }
 
-function renderEditor(): void {
-  byId("adjx-tab").textContent = state.activeFile;
-  byId("adjx-file-title").textContent = state.activeFile;
-  byId<HTMLTextAreaElement>("adjx-editor").value = state.activeContent;
+function renderPanel(): void {
+  for (const panel of Array.from(document.querySelectorAll<HTMLElement>("[data-panel]"))) {
+    panel.hidden = panel.dataset.panel !== state.activePanel;
+  }
+
+  for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>("[data-panel-button]"))) {
+    button.classList.toggle("is-active", button.dataset.panelButton === state.activePanel);
+  }
 }
 
-async function scanWorkspace(): Promise<void> {
-  state.workspace = byId<HTMLInputElement>("adjx-workspace-input").value.trim() || state.workspace;
+async function scan(): Promise<void> {
+  state.workspace = byId<HTMLInputElement>("adj-rev-workspace-input").value.trim() || state.workspace;
   window.localStorage.setItem("adjutorix.workspace", state.workspace);
-  byId("adjx-workspace-label").textContent = state.workspace;
-  log(`Scanning ${state.workspace}`);
+  renderStatus();
 
-  const markerBegin = "__ADJUTORIX_SCAN_JSON_BEGIN__";
-  const markerEnd = "__ADJUTORIX_SCAN_JSON_END__";
+  const begin = "__ADJUTORIX_SCAN_BEGIN__";
+  const end = "__ADJUTORIX_SCAN_END__";
+
   const command = `python3 - <<'PY'
 import json, os, pathlib
-root = pathlib.Path.cwd()
-skip = {".git", "node_modules", "dist", "release", ".tmp", "__pycache__", ".venv", "venv"}
+root = pathlib.Path.cwd().resolve()
+skip = {".git", "node_modules", "dist", "release", ".tmp", "__pycache__", ".venv", "venv", ".next", ".turbo"}
 rows = []
 for current, dirs, files in os.walk(root):
     dirs[:] = [d for d in dirs if d not in skip and not d.startswith(".cache")]
     for name in files:
         path = pathlib.Path(current) / name
-        rel = path.relative_to(root).as_posix()
-        if rel.startswith(".git/") or "/node_modules/" in rel:
-            continue
         try:
+            rel = path.relative_to(root).as_posix()
             size = path.stat().st_size
         except OSError:
-            size = 0
+            continue
+        if any(part in skip for part in pathlib.Path(rel).parts):
+            continue
         rows.append({"path": rel, "name": name, "size": size})
 rows.sort(key=lambda row: (row["path"].count("/"), row["path"].lower()))
-print("${markerBegin}")
-print(json.dumps(rows[:1600]))
-print("${markerEnd}")
+print("${begin}")
+print(json.dumps(rows[:2200]))
+print("${end}")
 PY`;
 
+  const raw = await run(command);
+  const jsonText = markerText(raw, begin, end);
   let parsed: FileEntry[] = [];
 
-  try {
-    const text = await runCommand(command);
-    const jsonText = betweenMarkers(text, markerBegin, markerEnd);
-    if (jsonText) parsed = JSON.parse(jsonText) as FileEntry[];
-  } catch (error) {
-    log(`Scan failed: ${outputText(error)}`);
-  }
-
-  if (!parsed.length && runtimeWindow.adjutorixPower?.scanWorkspace) {
-    try {
-      const result = await runtimeWindow.adjutorixPower.scanWorkspace(state.workspace);
-      const record = asRecord(result);
-      const data = asRecord(record?.data) ?? record;
-      const files = data?.files;
-      if (Array.isArray(files)) {
-        parsed = files
-          .map((file) => {
-            const row = asRecord(file);
-            const path = String(row?.path ?? row?.relativePath ?? row?.name ?? "");
-            return { path, name: path.split("/").pop() ?? path, size: Number(row?.size ?? 0) };
-          })
-          .filter((file) => file.path);
-      }
-    } catch (error) {
-      log(`Bridge scan failed: ${outputText(error)}`);
-    }
+  if (jsonText) {
+    parsed = (JSON.parse(jsonText) as Array<{ path: string; name: string; size?: number }>).map((file) => ({
+      path: file.path,
+      name: file.name,
+      size: Number(file.size ?? 0),
+      kind: classify(file.path),
+    }));
   }
 
   state.files = parsed;
   renderFiles();
-  setOutput("SCAN", `${parsed.length} real files indexed in ${state.workspace}`);
 
-  const preferred =
+  const first =
     parsed.find((file) => /^README\.md$/i.test(file.path)) ??
     parsed.find((file) => /^package\.json$/i.test(file.path)) ??
-    parsed.find((file) => /\.(ts|tsx|js|jsx|md|json|css|html)$/i.test(file.path));
+    parsed.find((file) => file.kind === "source");
 
-  if (preferred) await openFile(preferred.path);
+  if (first) await openFile(first.path);
 
-  log(`REAL FILE INDEX READY: ${parsed.length} files`);
+  output("SCAN COMPLETE", `${parsed.length} files indexed.\nWorkspace: ${state.workspace}`);
 }
 
 async function openFile(path: string): Promise<void> {
   if (!path) return;
-  state.activeFile = path;
 
-  const markerBegin = "__ADJUTORIX_FILE_BEGIN__";
-  const markerEnd = "__ADJUTORIX_FILE_END__";
+  state.activePath = path;
 
-  try {
-    if (runtimeWindow.adjutorixPower?.readFile) {
-      const result = await runtimeWindow.adjutorixPower.readFile({ workspace: state.workspace, path });
-      const record = asRecord(result);
-      const data = asRecord(record?.data) ?? record;
-      const content = data?.content ?? data?.text ?? data?.body;
-      if (typeof content === "string") {
-        state.activeContent = content;
-        renderEditor();
-        renderFiles();
-        return;
-      }
-    }
+  const begin = "__ADJUTORIX_FILE_BEGIN__";
+  const end = "__ADJUTORIX_FILE_END__";
+  const path64 = base64Utf8(path);
 
-    const text = await runCommand(`python3 - "${path}" <<'PY'
-import pathlib, sys
-rel = sys.argv[1]
+  const command = `python3 - <<'PY'
+import base64, pathlib, sys
+rel = base64.b64decode("${path64}").decode("utf-8")
 root = pathlib.Path.cwd().resolve()
 target = (root / rel).resolve()
 if root not in target.parents and target != root:
     raise SystemExit("outside workspace")
-print("${markerBegin}")
-print(target.read_text(encoding="utf-8", errors="replace"))
-print("${markerEnd}")
-PY`);
-    state.activeContent = betweenMarkers(text, markerBegin, markerEnd) ?? text;
-  } catch (error) {
-    state.activeContent = `Unable to read ${path}\n\n${outputText(error)}`;
+print("${begin}")
+try:
+    print(target.read_text(encoding="utf-8", errors="replace"))
+except Exception as exc:
+    print(f"READ_FAILED: {exc}")
+print("${end}")
+PY`;
+
+  const raw = await run(command);
+  const content = markerText(raw, begin, end) ?? raw;
+
+  let tab = state.tabs.find((candidate) => candidate.path === path);
+  if (!tab) {
+    tab = { path, content, dirty: false };
+    state.tabs.push(tab);
+  } else {
+    tab.content = content;
   }
 
   renderEditor();
   renderFiles();
 }
 
+async function saveDraft(): Promise<void> {
+  const tab = activeTab();
+  tab.content = byId<HTMLTextAreaElement>("adj-rev-editor").value;
+  tab.dirty = false;
+
+  if (typeof bridgeWindow.adjutorixPower?.saveDraft === "function") {
+    const result = await bridgeWindow.adjutorixPower.saveDraft({
+      workspace: state.workspace,
+      path: tab.path,
+      content: tab.content,
+    });
+    output("DRAFT SAVED THROUGH GOVERNED BRIDGE", result);
+    renderTabs();
+    return;
+  }
+
+  const content64 = base64Utf8(tab.content);
+  const path64 = base64Utf8(tab.path);
+
+  const result = await run(`python3 - <<'PY'
+import base64, pathlib, time
+path = base64.b64decode("${path64}").decode("utf-8")
+content = base64.b64decode("${content64}").decode("utf-8")
+root = pathlib.Path.cwd().resolve()
+out = root / ".adjutorix" / "workbench-drafts"
+out.mkdir(parents=True, exist_ok=True)
+safe = path.replace("/", "__")
+target = out / f"{int(time.time())}-{safe}"
+target.write_text(content, encoding="utf-8")
+print(target)
+PY`);
+  output("DRAFT SAVED", result);
+  renderTabs();
+}
+
 async function createPlan(): Promise<void> {
-  const intent = byId<HTMLTextAreaElement>("adjx-intent").value.trim();
+  const intent = byId<HTMLTextAreaElement>("adj-rev-intent").value.trim();
   state.intent = intent;
 
   if (!intent) {
-    setOutput("PLAN BLOCKED", "Describe the change first.");
+    output("PLAN BLOCKED", "Describe the change first.");
     return;
   }
 
-  try {
-    if (runtimeWindow.adjutorixPower?.createPlan) {
-      const result = await runtimeWindow.adjutorixPower.createPlan({
-        workspace: state.workspace,
-        intent,
-        activeFile: state.activeFile,
-      });
-      setOutput("GOVERNED PLAN CREATED", result);
-      log("Plan object created through governed bridge.");
-      return;
-    }
-
-    const payload = {
-      schema: 1,
-      kind: "adjutorix.intent.plan",
+  if (typeof bridgeWindow.adjutorixPower?.createPlan === "function") {
+    const result = await bridgeWindow.adjutorixPower.createPlan({
       workspace: state.workspace,
-      activeFile: state.activeFile,
       intent,
-      createdAt: new Date().toISOString(),
-      apply: "blocked_until_verify",
-    };
-
-    window.localStorage.setItem(`adjutorix.plan.${Date.now()}`, JSON.stringify(payload, null, 2));
-    setOutput("LOCAL PLAN CREATED", payload);
-  } catch (error) {
-    setOutput("PLAN FAILED", error);
+      activeFile: state.activePath,
+    });
+    output("GOVERNED PLAN OBJECT CREATED", result);
+    state.activePanel = "plan";
+    renderPanel();
+    return;
   }
+
+  const payload = {
+    schema: 1,
+    kind: "adjutorix.operator.plan",
+    createdAt: new Date().toISOString(),
+    workspace: state.workspace,
+    activeFile: state.activePath,
+    intent,
+    applyGate: "blocked_until_verify",
+    tasks: [
+      "inspect relevant files",
+      "generate patch proposal",
+      "run typecheck and tests",
+      "review diff",
+      "verify before apply",
+    ],
+  };
+
+  const payload64 = base64Utf8(JSON.stringify(payload, null, 2));
+  const result = await run(`python3 - <<'PY'
+import base64, pathlib, time
+payload = base64.b64decode("${payload64}").decode("utf-8")
+root = pathlib.Path.cwd().resolve()
+out = root / ".adjutorix" / "objects"
+out.mkdir(parents=True, exist_ok=True)
+target = out / f"intent-plan-{int(time.time())}.json"
+target.write_text(payload, encoding="utf-8")
+print(target)
+PY`);
+  output("PLAN OBJECT CREATED", result);
+  state.activePanel = "plan";
+  renderPanel();
 }
 
-async function saveDraft(): Promise<void> {
-  const content = byId<HTMLTextAreaElement>("adjx-editor").value;
-  try {
-    if (runtimeWindow.adjutorixPower?.saveDraft) {
-      const result = await runtimeWindow.adjutorixPower.saveDraft({
-        workspace: state.workspace,
-        path: state.activeFile,
-        content,
-      });
-      setOutput("DRAFT SAVED", result);
-      return;
-    }
+async function runAgentLoop(): Promise<void> {
+  await createPlan();
 
-    window.localStorage.setItem(`adjutorix.draft.${state.activeFile}`, content);
-    setOutput("DRAFT SAVED LOCALLY", state.activeFile);
-  } catch (error) {
-    setOutput("DRAFT FAILED", error);
-  }
+  const intent = state.intent || byId<HTMLTextAreaElement>("adj-rev-intent").value.trim();
+  const query = intent
+    .split(/\s+/)
+    .filter((word) => word.length > 3)
+    .slice(0, 8)
+    .join("|");
+
+  const searchCommand = query
+    ? `grep -RInE "${query.replaceAll('"', '\\"')}" . --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=release --exclude-dir=.tmp | head -160`
+    : `find . -maxdepth 4 -type f | head -160`;
+
+  const found = await run(searchCommand);
+  const diff = await run("git status --short && git diff --stat");
+  output("AGENT LOOP: PLAN + RELEVANCE + DIFF", `${found}\n\n--- DIFF STATE ---\n${diff}`);
 }
 
-async function feature(action: string): Promise<void> {
-  const commands: Record<string, string> = {
-    git: "git status --short && git branch --show-current && git log --oneline --max-count=8",
-    diff: "git diff --stat && git diff -- . ':(exclude)package-lock.json' | head -1200",
+async function feature(name: string): Promise<void> {
+  const commandMap: Record<string, string> = {
+    git: "git status --short && echo '--- branch ---' && git branch --show-current && echo '--- recent commits ---' && git log --oneline --decorate --max-count=12",
+    diff: "git diff --stat && echo '--- diff preview ---' && git diff -- . ':(exclude)package-lock.json' | head -1800",
     verify: "pnpm run verify",
     build: "pnpm -r --if-present run build",
     typecheck: "pnpm --filter @adjutorix/app run build:ts",
-    tests:
-      "pnpm --filter @adjutorix/app exec vitest run tests/renderer/operator_kernel_live_surface_contract.test.ts tests/renderer/operator_surface_spine_contract.test.ts tests/renderer/operator_unified_control_spine_contract.test.ts",
-    routes: "find . -maxdepth 5 \\( -name '*route*' -o -name '*router*' -o -name '*ipc*' \\) -not -path './node_modules/*' -not -path './.git/*' | head -300",
-    ipc: "grep -R \"ipcMain.handle\\|ipcRenderer.invoke\\|exposeInMainWorld\" packages/adjutorix-app/src configs/ci -n | head -260",
-    diagnostics: "find .tmp reports/current -maxdepth 4 -type f 2>/dev/null | sort | tail -160",
-    logs: "find ~/Library/Logs -maxdepth 3 -iname '*adjutorix*' -type f 2>/dev/null | head -80",
-    package: "bash scripts/app/install-one-adjutorix-app.sh",
+    tests: "pnpm --filter @adjutorix/app exec vitest run tests/renderer/operator_kernel_live_surface_contract.test.ts tests/renderer/operator_surface_spine_contract.test.ts tests/renderer/operator_unified_control_spine_contract.test.ts",
+    ipc: "grep -R \"ipcMain.handle\\|ipcRenderer.invoke\\|exposeInMainWorld\\|safeHandle\" packages/adjutorix-app/src configs/ci -n | head -300",
+    routes: "find . -maxdepth 6 \\( -name '*route*' -o -name '*router*' -o -name '*ipc*' -o -name '*bridge*' \\) -not -path './node_modules/*' -not -path './.git/*' | sort | head -300",
+    diagnostics: "find .tmp reports/current ~/Library/Logs -maxdepth 5 -type f 2>/dev/null | grep -i adjutorix | sort | tail -220",
+    ledger: "find . .adjutorix reports/current -maxdepth 5 \\( -iname '*ledger*' -o -iname '*receipt*' -o -iname '*evidence*' -o -iname '*finality*' \\) -type f 2>/dev/null | sort | head -220",
+    package: "ADJUTORIX_NO_OPEN=1 bash scripts/app/install-one-adjutorix-app.sh",
   };
 
-  if (action === "scan") {
-    await scanWorkspace();
-    return;
-  }
+  if (name === "scan") return void (await scan());
+  if (name === "plan") return void (await createPlan());
+  if (name === "agent") return void (await runAgentLoop());
+  if (name === "save") return void (await saveDraft());
 
-  if (action === "plan") {
-    await createPlan();
-    return;
-  }
-
-  if (action === "save") {
-    await saveDraft();
-    return;
-  }
-
-  const command = commands[action];
+  const command = commandMap[name];
   if (!command) {
-    setOutput("UNKNOWN FEATURE", action);
+    output("UNKNOWN FEATURE", name);
     return;
   }
 
-  const text = await runCommand(command);
-  setOutput(action.toUpperCase(), text);
+  const result = await run(command);
+  output(name.toUpperCase(), result);
+
+  if (name === "verify" && !/ERR_|FAIL|failed|error/i.test(result)) {
+    state.verifyGate = "passed";
+    state.applyGate = "review required";
+    renderStatus();
+  }
 }
 
 function mount(): void {
   document.title = "Adjutorix";
-  document.documentElement.dataset.adjutorixRendererBoot = "native-mounted";
+  document.documentElement.dataset.adjutorixRendererBoot = "revolution-mounted";
 
   let root = document.getElementById("root");
   if (!root) {
@@ -392,8 +516,8 @@ function mount(): void {
   }
 
   root.innerHTML = `
-    <main class="adjx-native" data-adjutorix-real-workbench="true">
-      <aside class="adjx-rail">
+    <main class="adj-rev" data-adjutorix-real-workbench="true">
+      <aside class="adj-rev-rail">
         <button class="is-active">⌘</button>
         <button>⌕</button>
         <button>⑂</button>
@@ -402,158 +526,219 @@ function mount(): void {
         <button>⚙</button>
       </aside>
 
-      <section class="adjx-explorer">
+      <section class="adj-rev-explorer">
         <header>
           <strong>EXPLORER</strong>
-          <button data-action="scan">Open</button>
+          <button data-feature="scan">Open</button>
         </header>
 
-        <section class="adjx-workspace-card">
-          <span>WORKSPACE</span>
-          <strong id="adjx-workspace-label">${escapeHtml(state.workspace)}</strong>
+        <section class="adj-rev-workspace">
+          <p>WORKSPACE</p>
+          <strong id="adj-rev-workspace">${html(state.workspace)}</strong>
           <div>
-            <input id="adjx-workspace-input" value="${escapeHtml(state.workspace)}" />
-            <button data-action="scan">Load</button>
+            <input id="adj-rev-workspace-input" value="${html(state.workspace)}" />
+            <button data-feature="scan">Load</button>
           </div>
         </section>
 
-        <input id="adjx-search" class="adjx-search" placeholder="Search real files, scripts, configs..." />
-
-        <section class="adjx-start">
-          <h2>Start in 3 seconds</h2>
-          <p>Open folder, describe change, generate governed plan, verify, save draft.</p>
-          <button data-action="scan">Open Folder</button>
+        <section class="adj-rev-filter">
+          <input id="adj-rev-search" placeholder="Search files, tests, routes, IPC, configs..." />
+          <select id="adj-rev-kind">
+            <option value="all">all</option>
+            <option value="source">source</option>
+            <option value="test">test</option>
+            <option value="config">config</option>
+            <option value="doc">doc</option>
+          </select>
         </section>
 
-        <div id="adjx-file-list" class="adjx-file-list"></div>
+        <section class="adj-rev-project-intel">
+          <h2>Project intelligence</h2>
+          <div>
+            <article><strong id="adj-rev-file-count">0</strong><span>files</span></article>
+            <article><strong id="adj-rev-verify-gate">required</strong><span>verify</span></article>
+            <article><strong id="adj-rev-apply-gate">blocked</strong><span>apply</span></article>
+          </div>
+        </section>
+
+        <div id="adj-rev-files" class="adj-rev-files"></div>
       </section>
 
-      <section class="adjx-center">
-        <header class="adjx-topbar">
+      <section class="adj-rev-workbench">
+        <header class="adj-rev-top">
           <div>
             <h1>ADJUTORIX</h1>
-            <p>operator-grade governed mutation IDE</p>
+            <p>governed mutation IDE · real command surface · no hidden apply</p>
           </div>
-          <input id="adjx-command" placeholder="Ask Adjutorix: change code, generate plan, verify..." />
-          <button data-action="git">Git</button>
-          <button data-action="verify">Verify</button>
-          <button data-action="plan">Plan</button>
+          <input id="adj-rev-command" placeholder="Ask Adjutorix: generate plan, inspect, diff, verify..." />
+          <button data-feature="agent">Agent run</button>
+          <button data-feature="verify">Verify</button>
         </header>
 
-        <nav class="adjx-tabs">
-          <button class="is-active" id="adjx-tab">${escapeHtml(state.activeFile)}</button>
-        </nav>
+        <nav id="adj-rev-tabs" class="adj-rev-tabs"></nav>
 
-        <section class="adjx-editor-head">
-          <strong id="adjx-file-title">${escapeHtml(state.activeFile)}</strong>
-          <span>editable governed buffer</span>
+        <section class="adj-rev-editor-head">
+          <strong id="adj-rev-file-title">README.md</strong>
+          <span id="adj-rev-file-kind">doc</span>
         </section>
 
-        <textarea id="adjx-editor" class="adjx-editor">${escapeHtml(state.activeContent)}</textarea>
+        <textarea id="adj-rev-editor" class="adj-rev-editor"></textarea>
 
-        <section class="adjx-terminal-shell">
+        <section class="adj-rev-terminal">
           <header>
-            <strong>Terminal</strong>
-            <input id="adjx-shell-command" value="git status --short" />
-            <button data-shell-run="true">Run</button>
+            <strong>TERMINAL</strong>
+            <input id="adj-rev-shell" value="git status --short" />
+            <button id="adj-rev-run-shell">Run</button>
           </header>
-          <pre id="adjx-terminal">${escapeHtml(state.terminal.join("\n"))}</pre>
+          <pre id="adj-rev-terminal"></pre>
         </section>
       </section>
 
-      <aside class="adjx-agent">
+      <aside class="adj-rev-agent">
         <nav>
-          <button class="is-active">AGENT</button>
-          <button>PLAN</button>
-          <button>VERIFY</button>
-          <button>DIFF</button>
-          <button>LEDGER</button>
+          <button class="is-active" data-panel-button="agent">AGENT</button>
+          <button data-panel-button="plan">PLAN</button>
+          <button data-panel-button="verify">VERIFY</button>
+          <button data-panel-button="diff">DIFF</button>
+          <button data-panel-button="ledger">LEDGER</button>
         </nav>
 
-        <section class="adjx-agent-box">
+        <section data-panel="agent" class="adj-rev-panel">
           <p>ADJUTORIX AGENT</p>
           <h2>Tell it what to change.</h2>
-          <textarea id="adjx-intent" placeholder="Example: add barcode validation, refactor scanner flow, update tests, verify before apply..."></textarea>
-          <button data-action="plan">Generate governed plan</button>
+          <textarea id="adj-rev-intent" placeholder="Example: add barcode validation, refactor scanner flow, update tests, verify before apply..."></textarea>
+          <button data-feature="agent">Generate plan + inspect + diff</button>
         </section>
 
-        <section class="adjx-feature-grid">
+        <section data-panel="plan" class="adj-rev-panel" hidden>
+          <p>PLAN ENGINE</p>
+          <h2>Governed plan object.</h2>
+          <button data-feature="plan">Create plan object</button>
+          <button data-feature="save">Save active draft</button>
+          <button data-feature="routes">Map routes</button>
+        </section>
+
+        <section data-panel="verify" class="adj-rev-panel" hidden>
+          <p>VERIFY ENGINE</p>
+          <h2>Gate before mutation.</h2>
+          <button data-feature="verify">Full verify</button>
+          <button data-feature="typecheck">Typecheck</button>
+          <button data-feature="tests">Tests</button>
+          <button data-feature="build">Build</button>
+        </section>
+
+        <section data-panel="diff" class="adj-rev-panel" hidden>
+          <p>DIFF ENGINE</p>
+          <h2>Review before apply.</h2>
+          <button data-feature="git">Git status</button>
+          <button data-feature="diff">Diff preview</button>
+          <button data-feature="ipc">IPC map</button>
+        </section>
+
+        <section data-panel="ledger" class="adj-rev-panel" hidden>
+          <p>LEDGER + DIAGNOSTICS</p>
+          <h2>Evidence surface.</h2>
+          <button data-feature="ledger">Ledger files</button>
+          <button data-feature="diagnostics">Diagnostics</button>
+          <button data-feature="package">Package app</button>
+        </section>
+
+        <section class="adj-rev-feature-grid">
           <p>ADJUTORIX FEATURES</p>
-          <button data-action="scan">Scan</button>
-          <button data-action="git">Git</button>
-          <button data-action="diff">Diff</button>
-          <button data-action="verify">Verify</button>
-          <button data-action="build">Build</button>
-          <button data-action="typecheck">Typecheck</button>
-          <button data-action="tests">Tests</button>
-          <button data-action="routes">Routes</button>
-          <button data-action="ipc">IPC Map</button>
-          <button data-action="diagnostics">Diagnostics</button>
-          <button data-action="logs">Logs</button>
-          <button data-action="save">Save Draft</button>
-          <button data-action="package">Package</button>
+          <button data-feature="scan">Scan</button>
+          <button data-feature="git">Git</button>
+          <button data-feature="diff">Diff</button>
+          <button data-feature="verify">Verify</button>
+          <button data-feature="build">Build</button>
+          <button data-feature="typecheck">Typecheck</button>
+          <button data-feature="tests">Tests</button>
+          <button data-feature="ipc">IPC Map</button>
+          <button data-feature="diagnostics">Diagnostics</button>
+          <button data-feature="ledger">Ledger</button>
+          <button data-feature="save">Save Draft</button>
+          <button data-feature="package">Package</button>
         </section>
 
-        <section class="adjx-gate">
-          <article><strong>READY</strong><span>Files: <b id="adjx-files-count">0</b></span></article>
-          <article><strong>VERIFY</strong><span>Required before mutation</span></article>
-          <article><strong>APPLY</strong><span>Blocked until verify</span></article>
-        </section>
-
-        <section class="adjx-output-shell">
+        <section class="adj-rev-output">
           <p>FEATURE OUTPUT</p>
-          <pre id="adjx-output">${escapeHtml(state.featureOutput)}</pre>
+          <pre id="adj-rev-output">${html(state.featureOutput)}</pre>
         </section>
       </aside>
+
+      <footer class="adj-rev-status">
+        <span>Adjutorix</span>
+        <span id="adj-rev-status-workspace">${html(state.workspace)}</span>
+        <span>Files: <b id="adj-rev-file-count-footer">0</b></span>
+        <span>Verify: <b id="adj-rev-verify-footer">required</b></span>
+        <span>Apply: <b id="adj-rev-apply-footer">blocked</b></span>
+      </footer>
     </main>
   `;
 
-  for (const button of Array.from(root.querySelectorAll<HTMLButtonElement>("[data-action]"))) {
+  for (const button of Array.from(root.querySelectorAll<HTMLButtonElement>("[data-feature]"))) {
+    button.addEventListener("click", () => void feature(button.dataset.feature ?? ""));
+  }
+
+  for (const button of Array.from(root.querySelectorAll<HTMLButtonElement>("[data-panel-button]"))) {
     button.addEventListener("click", () => {
-      void feature(button.dataset.action ?? "");
+      state.activePanel = button.dataset.panelButton ?? "agent";
+      renderPanel();
     });
   }
 
-  byId<HTMLInputElement>("adjx-search").addEventListener("input", renderFiles);
+  byId<HTMLInputElement>("adj-rev-search").addEventListener("input", renderFiles);
+  byId<HTMLSelectElement>("adj-rev-kind").addEventListener("change", renderFiles);
 
-  byId<HTMLButtonElement>("adjx-shell-command").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      void runCommand(byId<HTMLInputElement>("adjx-shell-command").value);
-    }
+  byId<HTMLTextAreaElement>("adj-rev-editor").addEventListener("input", () => {
+    const tab = activeTab();
+    tab.content = byId<HTMLTextAreaElement>("adj-rev-editor").value;
+    tab.dirty = true;
+    renderTabs();
   });
 
-  const shellButton = root.querySelector<HTMLButtonElement>("[data-shell-run]");
-  shellButton?.addEventListener("click", () => {
-    void runCommand(byId<HTMLInputElement>("adjx-shell-command").value);
+  byId<HTMLTextAreaElement>("adj-rev-intent").addEventListener("input", () => {
+    state.intent = byId<HTMLTextAreaElement>("adj-rev-intent").value;
   });
 
-  byId<HTMLTextAreaElement>("adjx-intent").addEventListener("input", (event) => {
-    state.intent = (event.currentTarget as HTMLTextAreaElement).value;
+  byId<HTMLInputElement>("adj-rev-command").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") void runAgentLoop();
   });
 
-  renderFiles();
+  byId<HTMLButtonElement>("adj-rev-run-shell").addEventListener("click", () => {
+    void run(byId<HTMLInputElement>("adj-rev-shell").value);
+  });
+
+  byId<HTMLInputElement>("adj-rev-shell").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") void run(byId<HTMLInputElement>("adj-rev-shell").value);
+  });
+
+  renderPanel();
   renderEditor();
+  renderFiles();
+  renderStatus();
 
-  window.setTimeout(() => {
-    void scanWorkspace();
-  }, 250);
-
-  console.log("ADJUTORIX_NATIVE_OPERATOR_IDE_MOUNTED");
+  window.setTimeout(() => void scan(), 250);
+  console.log("ADJUTORIX_REVOLUTION_OPERATOR_SURFACE_MOUNTED");
 }
 
 try {
   mount();
 } catch (error) {
-  const root = document.getElementById("root") ?? document.body.appendChild(document.createElement("div"));
-  root.id = "root";
+  let root = document.getElementById("root");
+  if (!root) {
+    root = document.createElement("div");
+    root.id = "root";
+    document.body.appendChild(root);
+  }
+
   root.innerHTML = `
-    <main class="adjx-native-fatal">
+    <main class="adj-rev-fatal">
       <section>
-        <p>ADJUTORIX NATIVE BOOT FAILURE</p>
-        <h1>Renderer mounted but native IDE failed.</h1>
-        <pre>${escapeHtml(error instanceof Error ? error.stack ?? error.message : String(error))}</pre>
+        <p>ADJUTORIX RENDERER FAILURE</p>
+        <h1>Operator IDE failed to mount.</h1>
+        <pre>${html(error instanceof Error ? error.stack ?? error.message : String(error))}</pre>
       </section>
     </main>
   `;
-  console.error("ADJUTORIX_NATIVE_OPERATOR_IDE_FAILED", error);
+  console.error("ADJUTORIX_REVOLUTION_OPERATOR_SURFACE_FAILED", error);
 }
