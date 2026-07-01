@@ -103,6 +103,111 @@ function markerText(text: string, begin: string, end: string): string | null {
   return text.slice(start + begin.length, stop).trim();
 }
 
+
+function normalizeFileEntries(rows: unknown): FileEntry[] {
+  if (!Array.isArray(rows)) return [];
+
+  return rows
+    .map((row) => {
+      const file = record(row);
+      if (!file || typeof file.path !== "string") return null;
+
+      const name =
+        typeof file.name === "string"
+          ? file.name
+          : file.path.split("/").pop() || file.path;
+
+      return {
+        path: file.path,
+        name,
+        size: Number(file.size ?? 0),
+        kind: classify(file.path),
+      } satisfies FileEntry;
+    })
+    .filter((row): row is FileEntry => Boolean(row));
+}
+
+function extractFileEntriesFromText(text: string): FileEntry[] {
+  const marked = markerText(text, "__ADJUTORIX_SCAN_BEGIN__", "__ADJUTORIX_SCAN_END__");
+  const candidates = [
+    marked,
+    text.trim(),
+    (() => {
+      const start = text.indexOf("[");
+      const end = text.lastIndexOf("]");
+      return start >= 0 && end > start ? text.slice(start, end + 1) : "";
+    })(),
+  ].filter(Boolean) as string[];
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      const direct = normalizeFileEntries(parsed);
+      if (direct.length > 0) return direct;
+      const nested = extractFileEntries(parsed);
+      if (nested.length > 0) return nested;
+    } catch {
+      // continue
+    }
+  }
+
+  const lineRows = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const tabParts = line.split("\t");
+      const path = tabParts[0]?.replace(/^\.\//, "");
+      if (!path || path.startsWith("$ ") || path.startsWith("python3 ")) return null;
+      if (path.includes("__ADJUTORIX_")) return null;
+      if (path.length > 240) return null;
+      return {
+        path,
+        name: path.split("/").pop() || path,
+        size: Number(tabParts[2] ?? 0),
+        kind: classify(path),
+      } satisfies FileEntry;
+    })
+    .filter((row): row is FileEntry => Boolean(row));
+
+  return lineRows;
+}
+
+function extractFileEntries(value: unknown, depth = 0): FileEntry[] {
+  if (depth > 8) return [];
+
+  if (typeof value === "string") {
+    return extractFileEntriesFromText(value);
+  }
+
+  if (Array.isArray(value)) {
+    const direct = normalizeFileEntries(value);
+    if (direct.length > 0) return direct;
+
+    for (const item of value) {
+      const nested = extractFileEntries(item, depth + 1);
+      if (nested.length > 0) return nested;
+    }
+
+    return [];
+  }
+
+  const row = record(value);
+  if (!row) return [];
+
+  for (const key of ["files", "entries", "items", "rows", "children"]) {
+    const nested = extractFileEntries(row[key], depth + 1);
+    if (nested.length > 0) return nested;
+  }
+
+  for (const key of ["data", "payload", "result", "value", "body", "envelope", "stdout", "output", "text", "content"]) {
+    const nested = extractFileEntries(row[key], depth + 1);
+    if (nested.length > 0) return nested;
+  }
+
+  return [];
+}
+
 function classify(path: string): FileEntry["kind"] {
   if (/(\.test\.|\.spec\.|\/tests?\/|__tests__)/i.test(path)) return "test";
   if (/(^|\/)(package\.json|pnpm-workspace\.yaml|tsconfig|vite|vitest|eslint|configs?\/|\.github\/)/i.test(path)) return "config";
@@ -269,8 +374,35 @@ async function scan(): Promise<void> {
   window.localStorage.setItem("adjutorix.workspace", state.workspace);
   renderStatus();
 
-  const begin = "__ADJUTORIX_SCAN_BEGIN__";
-  const end = "__ADJUTORIX_SCAN_END__";
+  terminal(`Scanning real workspace: ${state.workspace}`);
+
+  try {
+    if (typeof bridgeWindow.adjutorixPower?.scanWorkspace === "function") {
+      const bridgeResult = await bridgeWindow.adjutorixPower.scanWorkspace(state.workspace);
+      const bridgeFiles = extractFileEntries(bridgeResult);
+
+      if (bridgeFiles.length > 0) {
+        state.files = bridgeFiles;
+        renderFiles();
+
+        const first =
+          bridgeFiles.find((file) => /^README\.md$/i.test(file.path)) ??
+          bridgeFiles.find((file) => /^package\.json$/i.test(file.path)) ??
+          bridgeFiles.find((file) => file.kind === "source") ??
+          bridgeFiles[0];
+
+        if (first) await openFile(first.path);
+
+        console.log("ADJUTORIX_SCAN_INDEX_READY", JSON.stringify({ count: state.files.length, source: "bridge", workspace: state.workspace }));
+        output("REAL WORKSPACE INDEX READY", `${state.files.length} files indexed through governed bridge.\nWorkspace: ${state.workspace}`);
+        return;
+      }
+
+      terminal("Governed scan bridge returned no file rows; falling back to command scan.");
+    }
+  } catch (error) {
+    terminal(`Governed scan bridge failed; falling back to command scan: ${textOf(error)}`);
+  }
 
   const command = `python3 - <<'PY'
 import json, os, pathlib
@@ -290,23 +422,13 @@ for current, dirs, files in os.walk(root):
             continue
         rows.append({"path": rel, "name": name, "size": size})
 rows.sort(key=lambda row: (row["path"].count("/"), row["path"].lower()))
-print("${begin}")
-print(json.dumps(rows[:2200]))
-print("${end}")
+print("__ADJUTORIX_SCAN_BEGIN__")
+print(json.dumps(rows[:2600]))
+print("__ADJUTORIX_SCAN_END__")
 PY`;
 
   const raw = await run(command);
-  const jsonText = markerText(raw, begin, end);
-  let parsed: FileEntry[] = [];
-
-  if (jsonText) {
-    parsed = (JSON.parse(jsonText) as Array<{ path: string; name: string; size?: number }>).map((file) => ({
-      path: file.path,
-      name: file.name,
-      size: Number(file.size ?? 0),
-      kind: classify(file.path),
-    }));
-  }
+  const parsed = extractFileEntries(raw);
 
   state.files = parsed;
   renderFiles();
@@ -314,11 +436,19 @@ PY`;
   const first =
     parsed.find((file) => /^README\.md$/i.test(file.path)) ??
     parsed.find((file) => /^package\.json$/i.test(file.path)) ??
-    parsed.find((file) => file.kind === "source");
+    parsed.find((file) => file.kind === "source") ??
+    parsed[0];
 
   if (first) await openFile(first.path);
 
-  output("SCAN COMPLETE", `${parsed.length} files indexed.\nWorkspace: ${state.workspace}`);
+  if (parsed.length <= 0) {
+    console.error("ADJUTORIX_SCAN_INDEX_EMPTY", { workspace: state.workspace, raw: raw.slice(0, 1800) });
+    output("SCAN FAILED", `No files indexed.\nWorkspace: ${state.workspace}\n\nRaw scan output:\n${raw.slice(0, 4000)}`);
+    return;
+  }
+
+  console.log("ADJUTORIX_SCAN_INDEX_READY", JSON.stringify({ count: state.files.length, source: "command", workspace: state.workspace }));
+  output("REAL WORKSPACE INDEX READY", `${state.files.length} files indexed.\nWorkspace: ${state.workspace}`);
 }
 
 async function openFile(path: string): Promise<void> {
