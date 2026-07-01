@@ -1,0 +1,141 @@
+{
+  "schema": "adjutorix.power-packages.v1",
+  "status": "runtime_dependencies_enabled",
+  "package_manager": "pnpm",
+  "install_surface": "packages/adjutorix-app",
+  "installed_for": [
+    "runtime availability inside Adjutorix.app",
+    "power package inventory surface",
+    "future governed package adapters"
+  ],
+  "packages": [
+    {
+      "name": "@verifrax/originseal",
+      "resolved_latest_at_install": "0.1.1",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/archicustos",
+      "resolved_latest_at_install": "0.1.1",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/kairoclasp",
+      "resolved_latest_at_install": "0.1.1",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/limenward",
+      "resolved_latest_at_install": "0.1.1",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/validexor",
+      "resolved_latest_at_install": "0.1.1",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/attestorium",
+      "resolved_latest_at_install": "0.1.1",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/irrevocull",
+      "resolved_latest_at_install": "0.1.1",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/guillotine",
+      "resolved_latest_at_install": "0.1.1",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/auctoriseal",
+      "resolved_latest_at_install": "0.1.5",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/corpiform",
+      "resolved_latest_at_install": "0.1.7",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/cicullis",
+      "resolved_latest_at_install": "0.1.3",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/verifrax-verify",
+      "resolved_latest_at_install": "0.1.6",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/verifrax-profiles",
+      "resolved_latest_at_install": "0.1.1",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/verifrax-spec",
+      "resolved_latest_at_install": "0.1.1",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/verifrax",
+      "resolved_latest_at_install": "0.1.4",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/sigillarium",
+      "resolved_latest_at_install": "0.1.4",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/verifrax-api",
+      "resolved_latest_at_install": "0.0.4",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@verifrax/root",
+      "resolved_latest_at_install": "0.0.2",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@kaaffilm/mk10-pro",
+      "resolved_latest_at_install": "1.0.3",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@invocorder/recorder",
+      "resolved_latest_at_install": "2.0.0",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    },
+    {
+      "name": "@antimatterium/antimatterium",
+      "resolved_latest_at_install": "0.2.2",
+      "dependency_surface": "packages/adjutorix-app",
+      "update_policy": "latest-compatible-runtime-dependency"
+    }
+  ],
+  "verify_command": "bash scripts/power/verify-adjutorix-power-packages.sh",
+  "update_command": "bash scripts/power/update-adjutorix-power-packages.sh"
+}

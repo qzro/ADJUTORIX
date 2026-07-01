@@ -87,11 +87,22 @@ const FEATURE_BUTTONS = [
   ["ipc", "IPC Map"],
   ["logs", "Logs"],
   ["package", "Package"],
+  ["power", "Power"],
   ["draft", "Save Draft"],
   ["plan", "Plan Object"],
 ] as const;
 
 type FeatureKey = (typeof FEATURE_BUTTONS)[number][0] | "agent" | "ledger" | "state";
+
+
+type PowerPackagesBridge = {
+  inventory?: () => Promise<unknown>;
+};
+
+function powerPackagesBridge(): PowerPackagesBridge | null {
+  const candidate = (window as unknown as { adjutorixPowerPackages?: PowerPackagesBridge }).adjutorixPowerPackages;
+  return candidate ?? null;
+}
 
 function bridge(): PowerBridge | null {
   const candidate = (window as unknown as { adjutorixPower?: PowerBridge }).adjutorixPower;
@@ -379,6 +390,14 @@ function AdjutorixOperatorIde(): JSX.Element {
 
       if (feature === "scan") {
         await scanWorkspace(workspace);
+        return;
+      }
+
+      if (feature === "power") {
+        const inventory = await powerPackagesBridge()?.inventory?.();
+        const text = JSON.stringify(inventory ?? { ok: false, error: "adjutorixPowerPackages bridge unavailable" }, null, 2);
+        setFeatureOutput(text);
+        appendTerminal(`$ power package inventory\n${text.slice(0, 3000)}`);
         return;
       }
 

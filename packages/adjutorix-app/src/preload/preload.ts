@@ -1127,3 +1127,101 @@ contextBridge.exposeInMainWorld("adjutorixNativeFilesystem", {
   readFile: (request: { workspace: string; path: string }) => adjutorixPreloadNativeReadFile(request),
 });
 
+const ADJUTORIX_POWER_PACKAGE_NAMES = [
+  "@verifrax/originseal",
+  "@verifrax/archicustos",
+  "@verifrax/kairoclasp",
+  "@verifrax/limenward",
+  "@verifrax/validexor",
+  "@verifrax/attestorium",
+  "@verifrax/irrevocull",
+  "@verifrax/guillotine",
+  "@verifrax/auctoriseal",
+  "@verifrax/corpiform",
+  "@verifrax/cicullis",
+  "@verifrax/verifrax-verify",
+  "@verifrax/verifrax-profiles",
+  "@verifrax/verifrax-spec",
+  "@verifrax/verifrax",
+  "@verifrax/sigillarium",
+  "@verifrax/verifrax-api",
+  "@verifrax/root",
+  "@kaaffilm/mk10-pro",
+  "@invocorder/recorder",
+  "@antimatterium/antimatterium",
+];
+
+async function adjutorixPowerPackageInventory(): Promise<{
+  ok: true;
+  schema: "adjutorix.power-packages.inventory.v1";
+  source: "preload-runtime-package-inventory";
+  installedCount: number;
+  expectedCount: number;
+  packages: Array<{
+    name: string;
+    installed: boolean;
+    version?: string;
+    packageJsonPath?: string;
+  }>;
+}> {
+  const fs = await import("node:fs/promises");
+  const nodePath = await import("node:path");
+
+  const processWithResources = process as NodeJS.Process & { resourcesPath?: string };
+  const resourceRoot = processWithResources.resourcesPath
+    ? nodePath.join(processWithResources.resourcesPath, "app")
+    : process.cwd();
+
+  const candidates = [
+    resourceRoot,
+    process.cwd(),
+    nodePath.resolve("."),
+  ];
+
+  const rows = [];
+
+  for (const name of ADJUTORIX_POWER_PACKAGE_NAMES) {
+    let found: { version: string; packageJsonPath: string } | null = null;
+
+    for (const base of candidates) {
+      const packageJsonPath = nodePath.join(base, "node_modules", ...name.split("/"), "package.json");
+
+      try {
+        const raw = await fs.readFile(packageJsonPath, "utf8");
+        const parsed = JSON.parse(raw) as { version?: string };
+        found = {
+          version: parsed.version ?? "unknown",
+          packageJsonPath,
+        };
+        break;
+      } catch {
+        // try next candidate
+      }
+    }
+
+    rows.push({
+      name,
+      installed: Boolean(found),
+      version: found?.version,
+      packageJsonPath: found?.packageJsonPath,
+    });
+  }
+
+  return {
+    ok: true,
+    schema: "adjutorix.power-packages.inventory.v1",
+    source: "preload-runtime-package-inventory",
+    installedCount: rows.filter((row) => row.installed).length,
+    expectedCount: rows.length,
+    packages: rows,
+  };
+}
+
+if (!(globalThis as unknown as { __adjutorixPowerPackagesExposed?: boolean }).__adjutorixPowerPackagesExposed) {
+  contextBridge.exposeInMainWorld("adjutorixPowerPackages", {
+    inventory: () => adjutorixPowerPackageInventory(),
+  });
+
+  (globalThis as unknown as { __adjutorixPowerPackagesExposed?: boolean }).__adjutorixPowerPackagesExposed = true;
+}
+
