@@ -1349,3 +1349,310 @@ contextBridge.exposeInMainWorld("adjutorixPowerPackages", {
   (globalThis as unknown as { __adjutorixPowerPackagesExposed?: boolean }).__adjutorixPowerPackagesExposed = true;
 }
 
+
+
+type AdjutorixUniversalWorkspaceFile = {
+  path: string;
+  name: string;
+  kind: "source" | "test" | "config" | "doc" | "asset" | "other";
+  size: number;
+  mtimeMs: number;
+};
+
+type AdjutorixUniversalRunInput = {
+  workspace?: string;
+  command?: string;
+  timeoutMs?: number;
+};
+
+type AdjutorixUniversalFileInput = {
+  workspace?: string;
+  path?: string;
+  content?: string;
+};
+
+async function adjutorixUniversalResolveWorkspace(input: unknown): Promise<string> {
+  const nodeFs = await import("node:fs/promises");
+  const nodePath = await import("node:path");
+
+  const raw = String(input ?? "").trim();
+  if (!raw) {
+    throw new Error("workspace_path_required");
+  }
+
+  const resolved = nodePath.resolve(raw);
+  const stat = await nodeFs.stat(resolved);
+
+  if (!stat.isDirectory()) {
+    throw new Error(`workspace_not_directory:${resolved}`);
+  }
+
+  return resolved;
+}
+
+async function adjutorixUniversalResolveFile(workspaceInput: unknown, pathInput: unknown) {
+  const nodePath = await import("node:path");
+  const root = await adjutorixUniversalResolveWorkspace(workspaceInput);
+  const requested = String(pathInput ?? "");
+
+  if (!requested) {
+    throw new Error("file_path_required");
+  }
+
+  const target = nodePath.resolve(root, requested);
+  const relative = nodePath.relative(root, target);
+
+  if (relative.startsWith("..") || nodePath.isAbsolute(relative)) {
+    throw new Error("file_outside_workspace_refused");
+  }
+
+  return { nodePath, root, target, relative };
+}
+
+function adjutorixUniversalKind(path: string): AdjutorixUniversalWorkspaceFile["kind"] {
+  const lower = path.toLowerCase();
+
+  if (lower.includes("/test/") || lower.includes("/tests/") || lower.endsWith(".test.ts") || lower.endsWith(".test.tsx") || lower.endsWith(".spec.ts")) {
+    return "test";
+  }
+
+  if (lower.endsWith(".ts") || lower.endsWith(".tsx") || lower.endsWith(".js") || lower.endsWith(".jsx") || lower.endsWith(".py") || lower.endsWith(".css") || lower.endsWith(".html") || lower.endsWith(".sql") || lower.endsWith(".sh")) {
+    return "source";
+  }
+
+  if (lower.endsWith(".json") || lower.endsWith(".yaml") || lower.endsWith(".yml") || lower.endsWith(".toml") || lower.endsWith(".env") || lower.endsWith(".cjs") || lower.endsWith(".mjs")) {
+    return "config";
+  }
+
+  if (lower.endsWith(".md") || lower.endsWith(".txt") || lower.endsWith(".rst")) {
+    return "doc";
+  }
+
+  if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".svg") || lower.endsWith(".icns") || lower.endsWith(".woff2")) {
+    return "asset";
+  }
+
+  return "other";
+}
+
+function adjutorixUniversalIgnore(name: string): boolean {
+  return new Set([
+    ".git",
+    "node_modules",
+    "dist",
+    "release",
+    "build",
+    ".next",
+    ".turbo",
+    ".pytest_cache",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".DS_Store",
+    ".adjutorix-backups",
+  ]).has(name);
+}
+
+contextBridge.exposeInMainWorld("adjutorixUniversalWorkspace", {
+  resolveDefaultWorkspace: async () => {
+    return {
+      envWorkspace: process.env.ADJUTORIX_WORKSPACE ?? "",
+      home: process.env.HOME ?? "",
+      cwd: process.cwd(),
+      source: "adjutorix-universal-workspace",
+    };
+  },
+
+  scan: async (workspaceInput: string) => {
+    const nodeFs = await import("node:fs/promises");
+    const nodePath = await import("node:path");
+    const root = await adjutorixUniversalResolveWorkspace(workspaceInput);
+    const files: AdjutorixUniversalWorkspaceFile[] = [];
+    const maxFiles = 5000;
+
+    async function walk(relativeDir: string): Promise<void> {
+      if (files.length >= maxFiles) {
+        return;
+      }
+
+      const absoluteDir = nodePath.join(root, relativeDir);
+      const entries = await nodeFs.readdir(absoluteDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (files.length >= maxFiles) {
+          return;
+        }
+
+        if (adjutorixUniversalIgnore(entry.name)) {
+          continue;
+        }
+
+        const relative = relativeDir ? nodePath.join(relativeDir, entry.name) : entry.name;
+        const absolute = nodePath.join(root, relative);
+
+        if (entry.isDirectory()) {
+          await walk(relative);
+          continue;
+        }
+
+        if (!entry.isFile()) {
+          continue;
+        }
+
+        const stat = await nodeFs.stat(absolute);
+        files.push({
+          path: relative,
+          name: entry.name,
+          kind: adjutorixUniversalKind(relative),
+          size: stat.size,
+          mtimeMs: stat.mtimeMs,
+        });
+      }
+    }
+
+    await walk("");
+
+    files.sort((a, b) => {
+      const rank = { source: 0, test: 1, config: 2, doc: 3, asset: 4, other: 5 };
+      return rank[a.kind] - rank[b.kind] || a.path.localeCompare(b.path);
+    });
+
+    return {
+      ok: true,
+      source: "adjutorix-universal-workspace",
+      workspace: root,
+      fileCount: files.length,
+      truncated: files.length >= maxFiles,
+      files,
+    };
+  },
+
+  readText: async (input: AdjutorixUniversalFileInput) => {
+    const nodeFs = await import("node:fs/promises");
+    const { root, target, relative } = await adjutorixUniversalResolveFile(input?.workspace, input?.path);
+    const stat = await nodeFs.stat(target);
+
+    if (stat.size > 1_500_000) {
+      throw new Error(`file_too_large:${relative}`);
+    }
+
+    const content = await nodeFs.readFile(target, "utf8");
+
+    return {
+      ok: true,
+      source: "adjutorix-universal-read",
+      workspace: root,
+      path: relative,
+      content,
+    };
+  },
+
+  writeText: async (input: AdjutorixUniversalFileInput) => {
+    const nodeFs = await import("node:fs/promises");
+    const { nodePath, root, target, relative } = await adjutorixUniversalResolveFile(input?.workspace, input?.path);
+    const content = String(input?.content ?? "");
+    const previous = await nodeFs.readFile(target, "utf8").catch(() => "");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const backupPath = nodePath.join(root, ".adjutorix-backups", stamp, relative);
+
+    await nodeFs.mkdir(nodePath.dirname(backupPath), { recursive: true });
+    await nodeFs.writeFile(backupPath, previous, "utf8");
+    await nodeFs.mkdir(nodePath.dirname(target), { recursive: true });
+    await nodeFs.writeFile(target, content, "utf8");
+
+    return {
+      ok: true,
+      source: "adjutorix-universal-write",
+      workspace: root,
+      path: relative,
+      backupPath,
+      bytes: new TextEncoder().encode(content).length,
+    };
+  },
+
+  gitDiff: async (input: AdjutorixUniversalFileInput) => {
+    const nodePath = await import("node:path");
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const run = promisify(execFile);
+    const root = await adjutorixUniversalResolveWorkspace(input?.workspace);
+    const filePath = String(input?.path ?? "");
+    const args = ["-C", root, "diff", "--"];
+
+    if (filePath) {
+      const target = nodePath.resolve(root, filePath);
+      const relative = nodePath.relative(root, target);
+      if (relative.startsWith("..") || nodePath.isAbsolute(relative)) {
+        throw new Error("diff_path_outside_workspace_refused");
+      }
+      args.push(relative);
+    }
+
+    const result = await run("/usr/bin/git", args, { maxBuffer: 3_000_000 }).catch((error: unknown) => {
+      const typed = error as { stdout?: string; stderr?: string; message?: string };
+      return {
+        stdout: typed.stdout ?? "",
+        stderr: typed.stderr ?? typed.message ?? String(error),
+      };
+    });
+
+    return {
+      ok: true,
+      source: "adjutorix-universal-git-diff",
+      workspace: root,
+      output: `${result.stdout ?? ""}${result.stderr ? `\n${result.stderr}` : ""}`.slice(0, 240_000),
+    };
+  },
+
+  run: async (input: AdjutorixUniversalRunInput) => {
+    const { execFile } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const run = promisify(execFile);
+    const root = await adjutorixUniversalResolveWorkspace(input?.workspace);
+    const command = String(input?.command ?? "").trim();
+
+    if (!command) {
+      throw new Error("command_required");
+    }
+
+    const timeout = Math.max(5_000, Math.min(Number(input?.timeoutMs ?? 240_000), 600_000));
+
+    const startedAt = new Date().toISOString();
+    const result = await run("/bin/bash", ["-lc", command], {
+      cwd: root,
+      timeout,
+      maxBuffer: 6_000_000,
+      env: {
+        ...process.env,
+        ADJUTORIX_ACTIVE_WORKSPACE: root,
+      },
+    }).then(
+      (success) => ({
+        ok: true,
+        exitCode: 0,
+        stdout: success.stdout ?? "",
+        stderr: success.stderr ?? "",
+        timedOut: false,
+      }),
+      (error: unknown) => {
+        const typed = error as { code?: number | string; signal?: string; stdout?: string; stderr?: string; killed?: boolean; message?: string };
+        return {
+          ok: false,
+          exitCode: typeof typed.code === "number" ? typed.code : null,
+          stdout: typed.stdout ?? "",
+          stderr: typed.stderr ?? typed.message ?? String(error),
+          timedOut: typed.killed === true || typed.signal === "SIGTERM",
+        };
+      },
+    );
+
+    return {
+      ...result,
+      source: "adjutorix-universal-command",
+      workspace: root,
+      command,
+      startedAt,
+      completedAt: new Date().toISOString(),
+    };
+  },
+});

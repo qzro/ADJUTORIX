@@ -1,673 +1,424 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles/adjutorix-power-workbench.css";
 
-type FileKind = "source" | "test" | "config" | "doc" | "asset" | "other";
-
-type FileItem = {
+type WorkspaceFile = {
   path: string;
   name: string;
-  kind: FileKind;
+  kind: "source" | "test" | "config" | "doc" | "asset" | "other";
+  size: number;
+  mtimeMs: number;
 };
 
-type CommandRequest = {
-  workspace?: string;
-  workspacePath?: string;
-  cwd?: string;
+type UniversalBridge = {
+  resolveDefaultWorkspace: () => Promise<{
+    envWorkspace: string;
+    home: string;
+    cwd: string;
+    source: string;
+  }>;
+  scan: (workspace: string) => Promise<{
+    ok: boolean;
+    source: string;
+    workspace: string;
+    fileCount: number;
+    truncated: boolean;
+    files: WorkspaceFile[];
+  }>;
+  readText: (input: { workspace: string; path: string }) => Promise<{
+    ok: boolean;
+    source: string;
+    workspace: string;
+    path: string;
+    content: string;
+  }>;
+  writeText: (input: { workspace: string; path: string; content: string }) => Promise<unknown>;
+  gitDiff: (input: { workspace: string; path?: string }) => Promise<{
+    ok: boolean;
+    source: string;
+    workspace: string;
+    output: string;
+  }>;
+  run: (input: { workspace: string; command: string; timeoutMs?: number }) => Promise<{
+    ok: boolean;
+    source: string;
+    workspace: string;
+    command: string;
+    exitCode: number | null;
+    stdout: string;
+    stderr: string;
+    timedOut: boolean;
+  }>;
+};
+
+declare global {
+  interface Window {
+    adjutorixUniversalWorkspace?: UniversalBridge;
+  }
+}
+
+type Action = {
+  id: string;
+  title: string;
   command: string;
-  timeoutMs?: number;
 };
 
-type PowerBridge = {
-  openRepository?: () => Promise<unknown>;
-  runCommand?: (request: CommandRequest) => Promise<unknown>;
-  saveDraft?: (request: Record<string, unknown>) => Promise<unknown>;
-  createPlan?: (request: Record<string, unknown>) => Promise<unknown>;
-};
+const ACTIONS: Action[] = [
+  {
+    id: "status",
+    title: "Status",
+    command: "pwd; git status --short 2>/dev/null || true; git log --oneline --decorate --max-count=8 2>/dev/null || true",
+  },
+  {
+    id: "detect",
+    title: "Detect stack",
+    command:
+      "pwd; test -f package.json && node -e \"const p=require('./package.json'); console.log('package:', p.name || '(unnamed)'); console.log('scripts:', JSON.stringify(p.scripts || {}, null, 2))\" || true; test -f pyproject.toml && sed -n '1,120p' pyproject.toml || true; test -f README.md && sed -n '1,80p' README.md || true",
+  },
+  {
+    id: "test",
+    title: "Test",
+    command:
+      "test -f package.json && pnpm -s test || test -f package.json && npm test || test -f pyproject.toml && python -m pytest || echo 'No standard test command detected in this workspace.'",
+  },
+  {
+    id: "build",
+    title: "Build",
+    command:
+      "test -f package.json && pnpm -s run build || test -f package.json && npm run build || echo 'No standard build command detected in this workspace.'",
+  },
+  {
+    id: "verify",
+    title: "Verify",
+    command:
+      "test -x scripts/verify.sh && bash scripts/verify.sh || test -x ./verify.sh && bash ./verify.sh || echo 'No verify script detected in this workspace.'",
+  },
+  {
+    id: "agent",
+    title: "Agent",
+    command:
+      "test -x scripts/agent/status.sh && bash scripts/agent/status.sh || echo 'No Adjutorix agent surface detected in this workspace.'",
+  },
+  {
+    id: "power",
+    title: "Power",
+    command:
+      "test -x scripts/power/verify-adjutorix-power-packages.sh && pnpm power:verify && pnpm power:plane || echo 'No Adjutorix power plane detected in this workspace.'",
+  },
+  {
+    id: "clean",
+    title: "Clean generated",
+    command:
+      "rm -rf .tmp dist release build .pytest_cache **/__pycache__ 2>/dev/null || true; git status --short 2>/dev/null || true",
+  },
+];
 
-type NativeFilesystemBridge = {
-  scanWorkspace?: (workspace: string) => Promise<unknown>;
-  readFile?: (request: { workspace: string; path: string }) => Promise<unknown>;
-};
+function bridge(): UniversalBridge {
+  const value = window.adjutorixUniversalWorkspace;
 
-function nativeFilesystem(): NativeFilesystemBridge | null {
-  const candidate = (window as unknown as { adjutorixNativeFilesystem?: NativeFilesystemBridge }).adjutorixNativeFilesystem;
-  return candidate ?? null;
-}
-
-function filesFromNativeIndex(value: unknown): FileItem[] {
-  if (!value || typeof value !== "object") return [];
-
-  const record = value as Record<string, unknown>;
-  const rows = Array.isArray(record.files) ? record.files : [];
-
-  return rows
-    .map((row): FileItem | null => {
-      if (!row || typeof row !== "object") return null;
-      const file = row as Record<string, unknown>;
-      const path = typeof file.path === "string" ? file.path : "";
-      if (!path) return null;
-
-      return {
-        path,
-        name: typeof file.name === "string" ? file.name : basename(path),
-        kind:
-          file.kind === "source" ||
-          file.kind === "test" ||
-          file.kind === "config" ||
-          file.kind === "doc" ||
-          file.kind === "asset" ||
-          file.kind === "other"
-            ? file.kind
-            : detectKind(path),
-      };
-    })
-    .filter((file): file is FileItem => Boolean(file));
-}
-
-function textFromNativeRead(value: unknown): string {
-  if (!value || typeof value !== "object") return "";
-  const record = value as Record<string, unknown>;
-  return typeof record.content === "string" ? record.content : "";
-}
-
-const DEFAULT_WORKSPACE = "/Users/midiakiasat/Downloads/Apps/midiakiasat/E-LOGISTIC";
-const SCAN_SOURCE = "compact-find-marker-filesystem";
-
-const FEATURE_BUTTONS = [
-  ["scan", "Scan"],
-  ["git", "Git"],
-  ["diff", "Diff"],
-  ["search", "Search"],
-  ["verify", "Verify"],
-  ["build", "Build"],
-  ["typecheck", "Typecheck"],
-  ["tests", "Tests"],
-  ["routes", "Routes"],
-  ["ipc", "IPC Map"],
-  ["logs", "Logs"],
-  ["package", "Package"],
-  ["power", "Power"],
-  ["draft", "Save Draft"],
-  ["plan", "Plan Object"],
-] as const;
-
-type FeatureKey = (typeof FEATURE_BUTTONS)[number][0] | "agent" | "ledger" | "state";
-
-
-type PowerPackagesBridge = {
-  inventory?: () => Promise<unknown>;
-  powerPlane?: () => Promise<unknown>;
-};
-
-function powerPackagesBridge(): PowerPackagesBridge | null {
-  const candidate = (window as unknown as { adjutorixPowerPackages?: PowerPackagesBridge }).adjutorixPowerPackages;
-  return candidate ?? null;
-}
-
-function bridge(): PowerBridge | null {
-  const candidate = (window as unknown as { adjutorixPower?: PowerBridge }).adjutorixPower;
-  return candidate ?? null;
-}
-
-function shQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`;
-}
-
-function basename(path: string): string {
-  return path.split("/").filter(Boolean).pop() ?? path;
-}
-
-function detectKind(path: string): FileKind {
-  const lower = path.toLowerCase();
-  if (lower.includes("/test") || lower.includes(".test.") || lower.includes(".spec.")) return "test";
-  if (
-    lower.endsWith(".json") ||
-    lower.endsWith(".yml") ||
-    lower.endsWith(".yaml") ||
-    lower.endsWith(".toml") ||
-    lower.endsWith(".config.js") ||
-    lower.endsWith(".config.ts") ||
-    lower.includes("config")
-  ) return "config";
-  if (lower.endsWith(".md") || lower.endsWith(".txt") || lower.includes("readme") || lower.includes("docs/")) return "doc";
-  if (
-    lower.endsWith(".ts") ||
-    lower.endsWith(".tsx") ||
-    lower.endsWith(".js") ||
-    lower.endsWith(".jsx") ||
-    lower.endsWith(".py") ||
-    lower.endsWith(".swift") ||
-    lower.endsWith(".css") ||
-    lower.endsWith(".html")
-  ) return "source";
-  if (
-    lower.endsWith(".png") ||
-    lower.endsWith(".jpg") ||
-    lower.endsWith(".jpeg") ||
-    lower.endsWith(".svg") ||
-    lower.endsWith(".ico")
-  ) return "asset";
-  return "other";
-}
-
-function collectStrings(value: unknown, out: string[] = [], seen = new WeakSet<object>()): string[] {
-  if (value == null) return out;
-  if (typeof value === "string") {
-    out.push(value);
-    return out;
-  }
-  if (typeof value === "number" || typeof value === "boolean") {
-    out.push(String(value));
-    return out;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) collectStrings(item, out, seen);
-    return out;
-  }
-  if (typeof value === "object") {
-    if (seen.has(value)) return out;
-    seen.add(value);
-    const obj = value as Record<string, unknown>;
-    const preferred = ["stdout", "stderr", "output", "text", "message", "body", "result", "data", "path"];
-    for (const key of preferred) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) collectStrings(obj[key], out, seen);
-    }
-    for (const [key, item] of Object.entries(obj)) {
-      if (!preferred.includes(key)) collectStrings(item, out, seen);
-    }
-  }
-  return out;
-}
-
-function extractText(value: unknown): string {
-  return collectStrings(value)
-    .join("\n")
-    .replace(/\\n/g, "\n")
-    .replace(/\\t/g, "\t")
-    .slice(0, 60000);
-}
-
-function parseFileIndex(output: string): FileItem[] {
-  const expanded = output.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
-  const files = new Map<string, FileItem>();
-
-  for (const match of expanded.matchAll(/ADJUTORIX_FILE\|([^\r\n"\\]+)/g)) {
-    const path = match[1]?.trim();
-    if (!path || path.includes("[adjutorix:output_truncated]")) continue;
-    files.set(path, { path, name: basename(path), kind: detectKind(path) });
+  if (!value) {
+    throw new Error("adjutorixUniversalWorkspace bridge unavailable");
   }
 
-  for (const raw of expanded.split(/\r?\n/)) {
-    const line = raw.trim();
-    let path = "";
-
-    if (line.startsWith("ADJUTORIX_FILE|")) {
-      path = line.slice("ADJUTORIX_FILE|".length).trim();
-    } else if (line.startsWith("ADJUTORIX_FILE\t")) {
-      const parts = line.split("\t").filter(Boolean);
-      path = parts[parts.length - 1] ?? "";
-    }
-
-    if (!path || path.includes("[adjutorix:output_truncated]")) continue;
-    if (path.includes("/node_modules/") || path.includes("/.git/") || path.includes("/dist/") || path.includes("/release/")) continue;
-
-    files.set(path, { path, name: basename(path), kind: detectKind(path) });
-  }
-
-  return Array.from(files.values()).sort((a, b) => a.path.localeCompare(b.path));
+  return value;
 }
 
-function compactFileIndexCommand(root: string): string {
-  const prune =
-    "\\( -path './.git' -o -path './node_modules' -o -path './dist' -o -path './release' -o -path './.tmp' -o -path './__pycache__' -o -path './.venv' -o -path './venv' -o -path './.next' -o -path './.turbo' -o -path './.cache' \\) -prune";
-
-  return [
-    `cd ${shQuote(root)}`,
-    `printf 'ADJUTORIX_COMPACT_SCAN_BEGIN\\n'`,
-    `/usr/bin/find . ${prune} -o -type f ! -name '*.map' ! -name '*.log' ! -name '.DS_Store' -print | /usr/bin/head -n 80 | /usr/bin/sed 's#^\\./##; s#^#ADJUTORIX_FILE|#'`,
-    `printf 'ADJUTORIX_COMPACT_SCAN_END\\n'`,
-  ].join(" && ");
+function formatBytes(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function runWorkspaceCommand(workspace: string, command: string): Promise<{ ok: boolean; text: string; raw: unknown }> {
-  const api = bridge();
-  if (!api?.runCommand) {
-    return {
-      ok: false,
-      raw: null,
-      text: "Adjutorix bridge is not available. The installed preload did not expose adjutorixPower.runCommand.",
-    };
-  }
-
-  try {
-    const raw = await api.runCommand({
-      workspace,
-      workspacePath: workspace,
-      cwd: workspace,
-      command,
-      timeoutMs: 120000,
-    });
-    return { ok: true, raw, text: extractText(raw) };
-  } catch (error) {
-    return {
-      ok: false,
-      raw: error,
-      text: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-function initialWorkspace(): string {
-  try {
-    return window.localStorage.getItem("adjutorix.workspace") || DEFAULT_WORKSPACE;
-  } catch {
-    return DEFAULT_WORKSPACE;
-  }
-}
-
-function AdjutorixOperatorIde(): JSX.Element {
-  const [workspace, setWorkspace] = useState(initialWorkspace);
-  const [workspaceInput, setWorkspaceInput] = useState(initialWorkspace);
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [filter, setFilter] = useState("");
-  const [kind, setKind] = useState<FileKind | "all">("all");
-  const [selectedPath, setSelectedPath] = useState("ADJUTORIX.md");
-  const [editorText, setEditorText] = useState(
-    "# ADJUTORIX\n\nReal governed mutation IDE.\n\nOpen a repository. Inspect real files. Tell the agent what to change. Generate a plan object. Verify before apply.\n"
-  );
-  const [terminal, setTerminal] = useState("ADJUTORIX real operator IDE online.\nCompact real file index must report >50 files or the build fails.\n");
-  const [command, setCommand] = useState("git status --short");
-  const [intent, setIntent] = useState("");
-  const [featureOutput, setFeatureOutput] = useState("No feature call yet.");
-  const [activeFeature, setActiveFeature] = useState<FeatureKey>("agent");
-  const [verifyStatus, setVerifyStatus] = useState("required");
-  const [applyStatus, setApplyStatus] = useState("blocked");
+function App(): JSX.Element {
+  const [workspace, setWorkspace] = useState(localStorage.getItem("adjutorix.activeWorkspace") ?? "");
+  const [files, setFiles] = useState<WorkspaceFile[]>([]);
+  const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<WorkspaceFile["kind"] | "all">("all");
+  const [selected, setSelected] = useState<WorkspaceFile | null>(null);
+  const [content, setContent] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [output, setOutput] = useState("Paste or provide any folder path. Adjutorix is no longer bound to one folder.");
   const [busy, setBusy] = useState(false);
+  const [command, setCommand] = useState(ACTIONS[0]?.command ?? "pwd");
 
-  const filteredFiles = useMemo(() => {
-    const query = filter.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+
     return files.filter((file) => {
       if (kind !== "all" && file.kind !== kind) return false;
-      if (!query) return true;
-      return file.path.toLowerCase().includes(query);
+      if (!needle) return true;
+      return file.path.toLowerCase().includes(needle) || file.name.toLowerCase().includes(needle);
     });
-  }, [files, filter, kind]);
+  }, [files, kind, query]);
 
-  const appendTerminal = useCallback((text: string) => {
-    setTerminal((current) => `${current}${current.endsWith("\n") ? "" : "\n"}${text}`);
-  }, []);
+  const counts = useMemo(() => {
+    return {
+      source: files.filter((file) => file.kind === "source").length,
+      test: files.filter((file) => file.kind === "test").length,
+      config: files.filter((file) => file.kind === "config").length,
+      doc: files.filter((file) => file.kind === "doc").length,
+    };
+  }, [files]);
 
-  const openFile = useCallback(
-    async (path: string, root = workspace) => {
-      setSelectedPath(path);
+  function record(text: string): void {
+    setOutput(text.slice(-160000));
+  }
 
-      const native = nativeFilesystem();
-      if (native?.readFile) {
-        const nativeResult = await native.readFile({ workspace: root, path });
-        const content = textFromNativeRead(nativeResult);
-        if (content) {
-          setEditorText(content);
-          appendTerminal(`$ native read ${path}\n${content.slice(0, 1200)}`);
-          return;
-        }
-      }
+  async function connect(path = workspace): Promise<void> {
+    const trimmed = path.trim();
 
-      const reader = `python3 -c ${shQuote(
-        'import pathlib,sys; p=pathlib.Path(sys.argv[1]); print(p.read_text(errors="replace")[:30000])'
-      )} ${shQuote(path)}`;
-      const result = await runWorkspaceCommand(root, reader);
-      setEditorText(result.text || `Could not read ${path}`);
-      appendTerminal(`$ read ${path}\n${result.text.slice(0, 1200)}`);
-    },
-    [appendTerminal, workspace]
-  );
+    if (!trimmed) {
+      record("Workspace required. Paste any folder path. Nothing is hardcoded.");
+      return;
+    }
 
-  const scanWorkspace = useCallback(
-    async (nextRoot?: string) => {
-      const root = (nextRoot || workspaceInput || workspace).trim();
-      if (!root) return;
+    setBusy(true);
 
-      setBusy(true);
-      setWorkspace(root);
-      setWorkspaceInput(root);
-      try {
-        window.localStorage.setItem("adjutorix.workspace", root);
-      } catch {
-        // localStorage may be disabled; the workspace still runs.
-      }
+    try {
+      const result = await bridge().scan(trimmed);
+      localStorage.setItem("adjutorix.activeWorkspace", result.workspace);
+      setWorkspace(result.workspace);
+      setFiles(result.files);
+      setSelected(result.files[0] ?? null);
+      setContent("");
+      setDirty(false);
+      record(
+        [
+          "WORKSPACE CONNECTED",
+          result.workspace,
+          `${result.fileCount} files`,
+          `source=${result.source}`,
+          result.truncated ? "TRUNCATED=true" : "TRUNCATED=false",
+        ].join("\n"),
+      );
 
-      appendTerminal(`Scanning real filesystem: ${root}`);
-
-      let parsed: FileItem[] = [];
-      let scanSource = "native-main-filesystem-index";
-      let scanPreview = "";
-
-      const native = nativeFilesystem();
-
-      if (native?.scanWorkspace) {
-        const nativeResult = await native.scanWorkspace(root);
-        parsed = filesFromNativeIndex(nativeResult);
-        scanPreview = JSON.stringify(
-          {
-            source: scanSource,
-            fileCount: parsed.length,
-            workspace: root,
-            sample: parsed.slice(0, 12).map((file) => file.path),
-          },
-          null,
-          2,
-        );
-      }
-
-      if (parsed.length <= 0) {
-        const result = await runWorkspaceCommand(root, compactFileIndexCommand(root));
-        parsed = parseFileIndex(result.text);
-        scanSource = SCAN_SOURCE;
-        scanPreview = result.text.slice(0, 4000) || "No scan output.";
-      }
-
-      setFiles(parsed);
-      setFeatureOutput(scanPreview);
-      console.info("ADJUTORIX_SCAN_INDEX_READY", JSON.stringify({ count: parsed.length, source: scanSource, workspace: root }));
-
-      appendTerminal(`ADJUTORIX real file index ready: ${parsed.length} files via ${scanSource}`);
-
-      const preferred =
-        parsed.find((file) => file.path === "README.md") ||
-        parsed.find((file) => file.path.endsWith("/README.md")) ||
-        parsed.find((file) => file.kind === "source") ||
-        parsed[0];
-
-      if (preferred) await openFile(preferred.path, root);
+      console.info(
+        "ADJUTORIX_UNIVERSAL_WORKSPACE_READY",
+        JSON.stringify({
+          workspace: result.workspace,
+          files: result.fileCount,
+          source: result.source,
+        }),
+      );
+    } catch (error) {
+      record(`CONNECT FAILED\n${String(error)}`);
+    } finally {
       setBusy(false);
-    },
-    [appendTerminal, openFile, workspace, workspaceInput]
-  );
+    }
+  }
 
-  const runFeature = useCallback(
-    async (feature: FeatureKey) => {
-      setActiveFeature(feature);
+  async function openFile(file: WorkspaceFile): Promise<void> {
+    setBusy(true);
 
-      if (feature === "scan") {
-        await scanWorkspace(workspace);
-        return;
-      }
+    try {
+      const result = await bridge().readText({ workspace, path: file.path });
+      setSelected(file);
+      setContent(result.content);
+      setDirty(false);
+      record(`OPENED\n${result.path}\n${result.content.length} characters`);
+    } catch (error) {
+      record(`OPEN FAILED\n${file.path}\n${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-      if (feature === "power") {
-        const powerPlane = await powerPackagesBridge()?.powerPlane?.();
-        const fallback = await powerPackagesBridge()?.inventory?.();
-        const payload = powerPlane ?? fallback ?? { ok: false, error: "adjutorixPowerPackages bridge unavailable" };
-        const text = JSON.stringify(payload, null, 2);
-        setFeatureOutput(text);
-        appendTerminal(`$ power plane inventory\n${text.slice(0, 5000)}`);
-        return;
-      }
+  async function saveFile(): Promise<void> {
+    if (!selected) {
+      record("SAVE BLOCKED\nNo file selected.");
+      return;
+    }
 
-      if (feature === "draft") {
-        const draftPath = `.adjutorix/workbench-drafts/${Date.now()}-${basename(selectedPath)}.draft.md`;
-        const save = `mkdir -p .adjutorix/workbench-drafts && printf %s ${shQuote(editorText)} > ${shQuote(draftPath)} && printf 'SAVED_DRAFT=%s\\n' ${shQuote(draftPath)}`;
-        const result = await runWorkspaceCommand(workspace, save);
-        setFeatureOutput(result.text);
-        appendTerminal(`$ save draft\n${result.text}`);
-        return;
-      }
+    setBusy(true);
 
-      if (feature === "plan" || feature === "agent") {
-        const plan = {
-          schema: "adjutorix.intent.plan.v1",
-          id: `intent-plan-${Date.now()}`,
-          workspace,
-          selectedPath,
-          intent: intent || "operator requested governed change",
-          verifyRequired: true,
-          applyBlockedUntilVerify: true,
-          fileCount: files.length,
-          createdBy: "Adjutorix operator IDE",
-        };
-        const payload = JSON.stringify(plan);
-        const writer = `mkdir -p .adjutorix/objects && python3 -c ${shQuote(
-          "import json,pathlib,sys; obj=json.loads(sys.argv[1]); p=pathlib.Path('.adjutorix/objects')/(obj['id']+'.json'); p.write_text(json.dumps(obj, indent=2)); print(str(p))"
-        )} ${shQuote(payload)}`;
-        const result = await runWorkspaceCommand(workspace, writer);
-        setFeatureOutput(result.text);
-        appendTerminal(`$ create governed plan\n${result.text}`);
-        return;
-      }
+    try {
+      const result = await bridge().writeText({ workspace, path: selected.path, content });
+      setDirty(false);
+      record(`SAVED\n${JSON.stringify(result, null, 2)}`);
+      console.info("ADJUTORIX_UNIVERSAL_SAVE_OK", JSON.stringify({ path: selected.path }));
+    } catch (error) {
+      record(`SAVE FAILED\n${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-      const searchTerm = filter.trim() || intent.trim() || basename(selectedPath);
-      const commands: Record<string, string> = {
-        git: "git status --short && printf '\\nBRANCH=' && git branch --show-current && printf '\\nRECENT\\n' && git log --oneline -8",
-        diff: "git diff --stat && printf '\\n--- DIFF ---\\n' && git diff -- . ':!node_modules' ':!dist' ':!release' | /usr/bin/head -n 240",
-        search: `grep -RIn --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=release ${shQuote(searchTerm)} . | /usr/bin/head -n 120 || true`,
-        verify: "if [ -f package.json ]; then (pnpm verify || npm run verify || true); else echo 'No package.json verify command in this workspace'; fi",
-        build: "if [ -f package.json ]; then (pnpm -r --if-present run build || npm run build || true); else echo 'No package.json build command in this workspace'; fi",
-        typecheck: "if [ -f package.json ]; then (pnpm -r --if-present run typecheck || npm run typecheck || true); else echo 'No package.json typecheck command in this workspace'; fi",
-        tests: "if [ -f package.json ]; then (pnpm test -- --run || pnpm test || npm test || true); else echo 'No package.json test command in this workspace'; fi",
-        routes: "find . -type f \\( -iname '*route*' -o -iname '*router*' -o -iname '*api*' -o -iname '*server*' \\) ! -path './node_modules/*' ! -path './.git/*' | /usr/bin/head -n 120",
-        ipc: "grep -RIn --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=release 'adjutorix:' . | /usr/bin/head -n 160 || true",
-        logs: "find . -type f \\( -name '*.log' -o -path './.adjutorix/*' \\) ! -path './node_modules/*' ! -path './.git/*' | /usr/bin/head -n 120",
-        package: "if [ -f package.json ]; then cat package.json; else find . -maxdepth 3 -name package.json -print; fi",
-        ledger: "find .adjutorix -type f 2>/dev/null | sort | tail -n 80 || true && printf '\\nGIT\\n' && git log --oneline -10 || true",
-        state: "pwd && printf '\\nFILES=' && find . -type f ! -path './.git/*' ! -path './node_modules/*' | wc -l && printf '\\n' && git status --short || true",
-      };
+  async function diffActive(): Promise<void> {
+    setBusy(true);
 
-      if (feature === "verify") {
-        setVerifyStatus("running");
-      }
+    try {
+      const result = await bridge().gitDiff({ workspace, path: selected?.path });
+      record(result.output.trim() || "No diff.");
+    } catch (error) {
+      record(`DIFF FAILED\n${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
-      const commandToRun = commands[feature] ?? commands["state"] ?? "pwd && git status --short || true";
-      const result = await runWorkspaceCommand(workspace, commandToRun);
-      setFeatureOutput(result.text || "No output.");
-      appendTerminal(`$ ${feature}\n${(result.text || "").slice(0, 3000)}`);
+  async function runCommand(nextCommand = command): Promise<void> {
+    setBusy(true);
+    setCommand(nextCommand);
 
-      if (feature === "verify") {
-        setVerifyStatus("complete");
-        setApplyStatus("ready after verify");
-      }
-    },
-    [appendTerminal, editorText, files.length, filter, intent, scanWorkspace, selectedPath, workspace]
-  );
+    try {
+      const result = await bridge().run({ workspace, command: nextCommand, timeoutMs: 300000 });
+      record(
+        [
+          `$ ${result.command}`,
+          `workspace=${result.workspace}`,
+          `exit=${result.exitCode} timedOut=${result.timedOut} ok=${result.ok}`,
+          "",
+          result.stdout,
+          result.stderr ? `\n--- stderr ---\n${result.stderr}` : "",
+        ].join("\n"),
+      );
 
-  const runTerminal = useCallback(async () => {
-    const result = await runWorkspaceCommand(workspace, command);
-    setFeatureOutput(result.text || "No output.");
-    appendTerminal(`$ ${command}\n${(result.text || "").slice(0, 4000)}`);
-  }, [appendTerminal, command, workspace]);
+      console.info(
+        "ADJUTORIX_UNIVERSAL_COMMAND_DONE",
+        JSON.stringify({
+          command: result.command,
+          ok: result.ok,
+          exitCode: result.exitCode,
+        }),
+      );
+    } catch (error) {
+      record(`COMMAND FAILED\n${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
-    document.documentElement.dataset.rendererBoot = "revolution-mounted";
-    document.documentElement.dataset.adjutorixNativeIde = "true";
-    document.body.dataset.adjutorixNativeIde = "true";
-    document.documentElement.dataset.adjutorixNativeIde = "true";
-    document.body.dataset.adjutorixNativeIde = "true";
-    console.info("ADJUTORIX_REVOLUTION_OPERATOR_SURFACE_MOUNTED");
-    void scanWorkspace(initialWorkspace());
+    document.documentElement.dataset.adjutorixUniversalWorkspace = "true";
+    document.body.dataset.adjutorixUniversalWorkspace = "true";
+    console.info("ADJUTORIX_UNIVERSAL_WORKSPACE_MOUNTED");
+
+    void bridge().resolveDefaultWorkspace().then((defaults) => {
+      const stored = localStorage.getItem("adjutorix.activeWorkspace") ?? "";
+      const chosen = stored || defaults.envWorkspace || "";
+
+      if (chosen) {
+        setWorkspace(chosen);
+        void connect(chosen);
+      }
+    });
   }, []);
 
   return (
-    <main
-      className="adjutorix-native-operator-ide adjutorix-cursor-product"
-      data-adjutorix-native-ide="true"
-      data-testid="adjutorix-native-operator-ide"
-      data-renderer-boot="revolution-mounted"
-    >
-      <aside className="adjutorix-activity">
-        <button className="is-active">⌘</button>
-        <button>⌕</button>
-        <button>⑂</button>
-        <button>✓</button>
-        <button>◆</button>
-        <button>⚙</button>
-      </aside>
-
-      <section className="adjutorix-explorer">
-        <header>
-          <strong>EXPLORER</strong>
-          <button onClick={() => void scanWorkspace(workspaceInput)} disabled={busy}>Open</button>
+    <main className="workspace-shell">
+      <aside className="workspace-side">
+        <header className="brand">
+          <div className="brand-mark">A</div>
+          <div>
+            <strong>Adjutorix</strong>
+            <span>universal workspace host</span>
+          </div>
         </header>
 
-        <section className="adjutorix-workspace-card">
-          <span>WORKSPACE</span>
-          <strong>{workspace}</strong>
-          <div>
-            <input value={workspaceInput} onChange={(event) => setWorkspaceInput(event.target.value)} />
-            <button onClick={() => void scanWorkspace(workspaceInput)} disabled={busy}>Load</button>
-          </div>
+        <section className="workspace-connect">
+          <label>Any folder path</label>
+          <input
+            value={workspace}
+            onChange={(event) => setWorkspace(event.target.value)}
+            placeholder="/path/to/any/project"
+          />
+          <button disabled={busy} onClick={() => void connect()}>
+            Connect folder
+          </button>
+        </section>
+
+        <section className="stats">
+          <div><strong>{files.length}</strong><span>files</span></div>
+          <div><strong>{counts.source}</strong><span>source</span></div>
+          <div><strong>{counts.test}</strong><span>tests</span></div>
+          <div><strong>{counts.config}</strong><span>config</span></div>
         </section>
 
         <input
-          className="adjutorix-search"
-          value={filter}
-          onChange={(event) => setFilter(event.target.value)}
-          placeholder="Search real files, tests, routes, IPC, configs..."
+          className="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search this folder..."
         />
 
-        <div className="adjutorix-kind-grid">
-          {(["all", "source", "test", "config", "doc", "other"] as Array<FileKind | "all">).map((item) => (
-            <button key={item} className={kind === item ? "is-active" : ""} onClick={() => setKind(item)}>
+        <div className="filters">
+          {(["all", "source", "test", "config", "doc", "asset", "other"] as const).map((item) => (
+            <button key={item} className={kind === item ? "active" : ""} onClick={() => setKind(item)}>
               {item}
             </button>
           ))}
         </div>
 
-        <section className="adjutorix-intelligence">
-          <h2>Project intelligence</h2>
-          <div>
-            <strong>{files.length}</strong>
-            <span>real files</span>
-          </div>
-          <div>
-            <strong>{verifyStatus}</strong>
-            <span>verify</span>
-          </div>
-          <div>
-            <strong>{applyStatus}</strong>
-            <span>apply</span>
-          </div>
-        </section>
-
-        <section className="adjutorix-file-list">
-          {filteredFiles.map((file) => (
+        <section className="file-list">
+          {filtered.slice(0, 900).map((file) => (
             <button
               key={file.path}
-              className={file.path === selectedPath ? "is-active" : ""}
-              onClick={() => void openFile(file.path)}
+              className={selected?.path === file.path ? "file active" : "file"}
+              onClick={() => void openFile(file)}
             >
+              <b>{file.kind}</b>
               <strong>{file.name}</strong>
               <span>{file.path}</span>
-              <em>{file.kind}</em>
             </button>
           ))}
-        </section>
-      </section>
-
-      <section className="adjutorix-editor-zone">
-        <header className="adjutorix-topbar">
-          <div>
-            <h1>ADJUTORIX</h1>
-            <p>real governed mutation IDE · real filesystem · command surface</p>
-          </div>
-          <input
-            value={intent}
-            onChange={(event) => setIntent(event.target.value)}
-            placeholder="Ask Adjutorix: generate plan, refactor, verify, inspect..."
-          />
-          <button onClick={() => void runFeature("agent")}>Run Agent</button>
-        </header>
-
-        <nav className="adjutorix-tabs">
-          <button className="is-active">{selectedPath}</button>
-        </nav>
-
-        <section className="adjutorix-file-title">
-          <strong>{selectedPath}</strong>
-          <span>editable governed buffer</span>
-        </section>
-
-        <textarea
-          className="adjutorix-editor"
-          value={editorText}
-          onChange={(event) => setEditorText(event.target.value)}
-          spellCheck={false}
-        />
-
-        <section className="adjutorix-terminal">
-          <header>
-            <strong>TERMINAL</strong>
-            <input value={command} onChange={(event) => setCommand(event.target.value)} />
-            <button onClick={() => void runTerminal()}>Run</button>
-          </header>
-          <pre>{terminal}</pre>
-        </section>
-      </section>
-
-      <aside className="adjutorix-agent-panel">
-        <nav>
-          {(["agent", "plan", "verify", "diff", "ledger", "state"] as FeatureKey[]).map((item) => (
-            <button key={item} className={activeFeature === item ? "is-active" : ""} onClick={() => void runFeature(item)}>
-              {item.toUpperCase()}
-            </button>
-          ))}
-        </nav>
-
-        <section className="adjutorix-agent-card">
-          <span>ADJUTORIX AGENT</span>
-          <h2>Tell it what to change.</h2>
-          <textarea
-            value={intent}
-            onChange={(event) => setIntent(event.target.value)}
-            placeholder="Example: add barcode validation, refactor scanner flow, update tests, verify before apply..."
-          />
-          <button onClick={() => void runFeature("agent")}>Generate governed plan + inspect</button>
-        </section>
-
-        <section className="adjutorix-feature-card">
-          <span>ADJUTORIX FEATURES</span>
-          <div className="adjutorix-feature-grid">
-            {FEATURE_BUTTONS.map(([key, label]) => (
-              <button key={key} onClick={() => void runFeature(key)}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="adjutorix-output-card">
-          <span>FEATURE OUTPUT</span>
-          <pre>{featureOutput}</pre>
-        </section>
-
-        <section className="adjutorix-gate-card">
-          <span>GOVERNED GATE</span>
-          <div>
-            <strong>VERIFY</strong>
-            <em>{verifyStatus}</em>
-          </div>
-          <div>
-            <strong>APPLY</strong>
-            <em>{applyStatus}</em>
-          </div>
-          <p>Apply stays blocked until verification opens the evidence gate.</p>
         </section>
       </aside>
 
-      <footer className="adjutorix-statusbar">
-        <span>Adjutorix</span>
-        <span>{workspace}</span>
-        <span>Files: <strong>{files.length}</strong></span>
-        <span>Scan: <strong>{SCAN_SOURCE}</strong></span>
-        <span>Verify: <strong>{verifyStatus}</strong></span>
-        <span>Apply: <strong>{applyStatus}</strong></span>
-      </footer>
+      <section className="workspace-main">
+        <header className="topbar">
+          <div>
+            <strong>{selected?.path ?? "No file selected"}</strong>
+            <span>{dirty ? "modified buffer" : workspace || "no workspace connected"}</span>
+          </div>
+
+          <div className="top-actions">
+            <button disabled={busy || !selected || !dirty} onClick={() => void saveFile()}>Save</button>
+            <button disabled={busy} onClick={() => void diffActive()}>Diff</button>
+            {ACTIONS.map((action) => (
+              <button key={action.id} disabled={busy || !workspace} onClick={() => void runCommand(action.command)}>
+                {action.title}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        <textarea
+          className="editor"
+          value={content}
+          onChange={(event) => {
+            setContent(event.target.value);
+            setDirty(true);
+          }}
+          placeholder="Open a file from the connected folder. This surface is not tied to any single project."
+        />
+      </section>
+
+      <aside className="output">
+        <header>
+          <strong>Workspace Output</strong>
+          <span>{busy ? "running" : "idle"}</span>
+        </header>
+
+        <textarea
+          className="command"
+          value={command}
+          onChange={(event) => setCommand(event.target.value)}
+        />
+
+        <button className="run" disabled={busy || !workspace} onClick={() => void runCommand()}>
+          Run in active folder
+        </button>
+
+        <pre>{output}</pre>
+      </aside>
     </main>
   );
 }
 
-const rootElement = document.getElementById("root");
+const root = document.getElementById("root");
 
-if (!rootElement) {
-  throw new Error("Adjutorix renderer root is missing");
+if (!root) {
+  throw new Error("Adjutorix root element not found");
 }
 
-createRoot(rootElement).render(<AdjutorixOperatorIde />);
+createRoot(root).render(<App />);
