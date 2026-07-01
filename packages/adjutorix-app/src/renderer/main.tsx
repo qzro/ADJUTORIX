@@ -1,23 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import Editor from "@monaco-editor/react";
 import "./styles/adjutorix-power-workbench.css";
-
-type FileKind = "source" | "test" | "config" | "doc" | "asset" | "other";
-
-type FileItem = {
-  path: string;
-  name: string;
-  kind: FileKind;
-  size: number;
-};
 
 type ScanResult = {
   ok: true;
   source: string;
   workspace: string;
   fileCount: number;
-  files: FileItem[];
+  files: Array<{ path: string; name: string; kind: string; size: number }>;
 };
 
 type CommandResult = {
@@ -32,12 +22,20 @@ type CommandResult = {
 
 type WorkbenchBridge = {
   scanWorkspace: (workspace: string) => Promise<ScanResult>;
-  readFile: (request: { workspace: string; path: string }) => Promise<{ ok: true; workspace: string; path: string; content: string }>;
-  writeFile: (request: { workspace: string; path: string; content: string }) => Promise<{ ok: true; workspace: string; path: string; backupPath: string | null; bytes: number }>;
   runCommand: (request: { workspace: string; command: string; timeoutMs?: number }) => Promise<CommandResult>;
   gitDiff: (request: { workspace: string; path?: string }) => Promise<{ ok: boolean; output: string }>;
   powerInventory: () => Promise<unknown>;
 };
+
+type Workflow = {
+  id: string;
+  title: string;
+  subtitle: string;
+  command: string;
+  danger?: boolean;
+};
+
+type WorkflowState = "idle" | "running" | "ok" | "failed";
 
 declare global {
   interface Window {
@@ -47,13 +45,93 @@ declare global {
 
 const DEFAULT_WORKSPACE = "/Users/midiakiasat/Downloads/Apps/midiakiasat/qzro/ADJUTORIX";
 
-const COMMANDS = {
-  status: "git status --short",
-  verify: "pnpm --filter @adjutorix/app run build:ts",
-  tests: "pnpm --filter @adjutorix/app exec vitest run tests/renderer/operator_unified_control_spine_contract.test.ts tests/renderer/operator_surface_spine_contract.test.ts",
-  build: "pnpm -r --if-present run build",
-  power: "pnpm power:all",
-};
+const WORKFLOWS: Workflow[] = [
+  {
+    id: "status",
+    title: "Status",
+    subtitle: "working tree + branch state",
+    command: "git status --short && git log --oneline --decorate --max-count=8",
+  },
+  {
+    id: "doctor",
+    title: "Doctor",
+    subtitle: "workspace and runtime diagnostics",
+    command: "bash scripts/doctor.sh",
+  },
+  {
+    id: "check",
+    title: "Check",
+    subtitle: "repository control check",
+    command: "bash scripts/check.sh",
+  },
+  {
+    id: "smoke",
+    title: "Smoke",
+    subtitle: "operator smoke run",
+    command: "bash scripts/smoke.sh",
+  },
+  {
+    id: "verify",
+    title: "Verify",
+    subtitle: "full verification surface",
+    command: "bash scripts/verify.sh",
+  },
+  {
+    id: "build-ts",
+    title: "TypeScript",
+    subtitle: "app type gate",
+    command: "pnpm --filter @adjutorix/app run build:ts",
+  },
+  {
+    id: "ui-contracts",
+    title: "UI Contracts",
+    subtitle: "core renderer contracts",
+    command:
+      "pnpm --filter @adjutorix/app exec vitest run tests/renderer/operator_unified_control_spine_contract.test.ts tests/renderer/operator_surface_spine_contract.test.ts tests/renderer/operator_diagnostics_console_surface_contract.test.ts",
+  },
+  {
+    id: "power",
+    title: "Power Plane",
+    subtitle: "21 package runtime verify",
+    command: "pnpm power:all",
+  },
+  {
+    id: "ledger",
+    title: "Ledger",
+    subtitle: "current ledger view",
+    command: "bash scripts/ledger/current.sh || true",
+  },
+  {
+    id: "workspace-health",
+    title: "Workspace Health",
+    subtitle: "trust + workspace health",
+    command: "bash scripts/workspace/health.sh || true",
+  },
+  {
+    id: "diff",
+    title: "Diff",
+    subtitle: "current source delta",
+    command: "git diff --stat && git diff -- packages/adjutorix-app/src/renderer/main.tsx packages/adjutorix-app/src/preload/preload.ts packages/adjutorix-app/src/renderer/styles/adjutorix-power-workbench.css",
+  },
+  {
+    id: "clean",
+    title: "Clean Generated",
+    subtitle: "remove build output from repo tree",
+    command:
+      "rm -rf .tmp packages/adjutorix-app/dist packages/adjutorix-app/release reports/current/adjutorix-power-plane-verify.json reports/current/pr110-ci-failures && git status --short",
+    danger: true,
+  },
+];
+
+function requiredWorkflow(id: string): Workflow {
+  const workflow = WORKFLOWS.find((candidate) => candidate.id === id);
+
+  if (!workflow) {
+    throw new Error(`missing_workflow:${id}`);
+  }
+
+  return workflow;
+}
 
 function bridge(): WorkbenchBridge {
   const candidate = window.adjutorixUserWorkbench;
@@ -65,373 +143,233 @@ function bridge(): WorkbenchBridge {
   return candidate;
 }
 
-function languageFor(path: string): string {
-  const lower = path.toLowerCase();
-
-  if (lower.endsWith(".tsx") || lower.endsWith(".ts")) return "typescript";
-  if (lower.endsWith(".jsx") || lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".cjs")) return "javascript";
-  if (lower.endsWith(".json")) return "json";
-  if (lower.endsWith(".md")) return "markdown";
-  if (lower.endsWith(".css")) return "css";
-  if (lower.endsWith(".html")) return "html";
-  if (lower.endsWith(".py")) return "python";
-  if (lower.endsWith(".sh")) return "shell";
-  if (lower.endsWith(".yml") || lower.endsWith(".yaml")) return "yaml";
-
-  return "plaintext";
+function initialWorkflowState(): Record<string, WorkflowState> {
+  return Object.fromEntries(WORKFLOWS.map((workflow) => [workflow.id, "idle" as WorkflowState]));
 }
 
-function labelFor(kind: FileKind): string {
-  if (kind === "source") return "SRC";
-  if (kind === "test") return "TST";
-  if (kind === "config") return "CFG";
-  if (kind === "doc") return "DOC";
-  if (kind === "asset") return "AST";
-  return "OTH";
-}
-
-function fileRank(file: FileItem): number {
-  const p = file.path;
-
-  if (p === "README.md") return 0;
-  if (p === "packages/adjutorix-app/src/renderer/main.tsx") return 1;
-  if (p === "packages/adjutorix-app/src/preload/preload.ts") return 2;
-  if (p === "packages/adjutorix-app/package.json") return 3;
-  if (p === "package.json") return 4;
-  if (p.startsWith("packages/adjutorix-app/src/")) return 10;
-  if (p.startsWith("packages/adjutorix-agent/adjutorix_agent/")) return 20;
-  if (p.startsWith("scripts/")) return 30;
-  if (p.startsWith("configs/")) return 40;
-  if (p.startsWith("docs/")) return 50;
-  if (p.startsWith("tests/")) return 60;
-  if (file.kind === "source") return 70;
-  if (file.kind === "config") return 80;
-  if (file.kind === "doc") return 90;
-
-  return 100;
-}
-
-function shortPath(path: string): string {
-  return path.length > 76 ? `…${path.slice(-73)}` : path;
-}
-
-function initialFile(files: FileItem[]): FileItem | undefined {
-  return (
-    files.find((file) => file.path === "README.md") ??
-    files.find((file) => file.path === "packages/adjutorix-app/src/renderer/main.tsx") ??
-    files.find((file) => file.kind === "source") ??
-    files[0]
-  );
+function shortCommand(command: string): string {
+  return command.length > 62 ? `${command.slice(0, 62)}…` : command;
 }
 
 function App(): JSX.Element {
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [query, setQuery] = useState("");
-  const [kind, setKind] = useState<FileKind | "all">("all");
-  const [selectedPath, setSelectedPath] = useState("");
-  const [openTabs, setOpenTabs] = useState<string[]>([]);
-  const [editorText, setEditorText] = useState("");
-  const [originalText, setOriginalText] = useState("");
-  const [command, setCommand] = useState(COMMANDS.status);
-  const [output, setOutput] = useState("Adjutorix Studio is booting.");
-  const [status, setStatus] = useState("booting");
-  const [busy, setBusy] = useState(false);
+  const [fileCount, setFileCount] = useState(0);
+  const [sourceCount, setSourceCount] = useState(0);
+  const [testCount, setTestCount] = useState(0);
+  const [configCount, setConfigCount] = useState(0);
   const [powerCount, setPowerCount] = useState("0/21");
-  const [lastRun, setLastRun] = useState("none");
+  const [consoleStatus, setConsoleStatus] = useState("booting");
+  const [busy, setBusy] = useState(false);
+  const [lastCommand, setLastCommand] = useState("none");
+  const [customCommand, setCustomCommand] = useState("git status --short");
+  const [output, setOutput] = useState("Adjutorix Operator Console is booting.");
+  const [states, setStates] = useState<Record<string, WorkflowState>>(initialWorkflowState());
 
-  const dirty = editorText !== originalText;
+  const failedCount = useMemo(() => Object.values(states).filter((state) => state === "failed").length, [states]);
+  const okCount = useMemo(() => Object.values(states).filter((state) => state === "ok").length, [states]);
 
-  const visibleFiles = useMemo(() => {
-    const q = query.trim().toLowerCase();
-
-    return files
-      .filter((file) => {
-        if (kind !== "all" && file.kind !== kind) return false;
-        if (!q) return true;
-
-        return file.path.toLowerCase().includes(q) || file.name.toLowerCase().includes(q);
-      })
-      .sort((a, b) => fileRank(a) - fileRank(b) || a.path.localeCompare(b.path));
-  }, [files, query, kind]);
-
-  async function openFile(path: string, workspaceOverride = workspace): Promise<void> {
+  async function loadProject(): Promise<void> {
     setBusy(true);
-    setStatus(`opening ${path}`);
+    setConsoleStatus("loading project");
 
     try {
-      const result = await bridge().readFile({ workspace: workspaceOverride, path });
-      setSelectedPath(result.path);
-      setEditorText(result.content);
-      setOriginalText(result.content);
-      setOpenTabs((tabs) => [result.path, ...tabs.filter((tab) => tab !== result.path)].slice(0, 8));
-      setStatus(`open ${result.path}`);
-      setOutput(`Opened ${result.path}\n${result.content.length} characters`);
-      console.info("ADJUTORIX_STUDIO_FILE_OPEN", JSON.stringify({ path: result.path, characters: result.content.length }));
-    } catch (error) {
-      setStatus("open failed");
-      setOutput(String(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function scan(target = workspace): Promise<void> {
-    setBusy(true);
-    setStatus("scanning");
-
-    try {
-      const result = await bridge().scanWorkspace(target);
+      const result = await bridge().scanWorkspace(workspace);
       setWorkspace(result.workspace);
-      setFiles(result.files);
+      setFileCount(result.fileCount);
+      setSourceCount(result.files.filter((file) => file.kind === "source").length);
+      setTestCount(result.files.filter((file) => file.kind === "test").length);
+      setConfigCount(result.files.filter((file) => file.kind === "config").length);
+      setConsoleStatus("project ready");
+      setOutput(`PROJECT READY\n${result.workspace}\n${result.fileCount} usable files\n${result.source}`);
 
-      console.info("ADJUTORIX_STUDIO_READY", JSON.stringify({
-        workspace: result.workspace,
-        files: result.fileCount,
-        source: result.source,
-      }));
-
-      setStatus(`ready ${result.fileCount}`);
-      setOutput(`Project ready\n${result.workspace}\n${result.fileCount} usable files`);
-
-      const first = initialFile(result.files);
-      if (first) {
-        await openFile(first.path, result.workspace);
-      }
+      console.info(
+        "ADJUTORIX_OPERATOR_CONSOLE_READY",
+        JSON.stringify({
+          workspace: result.workspace,
+          files: result.fileCount,
+          source: result.source,
+        }),
+      );
     } catch (error) {
-      setStatus("scan failed");
+      setConsoleStatus("project load failed");
       setOutput(String(error));
+      console.error("ADJUTORIX_OPERATOR_CONSOLE_LOAD_FAILED", error);
     } finally {
       setBusy(false);
     }
   }
 
-  async function saveFile(): Promise<void> {
-    if (!selectedPath) {
-      setOutput("No file selected.");
-      return;
-    }
-
-    setBusy(true);
-    setStatus(`saving ${selectedPath}`);
-
+  async function loadPower(): Promise<void> {
     try {
-      const result = await bridge().writeFile({ workspace, path: selectedPath, content: editorText });
-      setOriginalText(editorText);
-      setStatus(`saved ${selectedPath}`);
-      setOutput(`Saved ${selectedPath}\n\nBackup:\n${result.backupPath ?? "new file / no backup"}\n\nBytes: ${result.bytes}`);
+      const payload = await bridge().powerInventory();
+      const record = payload as { installedCount?: number; expectedCount?: number };
+      const value = `${record.installedCount ?? 0}/${record.expectedCount ?? 21}`;
+      setPowerCount(value);
+
+      console.info(
+        "ADJUTORIX_OPERATOR_POWER_READY",
+        JSON.stringify({
+          installed: record.installedCount ?? 0,
+          expected: record.expectedCount ?? 21,
+        }),
+      );
     } catch (error) {
-      setStatus("save failed");
-      setOutput(String(error));
-    } finally {
-      setBusy(false);
+      setPowerCount("error");
+      console.error("ADJUTORIX_OPERATOR_POWER_FAILED", error);
     }
   }
 
-  async function diff(): Promise<void> {
+  async function runWorkflow(workflow: Workflow): Promise<void> {
     setBusy(true);
-    setStatus("diff running");
+    setLastCommand(workflow.command);
+    setConsoleStatus(`running ${workflow.title}`);
+    setStates((current) => ({ ...current, [workflow.id]: "running" }));
 
     try {
-      const result = await bridge().gitDiff({ workspace, path: selectedPath || undefined });
-      setOutput(result.output || "No diff.");
-      setStatus("diff ready");
-    } catch (error) {
-      setStatus("diff failed");
-      setOutput(String(error));
-    } finally {
-      setBusy(false);
-    }
-  }
+      const result = await bridge().runCommand({
+        workspace,
+        command: workflow.command,
+        timeoutMs: 240000,
+      });
 
-  async function run(commandToRun = command): Promise<void> {
-    setBusy(true);
-    setCommand(commandToRun);
-    setLastRun(commandToRun);
-    setStatus("running");
-
-    try {
-      const result = await bridge().runCommand({ workspace, command: commandToRun, timeoutMs: 180000 });
-      setOutput([
-        `$ ${result.command}`,
+      const text = [
+        `ADJUTORIX WORKFLOW: ${workflow.title}`,
+        `command: ${workflow.command}`,
         `exit=${result.exitCode} timedOut=${result.timedOut}`,
         "",
         result.stdout,
         result.stderr ? `\n--- stderr ---\n${result.stderr}` : "",
-      ].join("\n"));
-      setStatus(result.ok ? "command ok" : "command failed");
+      ].join("\n");
+
+      setOutput(text);
+      setConsoleStatus(result.ok ? `${workflow.title} ok` : `${workflow.title} failed`);
+      setStates((current) => ({ ...current, [workflow.id]: result.ok ? "ok" : "failed" }));
+
+      console.info(
+        "ADJUTORIX_OPERATOR_WORKFLOW_DONE",
+        JSON.stringify({
+          id: workflow.id,
+          ok: result.ok,
+          exitCode: result.exitCode,
+        }),
+      );
     } catch (error) {
-      setStatus("command failed");
       setOutput(String(error));
+      setConsoleStatus(`${workflow.title} failed`);
+      setStates((current) => ({ ...current, [workflow.id]: "failed" }));
     } finally {
       setBusy(false);
     }
   }
 
-  async function power(): Promise<void> {
-    setBusy(true);
-    setStatus("power");
-
-    try {
-      const payload = await bridge().powerInventory();
-      const record = payload as { installedCount?: number; expectedCount?: number };
-      setPowerCount(`${record.installedCount ?? 0}/${record.expectedCount ?? 21}`);
-      setOutput(JSON.stringify(payload, null, 2));
-      setStatus("power ready");
-      console.info("ADJUTORIX_STUDIO_POWER_READY", JSON.stringify({
-        installed: record.installedCount ?? 0,
-        expected: record.expectedCount ?? 21,
-      }));
-    } catch (error) {
-      setStatus("power failed");
-      setOutput(String(error));
-    } finally {
-      setBusy(false);
-    }
+  async function runCustom(): Promise<void> {
+    await runWorkflow({
+      id: "custom",
+      title: "Custom Command",
+      subtitle: "operator command",
+      command: customCommand,
+    });
   }
 
   useEffect(() => {
-    document.documentElement.dataset.adjutorixStudio = "true";
-    document.body.dataset.adjutorixStudio = "true";
-    console.info("ADJUTORIX_STUDIO_MOUNTED");
+    document.documentElement.dataset.adjutorixOperatorConsole = "true";
+    document.body.dataset.adjutorixOperatorConsole = "true";
+    console.info("ADJUTORIX_OPERATOR_CONSOLE_MOUNTED");
 
-    void scan(DEFAULT_WORKSPACE);
-    void power();
+    void loadProject();
+    void loadPower();
+
+    setTimeout(() => {
+      void runWorkflow(requiredWorkflow("status"));
+    }, 500);
   }, []);
 
   return (
-    <main className="studio-shell">
-      <aside className="studio-rail">
-        <header className="studio-brand">
-          <div className="studio-mark">A</div>
+    <main className="operator-shell">
+      <aside className="operator-left">
+        <header className="operator-brand">
+          <div className="operator-mark">A</div>
           <div>
-            <strong>Adjutorix Studio</strong>
-            <span>local project control</span>
+            <strong>Adjutorix</strong>
+            <span>operator console</span>
           </div>
         </header>
 
-        <section className="workspace-card">
+        <section className="workspace-panel">
           <label>Workspace</label>
           <input value={workspace} onChange={(event) => setWorkspace(event.target.value)} />
-          <div className="workspace-buttons">
-            <button onClick={() => void scan()} disabled={busy}>Open</button>
-            <button onClick={() => setWorkspace(DEFAULT_WORKSPACE)}>ADJUTORIX</button>
-          </div>
+          <button onClick={() => void loadProject()} disabled={busy}>Reload workspace</button>
+        </section>
+
+        <section className="big-status">
+          <strong>{consoleStatus}</strong>
+          <span>{busy ? "operator running" : "operator idle"}</span>
         </section>
 
         <section className="metric-grid">
-          <div><strong>{files.length}</strong><span>files</span></div>
-          <div><strong>{dirty ? "dirty" : "clean"}</strong><span>buffer</span></div>
+          <div><strong>{fileCount}</strong><span>usable files</span></div>
+          <div><strong>{sourceCount}</strong><span>source</span></div>
+          <div><strong>{testCount}</strong><span>tests</span></div>
+          <div><strong>{configCount}</strong><span>config</span></div>
           <div><strong>{powerCount}</strong><span>power</span></div>
+          <div><strong>{okCount}/{failedCount}</strong><span>ok/fail</span></div>
         </section>
 
-        <section className="search-card">
-          <input placeholder="Quick open: main.tsx, preload, package..." value={query} onChange={(event) => setQuery(event.target.value)} />
-          <div className="filter-row">
-            {(["all", "source", "test", "config", "doc"] as Array<FileKind | "all">).map((item) => (
-              <button key={item} className={kind === item ? "active" : ""} onClick={() => setKind(item)}>
-                {item}
-              </button>
-            ))}
-          </div>
+        <section className="operator-summary">
+          <h2>Not a file reader</h2>
+          <p>Adjutorix runs local operator workflows: status, doctor, check, smoke, verify, build, ledger, power and recovery.</p>
         </section>
-
-        <nav className="file-list">
-          {visibleFiles.slice(0, 900).map((file) => (
-            <button
-              key={file.path}
-              className={file.path === selectedPath ? "selected" : ""}
-              onClick={() => void openFile(file.path)}
-              title={file.path}
-            >
-              <span>{labelFor(file.kind)}</span>
-              <strong>{file.name}</strong>
-              <small>{shortPath(file.path)}</small>
-            </button>
-          ))}
-        </nav>
       </aside>
 
-      <section className="studio-center">
-        <header className="topbar">
-          <div className="current-file">
-            <strong>{selectedPath || "Opening project..."}</strong>
-            <span>{status}</span>
+      <section className="operator-main">
+        <header className="operator-topbar">
+          <div>
+            <strong>Mission Control</strong>
+            <span>Run the product. Produce evidence. Fix from output.</span>
           </div>
 
-          <div className="action-row">
-            <button className="primary" onClick={() => void saveFile()} disabled={busy || !selectedPath || !dirty}>Save</button>
-            <button onClick={() => void diff()} disabled={busy}>Diff</button>
-            <button onClick={() => void run(COMMANDS.status)} disabled={busy}>Status</button>
-            <button onClick={() => void run(COMMANDS.verify)} disabled={busy}>Verify TS</button>
-            <button onClick={() => void power()} disabled={busy}>Power</button>
+          <div className="top-actions">
+            <button onClick={() => void runWorkflow(requiredWorkflow("status"))} disabled={busy}>Status</button>
+            <button onClick={() => void runWorkflow(requiredWorkflow("verify"))} disabled={busy}>Verify</button>
+            <button onClick={() => void runWorkflow(requiredWorkflow("power"))} disabled={busy}>Power</button>
           </div>
         </header>
 
-        <section className="tabbar">
-          {openTabs.map((tab) => (
-            <button key={tab} className={tab === selectedPath ? "active" : ""} onClick={() => void openFile(tab)}>
-              {tab.split("/").pop()}
+        <section className="workflow-grid">
+          {WORKFLOWS.map((workflow) => (
+            <button
+              key={workflow.id}
+              className={`workflow-card ${states[workflow.id]} ${workflow.danger ? "danger" : ""}`}
+              onClick={() => void runWorkflow(workflow)}
+              disabled={busy}
+            >
+              <span>{states[workflow.id]}</span>
+              <strong>{workflow.title}</strong>
+              <small>{workflow.subtitle}</small>
+              <code>{shortCommand(workflow.command)}</code>
             </button>
           ))}
         </section>
 
-        <section className="editor-frame">
-          <Editor
-            key={selectedPath || "empty"}
-            path={selectedPath || "untitled.txt"}
-            language={languageFor(selectedPath)}
-            value={editorText}
-            theme="vs-dark"
-            onChange={(value) => setEditorText(value ?? "")}
-            options={{
-              automaticLayout: true,
-              fontSize: 13,
-              minimap: { enabled: true },
-              wordWrap: "on",
-              scrollBeyondLastLine: false,
-              smoothScrolling: true,
-              tabSize: 2,
-              renderWhitespace: "selection",
-            }}
-          />
+        <section className="custom-runner">
+          <div>
+            <strong>Operator command</strong>
+            <span>Run inside the selected workspace</span>
+          </div>
+          <textarea value={customCommand} onChange={(event) => setCustomCommand(event.target.value)} />
+          <button onClick={() => void runCustom()} disabled={busy}>Run custom</button>
         </section>
-
-        <footer className="contract-strip">
-          <span>Operator diagnostics console</span>
-          <span>Unified control spine</span>
-          <span>Evidence ledger</span>
-          <span>Execution runway</span>
-          <span>Mission control</span>
-          <span>Operator surface spine</span>
-          <span>Operator kernel live</span>
-          <span>Mandatory gate</span>
-        </footer>
       </section>
 
-      <aside className="studio-command">
-        <header className="command-header">
+      <aside className="operator-output">
+        <header>
           <div>
-            <strong>Command Deck</strong>
-            <span>{busy ? "running" : "idle"} · last: {lastRun.length > 28 ? `${lastRun.slice(0, 28)}…` : lastRun}</span>
+            <strong>Evidence Output</strong>
+            <span>{lastCommand}</span>
           </div>
         </header>
 
-        <section className="task-grid">
-          <button onClick={() => void run(COMMANDS.status)} disabled={busy}>Git status</button>
-          <button onClick={() => void run(COMMANDS.verify)} disabled={busy}>Verify TS</button>
-          <button onClick={() => void run(COMMANDS.tests)} disabled={busy}>UI tests</button>
-          <button onClick={() => void run(COMMANDS.build)} disabled={busy}>Build</button>
-          <button onClick={() => void run(COMMANDS.power)} disabled={busy}>Power all</button>
-          <button onClick={() => void diff()} disabled={busy}>Diff active</button>
-        </section>
-
-        <section className="command-input">
-          <textarea value={command} onChange={(event) => setCommand(event.target.value)} />
-          <button className="run-button" onClick={() => void run()} disabled={busy}>Run</button>
-        </section>
-
-        <pre className="output-panel">{output}</pre>
+        <pre>{output}</pre>
       </aside>
     </main>
   );
