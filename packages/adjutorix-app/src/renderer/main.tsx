@@ -97,6 +97,7 @@ type FeatureKey = (typeof FEATURE_BUTTONS)[number][0] | "agent" | "ledger" | "st
 
 type PowerPackagesBridge = {
   inventory?: () => Promise<unknown>;
+  powerPlane?: () => Promise<unknown>;
 };
 
 function powerPackagesBridge(): PowerPackagesBridge | null {
@@ -394,10 +395,12 @@ function AdjutorixOperatorIde(): JSX.Element {
       }
 
       if (feature === "power") {
-        const inventory = await powerPackagesBridge()?.inventory?.();
-        const text = JSON.stringify(inventory ?? { ok: false, error: "adjutorixPowerPackages bridge unavailable" }, null, 2);
+        const powerPlane = await powerPackagesBridge()?.powerPlane?.();
+        const fallback = await powerPackagesBridge()?.inventory?.();
+        const payload = powerPlane ?? fallback ?? { ok: false, error: "adjutorixPowerPackages bridge unavailable" };
+        const text = JSON.stringify(payload, null, 2);
         setFeatureOutput(text);
-        appendTerminal(`$ power package inventory\n${text.slice(0, 3000)}`);
+        appendTerminal(`$ power plane inventory\n${text.slice(0, 5000)}`);
         return;
       }
 

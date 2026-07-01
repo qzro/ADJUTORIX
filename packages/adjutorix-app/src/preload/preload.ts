@@ -1218,8 +1218,132 @@ async function adjutorixPowerPackageInventory(): Promise<{
 }
 
 if (!(globalThis as unknown as { __adjutorixPowerPackagesExposed?: boolean }).__adjutorixPowerPackagesExposed) {
-  contextBridge.exposeInMainWorld("adjutorixPowerPackages", {
+  
+
+async function adjutorixPowerPlaneReadJson(relativePath: string): Promise<unknown> {
+  const fs = await import("node:fs/promises");
+  const nodePath = await import("node:path");
+
+  const processWithResources = process as NodeJS.Process & { resourcesPath?: string };
+  const resourceRoot = processWithResources.resourcesPath
+    ? nodePath.join(processWithResources.resourcesPath, "app")
+    : process.cwd();
+
+  const candidates = [
+    nodePath.join(resourceRoot, relativePath),
+    nodePath.resolve(relativePath),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(await fs.readFile(candidate, "utf8"));
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return null;
+}
+
+async function adjutorixPowerPlanePackageDetail(name: string): Promise<{
+  name: string;
+  installed: boolean;
+  version?: string;
+  type?: string;
+  main?: string | null;
+  module?: string | null;
+  hasExports: boolean;
+  hasBin: boolean;
+  packageJsonPath?: string;
+}> {
+  const fs = await import("node:fs/promises");
+  const nodePath = await import("node:path");
+
+  const processWithResources = process as NodeJS.Process & { resourcesPath?: string };
+  const resourceRoot = processWithResources.resourcesPath
+    ? nodePath.join(processWithResources.resourcesPath, "app")
+    : process.cwd();
+
+  const candidates = [resourceRoot, process.cwd(), nodePath.resolve(".")];
+
+  for (const base of candidates) {
+    const packageJsonPath = nodePath.join(base, "node_modules", ...name.split("/"), "package.json");
+
+    try {
+      const raw = await fs.readFile(packageJsonPath, "utf8");
+      const parsed = JSON.parse(raw) as {
+        version?: string;
+        type?: string;
+        main?: string;
+        module?: string;
+        exports?: unknown;
+        bin?: unknown;
+      };
+
+      return {
+        name,
+        installed: true,
+        version: parsed.version ?? "unknown",
+        type: parsed.type ?? "commonjs-or-unspecified",
+        main: parsed.main ?? null,
+        module: parsed.module ?? null,
+        hasExports: Boolean(parsed.exports),
+        hasBin: Boolean(parsed.bin),
+        packageJsonPath,
+      };
+    } catch {
+      // try next candidate
+    }
+  }
+
+  return {
+    name,
+    installed: false,
+    hasExports: false,
+    hasBin: false,
+  };
+}
+
+async function adjutorixPowerPlaneInventory(): Promise<{
+  ok: true;
+  schema: "adjutorix.power-plane.inventory.v1";
+  source: "preload-runtime-power-plane";
+  installedCount: number;
+  expectedCount: number;
+  adapters: unknown;
+  packages: Array<Awaited<ReturnType<typeof adjutorixPowerPlanePackageDetail>>>;
+}> {
+  const packageRegistry = await adjutorixPowerPlaneReadJson("configs/runtime/adjutorix_power_packages.json") as
+    | { packages?: Array<{ name?: string }> }
+    | null;
+
+  const adapters = await adjutorixPowerPlaneReadJson("configs/runtime/adjutorix_power_adapters.json");
+
+  const names =
+    packageRegistry?.packages
+      ?.map((entry) => entry.name)
+      .filter((name): name is string => typeof name === "string" && name.length > 0) ?? ADJUTORIX_POWER_PACKAGE_NAMES;
+
+  const packages = [];
+
+  for (const name of names) {
+    packages.push(await adjutorixPowerPlanePackageDetail(name));
+  }
+
+  return {
+    ok: true,
+    schema: "adjutorix.power-plane.inventory.v1",
+    source: "preload-runtime-power-plane",
+    installedCount: packages.filter((row) => row.installed).length,
+    expectedCount: packages.length,
+    adapters,
+    packages,
+  };
+}
+
+contextBridge.exposeInMainWorld("adjutorixPowerPackages", {
     inventory: () => adjutorixPowerPackageInventory(),
+    powerPlane: () => adjutorixPowerPlaneInventory(),
   });
 
   (globalThis as unknown as { __adjutorixPowerPackagesExposed?: boolean }).__adjutorixPowerPackagesExposed = true;

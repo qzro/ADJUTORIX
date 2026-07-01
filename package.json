@@ -25,7 +25,9 @@
     "typecheck": "turbo run typecheck",
     "verify": "bash ./scripts/verify.sh",
     "power:verify": "bash scripts/power/verify-adjutorix-power-packages.sh",
-    "power:update": "bash scripts/power/update-adjutorix-power-packages.sh"
+    "power:update": "bash scripts/power/update-adjutorix-power-packages.sh",
+    "power:plane": "bash scripts/power/verify-adjutorix-power-plane.sh",
+    "power:all": "pnpm power:verify && pnpm power:plane"
   },
   "devDependencies": {
     "turbo": "^2.4.4",
