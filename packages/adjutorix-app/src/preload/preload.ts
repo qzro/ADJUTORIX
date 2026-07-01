@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { contextBridge as __adjutorixContextBridgeV13, ipcRenderer as __adjutorixIpcRendererV13 } from "electron";
+import { contextBridge as __adjutorixContextBridgeV13, ipcRenderer as __adjutorixIpcRendererV13, contextBridge } from "electron";
 import { contextBridge, ipcRenderer } from "electron";
 import { BRIDGE_CHANNELS } from "./bridge.js";
 import { createExposedApi } from "./exposed_api.js";
@@ -918,3 +918,212 @@ const operatorKernelApi = {
 
 
 contextBridge.exposeInMainWorld("adjutorixOperatorKernel", operatorKernelApi);
+
+type AdjutorixPreloadNativeKind = "source" | "test" | "config" | "doc" | "asset" | "other";
+
+type AdjutorixPreloadNativeFile = {
+  path: string;
+  name: string;
+  kind: AdjutorixPreloadNativeKind;
+  size: number;
+};
+
+function adjutorixPreloadNativeKind(filePath: string): AdjutorixPreloadNativeKind {
+  const lower = filePath.toLowerCase();
+
+  if (
+    lower.includes("/tests/") ||
+    lower.startsWith("tests/") ||
+    lower.includes("/test/") ||
+    lower.includes(".test.") ||
+    lower.includes(".spec.")
+  ) return "test";
+
+  if (
+    lower.endsWith(".json") ||
+    lower.endsWith(".yml") ||
+    lower.endsWith(".yaml") ||
+    lower.endsWith(".toml") ||
+    lower.endsWith(".env") ||
+    lower.endsWith(".config.js") ||
+    lower.endsWith(".config.ts") ||
+    lower.includes("config")
+  ) return "config";
+
+  if (
+    lower.endsWith(".md") ||
+    lower.endsWith(".txt") ||
+    lower.endsWith(".rst") ||
+    lower.includes("/docs/") ||
+    lower.includes("readme")
+  ) return "doc";
+
+  if (
+    lower.endsWith(".ts") ||
+    lower.endsWith(".tsx") ||
+    lower.endsWith(".js") ||
+    lower.endsWith(".jsx") ||
+    lower.endsWith(".py") ||
+    lower.endsWith(".sh") ||
+    lower.endsWith(".css") ||
+    lower.endsWith(".html") ||
+    lower.endsWith(".swift") ||
+    lower.endsWith(".go") ||
+    lower.endsWith(".rs")
+  ) return "source";
+
+  if (
+    lower.endsWith(".png") ||
+    lower.endsWith(".jpg") ||
+    lower.endsWith(".jpeg") ||
+    lower.endsWith(".svg") ||
+    lower.endsWith(".ico") ||
+    lower.endsWith(".webp")
+  ) return "asset";
+
+  return "other";
+}
+
+async function adjutorixPreloadNativeScanWorkspace(workspaceInput: string): Promise<{
+  ok: true;
+  schema: "adjutorix.preload-native-filesystem.index.v1";
+  source: "native-main-filesystem-index";
+  workspace: string;
+  fileCount: number;
+  files: AdjutorixPreloadNativeFile[];
+}> {
+  const fs = await import("node:fs/promises");
+  const nodePath = await import("node:path");
+
+  const workspace = nodePath.resolve(workspaceInput);
+  const rootStat = await fs.stat(workspace);
+
+  if (!rootStat.isDirectory()) {
+    throw new Error(`adjutorix_native_workspace_not_directory:${workspace}`);
+  }
+
+  const skip = new Set([
+    ".git",
+    "node_modules",
+    "dist",
+    "release",
+    ".tmp",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".next",
+    ".turbo",
+    ".cache",
+  ]);
+
+  const files: AdjutorixPreloadNativeFile[] = [];
+  const maxFiles = 5000;
+
+  async function walk(directory: string, depth: number): Promise<void> {
+    if (depth > 20 || files.length >= maxFiles) return;
+
+    let entries;
+    try {
+      entries = await fs.readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    entries.sort((a, b) => {
+      if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    for (const entry of entries) {
+      if (files.length >= maxFiles) return;
+      if (skip.has(entry.name)) continue;
+
+      const absolute = nodePath.join(directory, entry.name);
+      const relative = nodePath.relative(workspace, absolute).split(nodePath.sep).join("/");
+
+      if (!relative || relative.startsWith("..") || nodePath.isAbsolute(relative)) continue;
+
+      if (entry.isDirectory()) {
+        await walk(absolute, depth + 1);
+        continue;
+      }
+
+      if (!entry.isFile() || entry.isSymbolicLink()) continue;
+      if (entry.name.endsWith(".map") || entry.name.endsWith(".log") || entry.name === ".DS_Store") continue;
+
+      let size = 0;
+      try {
+        size = (await fs.stat(absolute)).size;
+      } catch {
+        continue;
+      }
+
+      files.push({
+        path: relative,
+        name: entry.name,
+        kind: adjutorixPreloadNativeKind(relative),
+        size,
+      });
+    }
+  }
+
+  await walk(workspace, 0);
+
+  files.sort((a, b) => {
+    const weight = (file: AdjutorixPreloadNativeFile): number => {
+      if (file.name.toLowerCase() === "readme.md") return -20;
+      if (file.name.toLowerCase() === "package.json") return -10;
+      if (file.kind === "source") return 0;
+      if (file.kind === "test") return 1;
+      if (file.kind === "config") return 2;
+      if (file.kind === "doc") return 3;
+      if (file.kind === "asset") return 4;
+      return 5;
+    };
+
+    return weight(a) - weight(b) || a.path.localeCompare(b.path);
+  });
+
+  return {
+    ok: true,
+    schema: "adjutorix.preload-native-filesystem.index.v1",
+    source: "native-main-filesystem-index",
+    workspace,
+    fileCount: files.length,
+    files,
+  };
+}
+
+async function adjutorixPreloadNativeReadFile(request: { workspace: string; path: string }): Promise<{
+  ok: true;
+  schema: "adjutorix.preload-native-filesystem.read.v1";
+  workspace: string;
+  path: string;
+  content: string;
+}> {
+  const fs = await import("node:fs/promises");
+  const nodePath = await import("node:path");
+
+  const workspace = nodePath.resolve(request.workspace);
+  const target = nodePath.resolve(workspace, request.path);
+
+  if (target !== workspace && !target.startsWith(workspace + nodePath.sep)) {
+    throw new Error("adjutorix_native_read_outside_workspace");
+  }
+
+  const content = await fs.readFile(target, "utf8");
+
+  return {
+    ok: true,
+    schema: "adjutorix.preload-native-filesystem.read.v1",
+    workspace,
+    path: request.path,
+    content: content.slice(0, 160000),
+  };
+}
+
+contextBridge.exposeInMainWorld("adjutorixNativeFilesystem", {
+  scanWorkspace: (workspace: string) => adjutorixPreloadNativeScanWorkspace(workspace),
+  readFile: (request: { workspace: string; path: string }) => adjutorixPreloadNativeReadFile(request),
+});
+
