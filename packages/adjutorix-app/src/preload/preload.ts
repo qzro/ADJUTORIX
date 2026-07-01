@@ -1004,16 +1004,25 @@ async function adjutorixPreloadNativeScanWorkspace(workspaceInput: string): Prom
 
   const skip = new Set([
     ".git",
+    ".github",
     "node_modules",
     "dist",
     "release",
     ".tmp",
     "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".vitest",
     ".venv",
     "venv",
     ".next",
     ".turbo",
     ".cache",
+    ".adjutorix-release",
+    "reports",
+    "quarantine",
+    "coverage",
   ]);
 
   const files: AdjutorixPreloadNativeFile[] = [];

@@ -1,7 +1,7 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
-  background: #06070a;
-  color: #f7f9ff;
+  color: #f8fbff;
+  background: #05060a;
 }
 
 * {
@@ -11,7 +11,7 @@
 body {
   margin: 0;
   overflow: hidden;
-  background: #06070a;
+  background: #05060a;
 }
 
 button,
@@ -21,285 +21,343 @@ textarea {
 }
 
 button {
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  background: rgba(255, 255, 255, 0.08);
-  color: #f7f9ff;
-  border-radius: 10px;
-  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.075);
+  color: #f8fbff;
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 button:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.42;
+  opacity: 0.4;
 }
 
 input,
 textarea {
+  width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.13);
-  background: rgba(0, 0, 0, 0.34);
-  color: #f7f9ff;
-  border-radius: 10px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.36);
+  color: #f8fbff;
   outline: none;
 }
 
-.user-workbench {
+.studio-shell {
   width: 100vw;
   height: 100vh;
   display: grid;
-  grid-template-columns: 360px minmax(680px, 1fr) 460px;
+  grid-template-columns: 360px minmax(740px, 1fr) 430px;
   background:
-    radial-gradient(circle at 8% 0%, rgba(66, 100, 255, 0.2), transparent 34%),
-    radial-gradient(circle at 84% 10%, rgba(0, 220, 255, 0.12), transparent 32%),
-    #06070a;
+    radial-gradient(circle at 10% -10%, rgba(69, 99, 255, 0.24), transparent 34%),
+    radial-gradient(circle at 85% 0%, rgba(0, 220, 255, 0.13), transparent 32%),
+    #05060a;
 }
 
-.user-sidebar,
-.user-main,
-.user-output {
+.studio-rail,
+.studio-center,
+.studio-command {
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.user-sidebar {
+.studio-rail {
   display: flex;
   flex-direction: column;
-  padding: 16px;
   gap: 13px;
-  background: rgba(255, 255, 255, 0.04);
+  padding: 16px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
 }
 
-.user-brand {
+.studio-brand {
   display: flex;
-  gap: 12px;
   align-items: center;
+  gap: 12px;
 }
 
-.user-logo {
-  width: 42px;
-  height: 42px;
+.studio-mark {
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(93, 132, 255, 0.95), rgba(0, 220, 255, 0.6));
-  font-weight: 900;
+  border-radius: 15px;
+  background: linear-gradient(135deg, rgba(92, 130, 255, 0.95), rgba(0, 224, 255, 0.62));
+  font-weight: 950;
 }
 
-.user-brand strong,
-.user-toolbar strong,
-.user-output header strong {
+.studio-brand strong,
+.topbar strong,
+.command-header strong {
   display: block;
-  font-size: 14px;
-  letter-spacing: 0.04em;
+  font-size: 15px;
+  letter-spacing: -0.02em;
 }
 
-.user-brand span,
-.user-toolbar span,
-.user-output header span,
-.user-stats span {
+.studio-brand span,
+.topbar span,
+.command-header span,
+.metric-grid span {
   display: block;
-  color: rgba(247, 249, 255, 0.62);
-  font-size: 11px;
   margin-top: 2px;
+  color: rgba(248, 251, 255, 0.62);
+  font-size: 11px;
 }
 
-.user-workspace {
+.workspace-card,
+.search-card {
   display: grid;
   gap: 8px;
 }
 
-.user-workspace label {
-  color: rgba(247, 249, 255, 0.68);
+.workspace-card label {
+  color: rgba(248, 251, 255, 0.66);
   font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 
-.user-workspace input,
-.user-filter {
-  width: 100%;
-  padding: 10px;
+.workspace-card input,
+.search-card input {
+  padding: 10px 11px;
 }
 
-.user-stats {
+.workspace-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.workspace-buttons button,
+.filter-row button,
+.task-grid button,
+.action-row button,
+.tabbar button,
+.run-button {
+  padding: 8px 10px;
+}
+
+.metric-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 9px;
 }
 
-.user-stats div {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 13px;
+.metric-grid div {
+  border: 1px solid rgba(255, 255, 255, 0.095);
+  border-radius: 14px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.055);
 }
 
-.user-stats strong {
+.metric-grid strong {
   display: block;
-  font-size: 17px;
+  font-size: 18px;
 }
 
-.user-filters {
-  display: grid;
-  gap: 8px;
-}
-
-.kind-row,
-.command-presets {
+.filter-row {
   display: flex;
-  gap: 6px;
   flex-wrap: wrap;
+  gap: 6px;
 }
 
-.kind-row button,
-.command-presets button {
-  padding: 6px 8px;
+.filter-row button {
   font-size: 11px;
   text-transform: uppercase;
 }
 
-.kind-row button.selected {
-  border-color: rgba(0, 220, 255, 0.75);
-  background: rgba(0, 220, 255, 0.14);
+.filter-row button.active {
+  border-color: rgba(0, 224, 255, 0.8);
+  background: rgba(0, 224, 255, 0.15);
 }
 
-.user-files {
+.file-list {
   overflow: auto;
   display: grid;
   align-content: start;
   gap: 7px;
-  padding-right: 4px;
+  padding-right: 3px;
 }
 
-.user-files button {
-  text-align: left;
+.file-list button {
   display: grid;
-  grid-template-columns: 38px 1fr;
+  grid-template-columns: 42px 1fr;
   gap: 2px 9px;
   align-items: center;
-  border-radius: 13px;
+  text-align: left;
   padding: 10px;
 }
 
-.user-files button.selected {
-  border-color: rgba(91, 141, 255, 0.88);
-  background: rgba(91, 141, 255, 0.2);
+.file-list button.selected {
+  border-color: rgba(92, 130, 255, 0.9);
+  background: rgba(92, 130, 255, 0.21);
 }
 
-.user-files button span {
+.file-list span {
   grid-row: span 2;
-  color: rgba(0, 220, 255, 0.9);
+  color: rgba(0, 224, 255, 0.92);
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 950;
 }
 
-.user-files button strong {
+.file-list strong,
+.file-list small {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.file-list strong {
   font-size: 12px;
 }
 
-.user-files button small {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: rgba(247, 249, 255, 0.58);
+.file-list small {
+  color: rgba(248, 251, 255, 0.55);
   font-size: 10px;
 }
 
-.user-main {
+.studio-center {
   display: grid;
-  grid-template-rows: auto 1fr;
-  min-width: 0;
+  grid-template-rows: 72px 42px minmax(0, 1fr) 40px;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.user-toolbar,
-.user-output header {
-  min-height: 70px;
+.topbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 13px 15px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 16px;
   background: rgba(255, 255, 255, 0.035);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.file-title {
+.current-file {
   min-width: 0;
 }
 
-.file-title strong {
+.current-file strong {
+  max-width: 540px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  max-width: 520px;
 }
 
-.user-actions {
+.action-row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.user-editor {
-  width: 100%;
-  height: 100%;
-  resize: none;
-  border: 0;
-  border-radius: 0;
-  padding: 18px;
-  line-height: 1.55;
-  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  background: rgba(2, 4, 8, 0.76);
+.action-row .primary {
+  border-color: rgba(0, 224, 255, 0.82);
+  background: rgba(0, 224, 255, 0.16);
 }
 
-.user-output {
-  display: grid;
-  grid-template-rows: auto auto 96px 1fr;
+.tabbar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 7px 12px;
   background: rgba(255, 255, 255, 0.025);
-  border-right: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.command-presets {
-  padding: 12px;
+.tabbar button {
+  flex: 0 0 auto;
+  max-width: 170px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+}
+
+.tabbar button.active {
+  border-color: rgba(92, 130, 255, 0.9);
+  background: rgba(92, 130, 255, 0.18);
+}
+
+.editor-frame {
+  min-width: 0;
+  min-height: 0;
+  background: #05060a;
+}
+
+.contract-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.contract-strip span {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: rgba(248, 251, 255, 0.55);
+  font-size: 10px;
+}
+
+.studio-command {
+  display: grid;
+  grid-template-rows: 72px auto 120px minmax(0, 1fr);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.command-header {
+  display: flex;
+  align-items: center;
+  padding: 13px 16px;
+  background: rgba(0, 224, 255, 0.045);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.user-command {
+.task-grid {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   padding: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.user-command textarea {
-  width: 100%;
-  height: 70px;
-  padding: 9px 10px;
-  resize: none;
-  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
+.command-input {
+  display: grid;
+  grid-template-columns: 1fr 74px;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.user-output pre {
+.command-input textarea {
+  height: 92px;
+  resize: none;
+  padding: 10px;
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.output-panel {
   margin: 0;
   padding: 14px;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  color: rgba(248, 251, 255, 0.86);
   font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(247, 249, 255, 0.86);
 }
