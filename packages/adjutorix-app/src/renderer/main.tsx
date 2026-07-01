@@ -27,15 +27,19 @@ type WorkbenchBridge = {
   powerInventory: () => Promise<unknown>;
 };
 
-type Workflow = {
+type ActionGroup = "connect" | "verify" | "operate" | "recover";
+
+type ControlAction = {
   id: string;
+  group: ActionGroup;
   title: string;
   subtitle: string;
   command: string;
-  danger?: boolean;
+  allowFailure?: boolean;
+  critical?: boolean;
 };
 
-type WorkflowState = "idle" | "running" | "ok" | "failed";
+type RunState = "idle" | "running" | "ok" | "failed";
 
 declare global {
   interface Window {
@@ -45,93 +49,167 @@ declare global {
 
 const DEFAULT_WORKSPACE = "/Users/midiakiasat/Downloads/Apps/midiakiasat/qzro/ADJUTORIX";
 
-const WORKFLOWS: Workflow[] = [
+const ACTIONS: ControlAction[] = [
   {
-    id: "status",
-    title: "Status",
-    subtitle: "working tree + branch state",
+    id: "agent-status",
+    group: "connect",
+    title: "Agent Status",
+    subtitle: "check local Adjutorix agent",
+    command: "bash scripts/agent/status.sh",
+    allowFailure: true,
+  },
+  {
+    id: "agent-start",
+    group: "connect",
+    title: "Start Agent",
+    subtitle: "boot local agent service",
+    command: "bash scripts/agent/start.sh && bash scripts/agent/status.sh",
+    critical: true,
+  },
+  {
+    id: "agent-restart",
+    group: "connect",
+    title: "Restart Agent",
+    subtitle: "hard reconnect runtime",
+    command: "bash scripts/agent/restart.sh && bash scripts/agent/status.sh",
+    critical: true,
+  },
+  {
+    id: "agent-logs",
+    group: "connect",
+    title: "Agent Logs",
+    subtitle: "latest agent evidence",
+    command: "bash scripts/agent/logs.sh || true",
+    allowFailure: true,
+  },
+  {
+    id: "git-status",
+    group: "operate",
+    title: "Git Status",
+    subtitle: "working tree and branch",
     command: "git status --short && git log --oneline --decorate --max-count=8",
   },
   {
     id: "doctor",
+    group: "operate",
     title: "Doctor",
-    subtitle: "workspace and runtime diagnostics",
+    subtitle: "runtime diagnostics",
     command: "bash scripts/doctor.sh",
+    allowFailure: true,
   },
   {
     id: "check",
+    group: "verify",
     title: "Check",
-    subtitle: "repository control check",
+    subtitle: "repository control gate",
     command: "bash scripts/check.sh",
+    critical: true,
   },
   {
     id: "smoke",
+    group: "verify",
     title: "Smoke",
-    subtitle: "operator smoke run",
+    subtitle: "operator smoke surface",
     command: "bash scripts/smoke.sh",
+    critical: true,
   },
   {
     id: "verify",
+    group: "verify",
     title: "Verify",
-    subtitle: "full verification surface",
+    subtitle: "full verification gate",
     command: "bash scripts/verify.sh",
+    critical: true,
   },
   {
-    id: "build-ts",
+    id: "verify-run",
+    group: "verify",
+    title: "Verify Run",
+    subtitle: "verification runner",
+    command: "bash scripts/verify/run.sh",
+    critical: true,
+  },
+  {
+    id: "verify-summary",
+    group: "verify",
+    title: "Verify Summary",
+    subtitle: "latest verification summary",
+    command: "bash scripts/verify/summary.sh || true",
+    allowFailure: true,
+  },
+  {
+    id: "typescript",
+    group: "verify",
     title: "TypeScript",
-    subtitle: "app type gate",
+    subtitle: "desktop app type gate",
     command: "pnpm --filter @adjutorix/app run build:ts",
-  },
-  {
-    id: "ui-contracts",
-    title: "UI Contracts",
-    subtitle: "core renderer contracts",
-    command:
-      "pnpm --filter @adjutorix/app exec vitest run tests/renderer/operator_unified_control_spine_contract.test.ts tests/renderer/operator_surface_spine_contract.test.ts tests/renderer/operator_diagnostics_console_surface_contract.test.ts",
+    critical: true,
   },
   {
     id: "power",
-    title: "Power Plane",
-    subtitle: "21 package runtime verify",
+    group: "connect",
+    title: "Power Packages",
+    subtitle: "21 package runtime plane",
     command: "pnpm power:all",
+    critical: true,
   },
   {
-    id: "ledger",
-    title: "Ledger",
-    subtitle: "current ledger view",
+    id: "ledger-current",
+    group: "operate",
+    title: "Ledger Current",
+    subtitle: "current ledger head",
     command: "bash scripts/ledger/current.sh || true",
+    allowFailure: true,
+  },
+  {
+    id: "ledger-graph",
+    group: "operate",
+    title: "Ledger Graph",
+    subtitle: "transaction graph",
+    command: "bash scripts/ledger/graph.sh || true",
+    allowFailure: true,
+  },
+  {
+    id: "transaction-status",
+    group: "operate",
+    title: "Transactions",
+    subtitle: "active transaction status",
+    command: "bash scripts/transaction/status.sh || true",
+    allowFailure: true,
+  },
+  {
+    id: "governance",
+    group: "operate",
+    title: "Governance",
+    subtitle: "policy and constitution check",
+    command: "bash scripts/governance/check.sh",
+    critical: true,
   },
   {
     id: "workspace-health",
+    group: "operate",
     title: "Workspace Health",
-    subtitle: "trust + workspace health",
+    subtitle: "trust and workspace health",
     command: "bash scripts/workspace/health.sh || true",
+    allowFailure: true,
   },
   {
-    id: "diff",
-    title: "Diff",
-    subtitle: "current source delta",
-    command: "git diff --stat && git diff -- packages/adjutorix-app/src/renderer/main.tsx packages/adjutorix-app/src/preload/preload.ts packages/adjutorix-app/src/renderer/styles/adjutorix-power-workbench.css",
+    id: "recovery-resume",
+    group: "recover",
+    title: "Recovery Status",
+    subtitle: "resume / recovery visibility",
+    command: "bash scripts/recovery/resume.sh || true",
+    allowFailure: true,
   },
   {
-    id: "clean",
+    id: "clean-tree",
+    group: "recover",
     title: "Clean Generated",
-    subtitle: "remove build output from repo tree",
+    subtitle: "remove generated output",
     command:
       "rm -rf .tmp packages/adjutorix-app/dist packages/adjutorix-app/release reports/current/adjutorix-power-plane-verify.json reports/current/pr110-ci-failures && git status --short",
-    danger: true,
   },
 ];
-
-function requiredWorkflow(id: string): Workflow {
-  const workflow = WORKFLOWS.find((candidate) => candidate.id === id);
-
-  if (!workflow) {
-    throw new Error(`missing_workflow:${id}`);
-  }
-
-  return workflow;
-}
 
 function bridge(): WorkbenchBridge {
   const candidate = window.adjutorixUserWorkbench;
@@ -143,12 +221,33 @@ function bridge(): WorkbenchBridge {
   return candidate;
 }
 
-function initialWorkflowState(): Record<string, WorkflowState> {
-  return Object.fromEntries(WORKFLOWS.map((workflow) => [workflow.id, "idle" as WorkflowState]));
+function actionById(id: string): ControlAction {
+  const action = ACTIONS.find((candidate) => candidate.id === id);
+
+  if (!action) {
+    throw new Error(`missing_action:${id}`);
+  }
+
+  return action;
 }
 
-function shortCommand(command: string): string {
-  return command.length > 62 ? `${command.slice(0, 62)}…` : command;
+function initialStates(): Record<string, RunState> {
+  return Object.fromEntries(ACTIONS.map((action) => [action.id, "idle" as RunState]));
+}
+
+function groupTitle(group: ActionGroup): string {
+  if (group === "connect") return "Connect";
+  if (group === "verify") return "Verify";
+  if (group === "operate") return "Operate";
+  return "Recover";
+}
+
+function timeStamp(): string {
+  return new Date().toLocaleTimeString();
+}
+
+function compact(text: string): string {
+  return text.length > 92 ? `${text.slice(0, 92)}…` : text;
 }
 
 function App(): JSX.Element {
@@ -158,32 +257,44 @@ function App(): JSX.Element {
   const [testCount, setTestCount] = useState(0);
   const [configCount, setConfigCount] = useState(0);
   const [powerCount, setPowerCount] = useState("0/21");
-  const [consoleStatus, setConsoleStatus] = useState("booting");
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   const [lastCommand, setLastCommand] = useState("none");
   const [customCommand, setCustomCommand] = useState("git status --short");
-  const [output, setOutput] = useState("Adjutorix Operator Console is booting.");
-  const [states, setStates] = useState<Record<string, WorkflowState>>(initialWorkflowState());
+  const [states, setStates] = useState<Record<string, RunState>>(initialStates());
+  const [evidence, setEvidence] = useState("Adjutorix Control Center booting.");
 
-  const failedCount = useMemo(() => Object.values(states).filter((state) => state === "failed").length, [states]);
+  const grouped = useMemo(
+    () =>
+      (["connect", "verify", "operate", "recover"] as ActionGroup[]).map((group) => ({
+        group,
+        actions: ACTIONS.filter((action) => action.group === group),
+      })),
+    [],
+  );
+
   const okCount = useMemo(() => Object.values(states).filter((state) => state === "ok").length, [states]);
+  const failCount = useMemo(() => Object.values(states).filter((state) => state === "failed").length, [states]);
+  const running = busyAction !== null;
 
-  async function loadProject(): Promise<void> {
-    setBusy(true);
-    setConsoleStatus("loading project");
+  function appendEvidence(text: string): void {
+    setEvidence((current) => `${current}\n\n[${timeStamp()}]\n${text}`.slice(-90000));
+  }
+
+  async function loadWorkspace(target = workspace): Promise<void> {
+    setBusyAction("workspace");
 
     try {
-      const result = await bridge().scanWorkspace(workspace);
+      const result = await bridge().scanWorkspace(target);
       setWorkspace(result.workspace);
       setFileCount(result.fileCount);
       setSourceCount(result.files.filter((file) => file.kind === "source").length);
       setTestCount(result.files.filter((file) => file.kind === "test").length);
       setConfigCount(result.files.filter((file) => file.kind === "config").length);
-      setConsoleStatus("project ready");
-      setOutput(`PROJECT READY\n${result.workspace}\n${result.fileCount} usable files\n${result.source}`);
+
+      appendEvidence(`WORKSPACE CONNECTED\n${result.workspace}\n${result.fileCount} usable files\nsource=${result.source}`);
 
       console.info(
-        "ADJUTORIX_OPERATOR_CONSOLE_READY",
+        "ADJUTORIX_CONTROL_CENTER_READY",
         JSON.stringify({
           workspace: result.workspace,
           files: result.fileCount,
@@ -191,11 +302,9 @@ function App(): JSX.Element {
         }),
       );
     } catch (error) {
-      setConsoleStatus("project load failed");
-      setOutput(String(error));
-      console.error("ADJUTORIX_OPERATOR_CONSOLE_LOAD_FAILED", error);
+      appendEvidence(`WORKSPACE FAILED\n${String(error)}`);
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -203,11 +312,13 @@ function App(): JSX.Element {
     try {
       const payload = await bridge().powerInventory();
       const record = payload as { installedCount?: number; expectedCount?: number };
-      const value = `${record.installedCount ?? 0}/${record.expectedCount ?? 21}`;
-      setPowerCount(value);
+      const count = `${record.installedCount ?? 0}/${record.expectedCount ?? 21}`;
+      setPowerCount(count);
+
+      appendEvidence(`POWER CONNECTED\n${count} packages available`);
 
       console.info(
-        "ADJUTORIX_OPERATOR_POWER_READY",
+        "ADJUTORIX_CONTROL_POWER_READY",
         JSON.stringify({
           installed: record.installedCount ?? 0,
           expected: record.expectedCount ?? 21,
@@ -215,161 +326,170 @@ function App(): JSX.Element {
       );
     } catch (error) {
       setPowerCount("error");
-      console.error("ADJUTORIX_OPERATOR_POWER_FAILED", error);
+      appendEvidence(`POWER FAILED\n${String(error)}`);
     }
   }
 
-  async function runWorkflow(workflow: Workflow): Promise<void> {
-    setBusy(true);
-    setLastCommand(workflow.command);
-    setConsoleStatus(`running ${workflow.title}`);
-    setStates((current) => ({ ...current, [workflow.id]: "running" }));
+  async function runAction(action: ControlAction, workspaceOverride = workspace): Promise<void> {
+    setBusyAction(action.id);
+    setLastCommand(action.command);
+    setStates((current) => ({ ...current, [action.id]: "running" }));
 
     try {
       const result = await bridge().runCommand({
-        workspace,
-        command: workflow.command,
+        workspace: workspaceOverride,
+        command: action.command,
         timeoutMs: 240000,
       });
 
-      const text = [
-        `ADJUTORIX WORKFLOW: ${workflow.title}`,
-        `command: ${workflow.command}`,
-        `exit=${result.exitCode} timedOut=${result.timedOut}`,
-        "",
-        result.stdout,
-        result.stderr ? `\n--- stderr ---\n${result.stderr}` : "",
-      ].join("\n");
+      const ok = result.ok || action.allowFailure === true;
+      setStates((current) => ({ ...current, [action.id]: ok ? "ok" : "failed" }));
 
-      setOutput(text);
-      setConsoleStatus(result.ok ? `${workflow.title} ok` : `${workflow.title} failed`);
-      setStates((current) => ({ ...current, [workflow.id]: result.ok ? "ok" : "failed" }));
+      appendEvidence(
+        [
+          `ACTION: ${action.title}`,
+          `GROUP: ${groupTitle(action.group)}`,
+          `$ ${result.command}`,
+          `exit=${result.exitCode} timedOut=${result.timedOut} ok=${ok}`,
+          "",
+          result.stdout || "(no stdout)",
+          result.stderr ? `\n--- stderr ---\n${result.stderr}` : "",
+        ].join("\n"),
+      );
 
       console.info(
-        "ADJUTORIX_OPERATOR_WORKFLOW_DONE",
+        "ADJUTORIX_CONTROL_WORKFLOW_DONE",
         JSON.stringify({
-          id: workflow.id,
-          ok: result.ok,
+          id: action.id,
+          ok,
           exitCode: result.exitCode,
         }),
       );
     } catch (error) {
-      setOutput(String(error));
-      setConsoleStatus(`${workflow.title} failed`);
-      setStates((current) => ({ ...current, [workflow.id]: "failed" }));
+      setStates((current) => ({ ...current, [action.id]: "failed" }));
+      appendEvidence(`ACTION FAILED: ${action.title}\n${String(error)}`);
     } finally {
-      setBusy(false);
+      setBusyAction(null);
     }
   }
 
   async function runCustom(): Promise<void> {
-    await runWorkflow({
-      id: "custom",
+    await runAction({
+      id: "custom-command",
+      group: "operate",
       title: "Custom Command",
-      subtitle: "operator command",
+      subtitle: "manual operator command",
       command: customCommand,
+      allowFailure: true,
     });
   }
 
+  async function boot(): Promise<void> {
+    document.documentElement.dataset.adjutorixControlCenter = "true";
+    document.body.dataset.adjutorixControlCenter = "true";
+    console.info("ADJUTORIX_CONTROL_CENTER_MOUNTED");
+
+    await loadWorkspace(DEFAULT_WORKSPACE);
+    await loadPower();
+    await runAction(actionById("git-status"), DEFAULT_WORKSPACE);
+  }
+
   useEffect(() => {
-    document.documentElement.dataset.adjutorixOperatorConsole = "true";
-    document.body.dataset.adjutorixOperatorConsole = "true";
-    console.info("ADJUTORIX_OPERATOR_CONSOLE_MOUNTED");
-
-    void loadProject();
-    void loadPower();
-
-    setTimeout(() => {
-      void runWorkflow(requiredWorkflow("status"));
-    }, 500);
+    void boot();
   }, []);
 
   return (
-    <main className="operator-shell">
-      <aside className="operator-left">
-        <header className="operator-brand">
-          <div className="operator-mark">A</div>
+    <main className="control-shell">
+      <aside className="control-left">
+        <header className="brand-row">
+          <div className="brand-mark">A</div>
           <div>
             <strong>Adjutorix</strong>
-            <span>operator console</span>
+            <span>control center</span>
           </div>
         </header>
 
-        <section className="workspace-panel">
+        <section className="workspace-box">
           <label>Workspace</label>
           <input value={workspace} onChange={(event) => setWorkspace(event.target.value)} />
-          <button onClick={() => void loadProject()} disabled={busy}>Reload workspace</button>
+          <button onClick={() => void loadWorkspace()} disabled={running}>Connect workspace</button>
         </section>
 
-        <section className="big-status">
-          <strong>{consoleStatus}</strong>
-          <span>{busy ? "operator running" : "operator idle"}</span>
+        <section className="connection-state">
+          <strong>{running ? `running ${busyAction}` : "ready"}</strong>
+          <span>{lastCommand}</span>
         </section>
 
         <section className="metric-grid">
-          <div><strong>{fileCount}</strong><span>usable files</span></div>
+          <div><strong>{fileCount}</strong><span>files</span></div>
           <div><strong>{sourceCount}</strong><span>source</span></div>
           <div><strong>{testCount}</strong><span>tests</span></div>
           <div><strong>{configCount}</strong><span>config</span></div>
           <div><strong>{powerCount}</strong><span>power</span></div>
-          <div><strong>{okCount}/{failedCount}</strong><span>ok/fail</span></div>
+          <div><strong>{okCount}/{failCount}</strong><span>ok/fail</span></div>
         </section>
 
-        <section className="operator-summary">
-          <h2>Not a file reader</h2>
-          <p>Adjutorix runs local operator workflows: status, doctor, check, smoke, verify, build, ledger, power and recovery.</p>
+        <section className="primary-stack">
+          <button onClick={() => void runAction(actionById("agent-start"))} disabled={running}>Start Agent</button>
+          <button onClick={() => void runAction(actionById("verify"))} disabled={running}>Run Verify</button>
+          <button onClick={() => void runAction(actionById("power"))} disabled={running}>Power Check</button>
         </section>
       </aside>
 
-      <section className="operator-main">
-        <header className="operator-topbar">
+      <section className="control-main">
+        <header className="mission-header">
           <div>
             <strong>Mission Control</strong>
-            <span>Run the product. Produce evidence. Fix from output.</span>
+            <span>Connect runtime. Run gates. Produce evidence. Recover from failures.</span>
           </div>
 
-          <div className="top-actions">
-            <button onClick={() => void runWorkflow(requiredWorkflow("status"))} disabled={busy}>Status</button>
-            <button onClick={() => void runWorkflow(requiredWorkflow("verify"))} disabled={busy}>Verify</button>
-            <button onClick={() => void runWorkflow(requiredWorkflow("power"))} disabled={busy}>Power</button>
+          <div className="mission-actions">
+            <button onClick={() => void runAction(actionById("agent-status"))} disabled={running}>Agent</button>
+            <button onClick={() => void runAction(actionById("git-status"))} disabled={running}>Status</button>
+            <button onClick={() => void runAction(actionById("verify-run"))} disabled={running}>Verify</button>
+            <button onClick={() => void runAction(actionById("clean-tree"))} disabled={running}>Clean</button>
           </div>
         </header>
 
-        <section className="workflow-grid">
-          {WORKFLOWS.map((workflow) => (
-            <button
-              key={workflow.id}
-              className={`workflow-card ${states[workflow.id]} ${workflow.danger ? "danger" : ""}`}
-              onClick={() => void runWorkflow(workflow)}
-              disabled={busy}
-            >
-              <span>{states[workflow.id]}</span>
-              <strong>{workflow.title}</strong>
-              <small>{workflow.subtitle}</small>
-              <code>{shortCommand(workflow.command)}</code>
-            </button>
+        <section className="lanes">
+          {grouped.map((lane) => (
+            <section className="lane" key={lane.group}>
+              <header>{groupTitle(lane.group)}</header>
+              <div className="lane-actions">
+                {lane.actions.map((action) => (
+                  <button
+                    key={action.id}
+                    className={`action-card ${states[action.id]} ${action.critical ? "critical" : ""}`}
+                    onClick={() => void runAction(action)}
+                    disabled={running}
+                  >
+                    <span>{states[action.id]}</span>
+                    <strong>{action.title}</strong>
+                    <small>{action.subtitle}</small>
+                    <code>{compact(action.command)}</code>
+                  </button>
+                ))}
+              </div>
+            </section>
           ))}
         </section>
 
-        <section className="custom-runner">
+        <section className="manual-command">
           <div>
             <strong>Operator command</strong>
-            <span>Run inside the selected workspace</span>
+            <span>Runs inside connected workspace</span>
           </div>
           <textarea value={customCommand} onChange={(event) => setCustomCommand(event.target.value)} />
-          <button onClick={() => void runCustom()} disabled={busy}>Run custom</button>
+          <button onClick={() => void runCustom()} disabled={running}>Run</button>
         </section>
       </section>
 
-      <aside className="operator-output">
+      <aside className="evidence-panel">
         <header>
-          <div>
-            <strong>Evidence Output</strong>
-            <span>{lastCommand}</span>
-          </div>
+          <strong>Evidence Stream</strong>
+          <span>{running ? "live" : "idle"}</span>
         </header>
-
-        <pre>{output}</pre>
+        <pre>{evidence}</pre>
       </aside>
     </main>
   );
