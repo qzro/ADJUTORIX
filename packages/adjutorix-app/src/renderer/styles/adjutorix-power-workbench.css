@@ -1,7 +1,7 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
-  background: #07080b;
-  color: #f5f7fb;
+  background: #06070a;
+  color: #f7f9ff;
 }
 
 * {
@@ -11,7 +11,7 @@
 body {
   margin: 0;
   overflow: hidden;
-  background: #07080b;
+  background: #06070a;
 }
 
 button,
@@ -21,28 +21,29 @@ textarea {
 }
 
 button {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.13);
   background: rgba(255, 255, 255, 0.08);
-  color: #f5f7fb;
+  color: #f7f9ff;
   border-radius: 10px;
   padding: 8px 10px;
   cursor: pointer;
+  font-weight: 700;
 }
 
 button:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 0.42;
 }
 
 input,
 textarea {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.32);
-  color: #f5f7fb;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(0, 0, 0, 0.34);
+  color: #f7f9ff;
   border-radius: 10px;
   outline: none;
 }
@@ -51,11 +52,11 @@ textarea {
   width: 100vw;
   height: 100vh;
   display: grid;
-  grid-template-columns: 330px minmax(520px, 1fr) 420px;
+  grid-template-columns: 360px minmax(680px, 1fr) 460px;
   background:
-    radial-gradient(circle at 10% 0%, rgba(61, 96, 255, 0.18), transparent 34%),
-    radial-gradient(circle at 80% 10%, rgba(0, 212, 255, 0.12), transparent 30%),
-    #07080b;
+    radial-gradient(circle at 8% 0%, rgba(66, 100, 255, 0.2), transparent 34%),
+    radial-gradient(circle at 84% 10%, rgba(0, 220, 255, 0.12), transparent 32%),
+    #06070a;
 }
 
 .user-sidebar,
@@ -70,8 +71,8 @@ textarea {
   display: flex;
   flex-direction: column;
   padding: 16px;
-  gap: 14px;
-  background: rgba(255, 255, 255, 0.035);
+  gap: 13px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .user-brand {
@@ -81,12 +82,12 @@ textarea {
 }
 
 .user-logo {
-  width: 38px;
-  height: 38px;
+  width: 42px;
+  height: 42px;
   display: grid;
   place-items: center;
-  border-radius: 13px;
-  background: linear-gradient(135deg, rgba(83, 119, 255, 0.9), rgba(0, 220, 255, 0.55));
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(93, 132, 255, 0.95), rgba(0, 220, 255, 0.6));
   font-weight: 900;
 }
 
@@ -103,7 +104,7 @@ textarea {
 .user-output header span,
 .user-stats span {
   display: block;
-  color: rgba(245, 247, 251, 0.62);
+  color: rgba(247, 249, 255, 0.62);
   font-size: 11px;
   margin-top: 2px;
 }
@@ -114,17 +115,16 @@ textarea {
 }
 
 .user-workspace label {
-  color: rgba(245, 247, 251, 0.68);
+  color: rgba(247, 249, 255, 0.68);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .user-workspace input,
-.user-filter,
-.user-command input {
+.user-filter {
   width: 100%;
-  padding: 9px 10px;
+  padding: 10px;
 }
 
 .user-stats {
@@ -135,44 +135,68 @@ textarea {
 
 .user-stats div {
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 9px;
-  background: rgba(255, 255, 255, 0.055);
+  border-radius: 13px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .user-stats strong {
   display: block;
-  font-size: 16px;
+  font-size: 17px;
+}
+
+.user-filters {
+  display: grid;
+  gap: 8px;
+}
+
+.kind-row,
+.command-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.kind-row button,
+.command-presets button {
+  padding: 6px 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.kind-row button.selected {
+  border-color: rgba(0, 220, 255, 0.75);
+  background: rgba(0, 220, 255, 0.14);
 }
 
 .user-files {
   overflow: auto;
   display: grid;
   align-content: start;
-  gap: 6px;
+  gap: 7px;
   padding-right: 4px;
 }
 
 .user-files button {
   text-align: left;
   display: grid;
-  grid-template-columns: 34px 1fr;
-  gap: 2px 8px;
+  grid-template-columns: 38px 1fr;
+  gap: 2px 9px;
   align-items: center;
-  border-radius: 12px;
-  padding: 9px;
+  border-radius: 13px;
+  padding: 10px;
 }
 
 .user-files button.selected {
   border-color: rgba(91, 141, 255, 0.88);
-  background: rgba(91, 141, 255, 0.18);
+  background: rgba(91, 141, 255, 0.2);
 }
 
 .user-files button span {
   grid-row: span 2;
-  color: rgba(0, 220, 255, 0.82);
+  color: rgba(0, 220, 255, 0.9);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .user-files button strong {
@@ -186,7 +210,7 @@ textarea {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: rgba(245, 247, 251, 0.55);
+  color: rgba(247, 249, 255, 0.58);
   font-size: 10px;
 }
 
@@ -198,14 +222,25 @@ textarea {
 
 .user-toolbar,
 .user-output header {
-  height: 64px;
+  min-height: 70px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 13px 15px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.035);
+}
+
+.file-title {
+  min-width: 0;
+}
+
+.file-title strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 520px;
 }
 
 .user-actions {
@@ -225,14 +260,19 @@ textarea {
   line-height: 1.55;
   font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
   font-size: 13px;
-  background: rgba(2, 4, 8, 0.72);
+  background: rgba(2, 4, 8, 0.76);
 }
 
 .user-output {
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto 96px 1fr;
   background: rgba(255, 255, 255, 0.025);
   border-right: 0;
+}
+
+.command-presets {
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .user-command {
@@ -241,6 +281,15 @@ textarea {
   gap: 8px;
   padding: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.user-command textarea {
+  width: 100%;
+  height: 70px;
+  padding: 9px 10px;
+  resize: none;
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
 }
 
 .user-output pre {
@@ -252,21 +301,5 @@ textarea {
   font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.45;
-  color: rgba(245, 247, 251, 0.86);
-}
-
-.user-contract-strip {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.user-contract-strip span {
-  font-size: 9px;
-  color: rgba(245, 247, 251, 0.56);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 999px;
-  padding: 4px 7px;
+  color: rgba(247, 249, 255, 0.86);
 }

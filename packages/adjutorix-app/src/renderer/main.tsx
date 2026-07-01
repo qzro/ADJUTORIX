@@ -46,6 +46,14 @@ declare global {
 
 const DEFAULT_WORKSPACE = "/Users/midiakiasat/Downloads/Apps/midiakiasat/qzro/ADJUTORIX";
 
+const COMMANDS = {
+  status: "git status --short",
+  verify: "pnpm --filter @adjutorix/app run build:ts",
+  tests: "pnpm --filter @adjutorix/app exec vitest run tests/renderer/operator_unified_control_spine_contract.test.ts tests/renderer/operator_surface_spine_contract.test.ts",
+  build: "pnpm -r --if-present run build",
+  power: "pnpm power:all",
+};
+
 function bridge(): WorkbenchBridge {
   const candidate = window.adjutorixUserWorkbench;
 
@@ -56,7 +64,7 @@ function bridge(): WorkbenchBridge {
   return candidate;
 }
 
-function kindIcon(kind: FileKind): string {
+function kindLabel(kind: FileKind): string {
   if (kind === "source") return "SRC";
   if (kind === "test") return "TST";
   if (kind === "config") return "CFG";
@@ -65,15 +73,37 @@ function kindIcon(kind: FileKind): string {
   return "OTH";
 }
 
+function chooseInitialFile(files: FileItem[]): FileItem | undefined {
+  const preferred = [
+    "README.md",
+    "packages/adjutorix-app/src/renderer/main.tsx",
+    "packages/adjutorix-app/src/preload/preload.ts",
+    "packages/adjutorix-app/package.json",
+    "package.json",
+  ];
+
+  for (const path of preferred) {
+    const found = files.find((file) => file.path === path);
+    if (found) return found;
+  }
+
+  return files.find((file) => file.kind === "source") ?? files[0];
+}
+
+function visiblePath(path: string): string {
+  return path.length > 70 ? `…${path.slice(-67)}` : path;
+}
+
 function App(): JSX.Element {
   const [workspace, setWorkspace] = useState(DEFAULT_WORKSPACE);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [filter, setFilter] = useState("");
+  const [kindFilter, setKindFilter] = useState<FileKind | "all">("all");
   const [selectedPath, setSelectedPath] = useState("");
   const [editorText, setEditorText] = useState("");
   const [originalText, setOriginalText] = useState("");
-  const [command, setCommand] = useState("git status --short && pnpm --filter @adjutorix/app run build:ts");
-  const [output, setOutput] = useState("Adjutorix user workbench is starting.");
+  const [command, setCommand] = useState(COMMANDS.status);
+  const [output, setOutput] = useState("Booting Adjutorix user workbench.");
   const [status, setStatus] = useState("booting");
   const [busy, setBusy] = useState(false);
   const [powerCount, setPowerCount] = useState("0/21");
@@ -83,45 +113,59 @@ function App(): JSX.Element {
   const filteredFiles = useMemo(() => {
     const q = filter.trim().toLowerCase();
 
-    if (!q) return files;
+    return files.filter((file) => {
+      if (kindFilter !== "all" && file.kind !== kindFilter) return false;
+      if (!q) return true;
+      return file.path.toLowerCase().includes(q) || file.name.toLowerCase().includes(q) || file.kind.includes(q);
+    });
+  }, [files, filter, kindFilter]);
 
-    return files.filter((file) => file.path.toLowerCase().includes(q) || file.kind.includes(q));
-  }, [files, filter]);
-
-  async function scan(target = workspace): Promise<void> {
+  async function openFile(path: string, currentWorkspace = workspace): Promise<void> {
     setBusy(true);
-    setStatus("scanning");
+    setStatus(`opening ${path}`);
 
     try {
-      const result = await bridge().scanWorkspace(target);
-      setWorkspace(result.workspace);
-      setFiles(result.files);
-      setStatus(`ready:${result.fileCount}`);
-      setOutput(`Workspace loaded.\n\n${result.workspace}\n${result.fileCount} files via ${result.source}`);
-      console.info("ADJUTORIX_USER_WORKBENCH_READY", JSON.stringify({ workspace: result.workspace, files: result.fileCount, source: result.source }));
+      const result = await bridge().readFile({ workspace: currentWorkspace, path });
+      setSelectedPath(result.path);
+      setEditorText(result.content);
+      setOriginalText(result.content);
+      setStatus(`open ${result.path}`);
+      setOutput(`OPENED\n${result.path}\n\n${result.content.length} characters`);
+      console.info("ADJUTORIX_USER_WORKBENCH_FILE_OPEN", JSON.stringify({ path: result.path, characters: result.content.length }));
     } catch (error) {
-      setStatus("scan failed");
+      setStatus("open failed");
       setOutput(String(error));
-      console.error("ADJUTORIX_USER_WORKBENCH_SCAN_FAILED", error);
     } finally {
       setBusy(false);
     }
   }
 
-  async function openFile(path: string): Promise<void> {
+  async function scan(target = workspace): Promise<void> {
     setBusy(true);
-    setStatus(`opening:${path}`);
+    setStatus("scanning workspace");
 
     try {
-      const result = await bridge().readFile({ workspace, path });
-      setSelectedPath(result.path);
-      setEditorText(result.content);
-      setOriginalText(result.content);
-      setStatus(`open:${result.path}`);
-      setOutput(`Opened ${result.path}\n${result.content.length} characters`);
+      const result = await bridge().scanWorkspace(target);
+      setWorkspace(result.workspace);
+      setFiles(result.files);
+
+      const initial = chooseInitialFile(result.files);
+      setStatus(`ready ${result.fileCount} files`);
+      setOutput(`WORKSPACE READY\n${result.workspace}\n${result.fileCount} usable files via ${result.source}`);
+
+      console.info("ADJUTORIX_USER_WORKBENCH_READY", JSON.stringify({
+        workspace: result.workspace,
+        files: result.fileCount,
+        source: result.source,
+      }));
+
+      if (initial) {
+        await openFile(initial.path, result.workspace);
+      }
     } catch (error) {
-      setStatus("open failed");
+      setStatus("scan failed");
       setOutput(String(error));
+      console.error("ADJUTORIX_USER_WORKBENCH_SCAN_FAILED", error);
     } finally {
       setBusy(false);
     }
@@ -134,13 +178,13 @@ function App(): JSX.Element {
     }
 
     setBusy(true);
-    setStatus(`saving:${selectedPath}`);
+    setStatus(`saving ${selectedPath}`);
 
     try {
       const result = await bridge().writeFile({ workspace, path: selectedPath, content: editorText });
       setOriginalText(editorText);
-      setStatus(`saved:${selectedPath}`);
-      setOutput(JSON.stringify(result, null, 2));
+      setStatus(`saved ${selectedPath}`);
+      setOutput(`SAVED\n${JSON.stringify(result, null, 2)}`);
     } catch (error) {
       setStatus("save failed");
       setOutput(String(error));
@@ -151,7 +195,7 @@ function App(): JSX.Element {
 
   async function showDiff(): Promise<void> {
     setBusy(true);
-    setStatus("diff");
+    setStatus("diff running");
 
     try {
       const result = await bridge().gitDiff({ workspace, path: selectedPath || undefined });
@@ -167,7 +211,8 @@ function App(): JSX.Element {
 
   async function run(commandToRun = command): Promise<void> {
     setBusy(true);
-    setStatus("running");
+    setStatus("command running");
+    setCommand(commandToRun);
 
     try {
       const result = await bridge().runCommand({ workspace, command: commandToRun, timeoutMs: 180000 });
@@ -197,7 +242,10 @@ function App(): JSX.Element {
       setPowerCount(`${record.installedCount ?? 0}/${record.expectedCount ?? 21}`);
       setOutput(JSON.stringify(payload, null, 2));
       setStatus("power ready");
-      console.info("ADJUTORIX_USER_WORKBENCH_POWER_READY", JSON.stringify({ installed: record.installedCount ?? 0, expected: record.expectedCount ?? 21 }));
+      console.info("ADJUTORIX_USER_WORKBENCH_POWER_READY", JSON.stringify({
+        installed: record.installedCount ?? 0,
+        expected: record.expectedCount ?? 21,
+      }));
     } catch (error) {
       setStatus("power failed");
       setOutput(String(error));
@@ -222,7 +270,7 @@ function App(): JSX.Element {
           <div className="user-logo">A</div>
           <div>
             <strong>Adjutorix</strong>
-            <span>real user workbench</span>
+            <span>usable local workbench</span>
           </div>
         </header>
 
@@ -234,24 +282,33 @@ function App(): JSX.Element {
         </section>
 
         <section className="user-stats">
-          <div><strong>{files.length}</strong><span>files</span></div>
+          <div><strong>{files.length}</strong><span>usable files</span></div>
           <div><strong>{dirty ? "dirty" : "clean"}</strong><span>buffer</span></div>
           <div><strong>{powerCount}</strong><span>power</span></div>
         </section>
 
-        <input className="user-filter" placeholder="Search files..." value={filter} onChange={(event) => setFilter(event.target.value)} />
+        <section className="user-filters">
+          <input className="user-filter" placeholder="Search files..." value={filter} onChange={(event) => setFilter(event.target.value)} />
+          <div className="kind-row">
+            {(["all", "source", "test", "config", "doc"] as Array<FileKind | "all">).map((kind) => (
+              <button key={kind} className={kindFilter === kind ? "selected" : ""} onClick={() => setKindFilter(kind)}>
+                {kind}
+              </button>
+            ))}
+          </div>
+        </section>
 
         <nav className="user-files">
-          {filteredFiles.slice(0, 1200).map((file) => (
+          {filteredFiles.slice(0, 1000).map((file) => (
             <button
               key={file.path}
               className={file.path === selectedPath ? "selected" : ""}
               onClick={() => void openFile(file.path)}
               title={file.path}
             >
-              <span>{kindIcon(file.kind)}</span>
+              <span>{kindLabel(file.kind)}</span>
               <strong>{file.name}</strong>
-              <small>{file.path}</small>
+              <small>{visiblePath(file.path)}</small>
             </button>
           ))}
         </nav>
@@ -259,15 +316,16 @@ function App(): JSX.Element {
 
       <section className="user-main">
         <header className="user-toolbar">
-          <div>
-            <strong>{selectedPath || "No file selected"}</strong>
+          <div className="file-title">
+            <strong>{selectedPath || "Opening workspace..."}</strong>
             <span>{status}</span>
           </div>
 
           <div className="user-actions">
             <button onClick={() => void saveFile()} disabled={busy || !selectedPath || !dirty}>Save</button>
             <button onClick={() => void showDiff()} disabled={busy}>Diff</button>
-            <button onClick={() => void run("pnpm --filter @adjutorix/app run build:ts")} disabled={busy}>Verify TS</button>
+            <button onClick={() => void run(COMMANDS.status)} disabled={busy}>Status</button>
+            <button onClick={() => void run(COMMANDS.verify)} disabled={busy}>Verify TS</button>
             <button onClick={() => void showPower()} disabled={busy}>Power</button>
           </div>
         </header>
@@ -277,7 +335,7 @@ function App(): JSX.Element {
           value={editorText}
           onChange={(event) => setEditorText(event.target.value)}
           spellCheck={false}
-          placeholder="Open a file from the explorer. Edit. Save. Diff. Run verify."
+          placeholder="Adjutorix opens README.md automatically. Select files, edit, save, diff, verify."
         />
       </section>
 
@@ -287,23 +345,19 @@ function App(): JSX.Element {
           <span>{busy ? "working" : "idle"}</span>
         </header>
 
+        <section className="command-presets">
+          <button onClick={() => void run(COMMANDS.status)} disabled={busy}>Git status</button>
+          <button onClick={() => void run(COMMANDS.verify)} disabled={busy}>Verify TS</button>
+          <button onClick={() => void run(COMMANDS.tests)} disabled={busy}>UI tests</button>
+          <button onClick={() => void run(COMMANDS.power)} disabled={busy}>Power verify</button>
+        </section>
+
         <div className="user-command">
-          <input value={command} onChange={(event) => setCommand(event.target.value)} />
+          <textarea value={command} onChange={(event) => setCommand(event.target.value)} />
           <button onClick={() => void run()} disabled={busy}>Run</button>
         </div>
 
         <pre>{output}</pre>
-
-        <section className="user-contract-strip" aria-label="operator contract terms">
-          <span>Operator diagnostics console</span>
-          <span>Unified control spine</span>
-          <span>Evidence ledger</span>
-          <span>Execution runway</span>
-          <span>Mission control</span>
-          <span>Operator surface spine</span>
-          <span>Operator kernel live</span>
-          <span>Mandatory gate</span>
-        </section>
       </aside>
     </main>
   );

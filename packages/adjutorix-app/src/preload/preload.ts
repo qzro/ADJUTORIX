@@ -1447,7 +1447,22 @@ async function adjutorixUserScanWorkspace(workspaceInput: string): Promise<{
   const nodePath = await import("node:path");
 
   const workspace = await adjutorixUserResolveWorkspace(workspaceInput);
-  const skip = new Set([".git", "node_modules", "dist", "release", ".tmp", "__pycache__", ".venv", "venv", ".next", ".turbo", ".cache"]);
+  const skip = new Set([
+    ".git",
+    "node_modules",
+    "dist",
+    "release",
+    ".tmp",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".next",
+    ".turbo",
+    ".cache",
+    ".adjutorix-release",
+    "reports",
+    "quarantine",
+  ]);
   const files: AdjutorixUserWorkbenchFile[] = [];
   const maxFiles = 8000;
 
