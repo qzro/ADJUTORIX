@@ -66,14 +66,20 @@ type Action = {
 const ACTIONS: Action[] = [
   {
     id: "status",
-    title: "Status",
+    title: "Git status",
     command: "pwd; git status --short 2>/dev/null || true; git log --oneline --decorate --max-count=8 2>/dev/null || true",
   },
   {
     id: "detect",
-    title: "Detect stack",
+    title: "Detect",
     command:
-      "pwd; test -f package.json && node -e \"const p=require('./package.json'); console.log('package:', p.name || '(unnamed)'); console.log('scripts:', JSON.stringify(p.scripts || {}, null, 2))\" || true; test -f pyproject.toml && sed -n '1,120p' pyproject.toml || true; test -f README.md && sed -n '1,80p' README.md || true",
+      "pwd; test -f package.json && node -e \"const p=require('./package.json'); console.log('package:', p.name || '(unnamed)'); console.log('scripts:', JSON.stringify(p.scripts || {}, null, 2))\" || true; test -f pyproject.toml && sed -n '1,140p' pyproject.toml || true; test -f README.md && sed -n '1,90p' README.md || true",
+  },
+  {
+    id: "verify",
+    title: "Verify",
+    command:
+      "test -x scripts/verify.sh && bash scripts/verify.sh || test -x ./verify.sh && bash ./verify.sh || echo 'No verify script detected in this workspace.'",
   },
   {
     id: "test",
@@ -88,45 +94,36 @@ const ACTIONS: Action[] = [
       "test -f package.json && pnpm -s run build || test -f package.json && npm run build || echo 'No standard build command detected in this workspace.'",
   },
   {
-    id: "verify",
-    title: "Verify",
-    command:
-      "test -x scripts/verify.sh && bash scripts/verify.sh || test -x ./verify.sh && bash ./verify.sh || echo 'No verify script detected in this workspace.'",
-  },
-  {
-    id: "agent",
-    title: "Agent",
-    command:
-      "test -x scripts/agent/status.sh && bash scripts/agent/status.sh || echo 'No Adjutorix agent surface detected in this workspace.'",
-  },
-  {
     id: "power",
     title: "Power",
     command:
       "test -x scripts/power/verify-adjutorix-power-packages.sh && pnpm power:verify && pnpm power:plane || echo 'No Adjutorix power plane detected in this workspace.'",
   },
-  {
-    id: "clean",
-    title: "Clean generated",
-    command:
-      "rm -rf .tmp dist release build .pytest_cache **/__pycache__ 2>/dev/null || true; git status --short 2>/dev/null || true",
-  },
 ];
 
 function bridge(): UniversalBridge {
-  const value = window.adjutorixUniversalWorkspace;
+  const api = window.adjutorixUniversalWorkspace;
 
-  if (!value) {
+  if (!api) {
     throw new Error("adjutorixUniversalWorkspace bridge unavailable");
   }
 
-  return value;
+  return api;
 }
 
-function formatBytes(size: number): string {
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+function fileWeight(file: WorkspaceFile): number {
+  const path = file.path.toLowerCase();
+
+  if (path === "readme.md") return -10;
+  if (path === "package.json") return -9;
+  if (path.endsWith("/package.json")) return -8;
+  if (path.includes("/src/")) return -7;
+  if (file.kind === "source") return 0;
+  if (file.kind === "test") return 1;
+  if (file.kind === "config") return 2;
+  if (file.kind === "doc") return 3;
+  if (file.kind === "asset") return 4;
+  return 5;
 }
 
 function App(): JSX.Element {
@@ -137,18 +134,20 @@ function App(): JSX.Element {
   const [selected, setSelected] = useState<WorkspaceFile | null>(null);
   const [content, setContent] = useState("");
   const [dirty, setDirty] = useState(false);
-  const [output, setOutput] = useState("Paste or provide any folder path. Adjutorix is no longer bound to one folder.");
+  const [output, setOutput] = useState("Connect any project folder. This is not bound to any single workspace.");
   const [busy, setBusy] = useState(false);
   const [command, setCommand] = useState(ACTIONS[0]?.command ?? "pwd");
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
 
-    return files.filter((file) => {
-      if (kind !== "all" && file.kind !== kind) return false;
-      if (!needle) return true;
-      return file.path.toLowerCase().includes(needle) || file.name.toLowerCase().includes(needle);
-    });
+    return files
+      .filter((file) => {
+        if (kind !== "all" && file.kind !== kind) return false;
+        if (!needle) return true;
+        return file.path.toLowerCase().includes(needle) || file.name.toLowerCase().includes(needle);
+      })
+      .sort((a, b) => fileWeight(a) - fileWeight(b) || a.path.localeCompare(b.path));
   }, [files, kind, query]);
 
   const counts = useMemo(() => {
@@ -161,14 +160,14 @@ function App(): JSX.Element {
   }, [files]);
 
   function record(text: string): void {
-    setOutput(text.slice(-160000));
+    setOutput(text.slice(-180000));
   }
 
   async function connect(path = workspace): Promise<void> {
     const trimmed = path.trim();
 
     if (!trimmed) {
-      record("Workspace required. Paste any folder path. Nothing is hardcoded.");
+      record("CONNECT BLOCKED\nPaste any folder path.");
       return;
     }
 
@@ -179,27 +178,40 @@ function App(): JSX.Element {
       localStorage.setItem("adjutorix.activeWorkspace", result.workspace);
       setWorkspace(result.workspace);
       setFiles(result.files);
-      setSelected(result.files[0] ?? null);
       setContent("");
       setDirty(false);
+
+      const preferred =
+        result.files.find((file) => file.path === "README.md") ??
+        result.files.find((file) => file.path === "package.json") ??
+        result.files.find((file) => file.kind === "source") ??
+        result.files[0] ??
+        null;
+
+      setSelected(preferred);
+
       record(
         [
           "WORKSPACE CONNECTED",
           result.workspace,
-          `${result.fileCount} files`,
+          `${result.fileCount} usable files`,
           `source=${result.source}`,
           result.truncated ? "TRUNCATED=true" : "TRUNCATED=false",
         ].join("\n"),
       );
 
       console.info(
-        "ADJUTORIX_UNIVERSAL_WORKSPACE_READY",
+        "ADJUTORIX_FIXED_WORKSPACE_READY",
         JSON.stringify({
           workspace: result.workspace,
           files: result.fileCount,
           source: result.source,
         }),
       );
+
+      if (preferred) {
+        await openFile(preferred, result.workspace);
+      }
     } catch (error) {
       record(`CONNECT FAILED\n${String(error)}`);
     } finally {
@@ -207,16 +219,19 @@ function App(): JSX.Element {
     }
   }
 
-  async function openFile(file: WorkspaceFile): Promise<void> {
+  async function openFile(file: WorkspaceFile, activeWorkspace = workspace): Promise<void> {
     setBusy(true);
 
     try {
-      const result = await bridge().readText({ workspace, path: file.path });
+      const result = await bridge().readText({ workspace: activeWorkspace, path: file.path });
       setSelected(file);
       setContent(result.content);
       setDirty(false);
       record(`OPENED\n${result.path}\n${result.content.length} characters`);
     } catch (error) {
+      setSelected(file);
+      setContent("");
+      setDirty(false);
       record(`OPEN FAILED\n${file.path}\n${String(error)}`);
     } finally {
       setBusy(false);
@@ -235,7 +250,7 @@ function App(): JSX.Element {
       const result = await bridge().writeText({ workspace, path: selected.path, content });
       setDirty(false);
       record(`SAVED\n${JSON.stringify(result, null, 2)}`);
-      console.info("ADJUTORIX_UNIVERSAL_SAVE_OK", JSON.stringify({ path: selected.path }));
+      console.info("ADJUTORIX_FIXED_SAVE_OK", JSON.stringify({ path: selected.path }));
     } catch (error) {
       record(`SAVE FAILED\n${String(error)}`);
     } finally {
@@ -257,6 +272,11 @@ function App(): JSX.Element {
   }
 
   async function runCommand(nextCommand = command): Promise<void> {
+    if (!workspace.trim()) {
+      record("RUN BLOCKED\nConnect a folder first.");
+      return;
+    }
+
     setBusy(true);
     setCommand(nextCommand);
 
@@ -274,11 +294,11 @@ function App(): JSX.Element {
       );
 
       console.info(
-        "ADJUTORIX_UNIVERSAL_COMMAND_DONE",
+        "ADJUTORIX_FIXED_COMMAND_DONE",
         JSON.stringify({
-          command: result.command,
           ok: result.ok,
           exitCode: result.exitCode,
+          command: result.command,
         }),
       );
     } catch (error) {
@@ -289,13 +309,13 @@ function App(): JSX.Element {
   }
 
   useEffect(() => {
-    document.documentElement.dataset.adjutorixUniversalWorkspace = "true";
-    document.body.dataset.adjutorixUniversalWorkspace = "true";
-    console.info("ADJUTORIX_UNIVERSAL_WORKSPACE_MOUNTED");
+    document.documentElement.dataset.adjutorixFixedWorkspace = "true";
+    document.body.dataset.adjutorixFixedWorkspace = "true";
+    console.info("ADJUTORIX_FIXED_WORKSPACE_MOUNTED");
 
     void bridge().resolveDefaultWorkspace().then((defaults) => {
       const stored = localStorage.getItem("adjutorix.activeWorkspace") ?? "";
-      const chosen = stored || defaults.envWorkspace || "";
+      const chosen = defaults.envWorkspace || stored;
 
       if (chosen) {
         setWorkspace(chosen);
@@ -305,29 +325,30 @@ function App(): JSX.Element {
   }, []);
 
   return (
-    <main className="workspace-shell">
-      <aside className="workspace-side">
-        <header className="brand">
-          <div className="brand-mark">A</div>
-          <div>
+    <main className="adj-shell">
+      <aside className="adj-sidebar">
+        <header className="adj-brand">
+          <div className="adj-logo">A</div>
+          <div className="adj-brand-copy">
             <strong>Adjutorix</strong>
-            <span>universal workspace host</span>
+            <span>universal workspace runtime</span>
           </div>
         </header>
 
-        <section className="workspace-connect">
-          <label>Any folder path</label>
+        <section className="adj-connect">
+          <label>Project folder</label>
           <input
             value={workspace}
             onChange={(event) => setWorkspace(event.target.value)}
-            placeholder="/path/to/any/project"
+            placeholder="/path/to/project"
+            spellCheck={false}
           />
           <button disabled={busy} onClick={() => void connect()}>
-            Connect folder
+            Connect
           </button>
         </section>
 
-        <section className="stats">
+        <section className="adj-stats">
           <div><strong>{files.length}</strong><span>files</span></div>
           <div><strong>{counts.source}</strong><span>source</span></div>
           <div><strong>{counts.test}</strong><span>tests</span></div>
@@ -335,13 +356,14 @@ function App(): JSX.Element {
         </section>
 
         <input
-          className="search"
+          className="adj-search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search this folder..."
+          placeholder="Open file..."
+          spellCheck={false}
         />
 
-        <div className="filters">
+        <div className="adj-filters">
           {(["all", "source", "test", "config", "doc", "asset", "other"] as const).map((item) => (
             <button key={item} className={kind === item ? "active" : ""} onClick={() => setKind(item)}>
               {item}
@@ -349,12 +371,13 @@ function App(): JSX.Element {
           ))}
         </div>
 
-        <section className="file-list">
-          {filtered.slice(0, 900).map((file) => (
+        <section className="adj-files">
+          {filtered.slice(0, 800).map((file) => (
             <button
               key={file.path}
-              className={selected?.path === file.path ? "file active" : "file"}
+              className={selected?.path === file.path ? "adj-file active" : "adj-file"}
               onClick={() => void openFile(file)}
+              title={file.path}
             >
               <b>{file.kind}</b>
               <strong>{file.name}</strong>
@@ -364,52 +387,59 @@ function App(): JSX.Element {
         </section>
       </aside>
 
-      <section className="workspace-main">
-        <header className="topbar">
-          <div>
-            <strong>{selected?.path ?? "No file selected"}</strong>
-            <span>{dirty ? "modified buffer" : workspace || "no workspace connected"}</span>
+      <section className="adj-editor-pane">
+        <header className="adj-editor-head">
+          <div className="adj-title">
+            <strong>{selected?.name ?? "No file selected"}</strong>
+            <span title={selected?.path ?? workspace}>{selected?.path ?? (workspace || "no workspace connected")}</span>
           </div>
 
-          <div className="top-actions">
+          <div className="adj-editor-actions">
             <button disabled={busy || !selected || !dirty} onClick={() => void saveFile()}>Save</button>
-            <button disabled={busy} onClick={() => void diffActive()}>Diff</button>
-            {ACTIONS.map((action) => (
-              <button key={action.id} disabled={busy || !workspace} onClick={() => void runCommand(action.command)}>
-                {action.title}
-              </button>
-            ))}
+            <button disabled={busy || !workspace} onClick={() => void diffActive()}>Diff</button>
           </div>
         </header>
 
         <textarea
-          className="editor"
+          className="adj-editor"
           value={content}
           onChange={(event) => {
             setContent(event.target.value);
             setDirty(true);
           }}
-          placeholder="Open a file from the connected folder. This surface is not tied to any single project."
+          placeholder="Open a file from the connected folder. Save writes to the active workspace with backup."
+          spellCheck={false}
         />
       </section>
 
-      <aside className="output">
-        <header>
-          <strong>Workspace Output</strong>
-          <span>{busy ? "running" : "idle"}</span>
+      <aside className="adj-output-pane">
+        <header className="adj-output-head">
+          <div>
+            <strong>Run / Output</strong>
+            <span>{busy ? "running" : "idle"}</span>
+          </div>
         </header>
 
+        <section className="adj-actions">
+          {ACTIONS.map((action) => (
+            <button key={action.id} disabled={busy || !workspace} onClick={() => void runCommand(action.command)}>
+              {action.title}
+            </button>
+          ))}
+        </section>
+
         <textarea
-          className="command"
+          className="adj-command"
           value={command}
           onChange={(event) => setCommand(event.target.value)}
+          spellCheck={false}
         />
 
-        <button className="run" disabled={busy || !workspace} onClick={() => void runCommand()}>
+        <button className="adj-run" disabled={busy || !workspace} onClick={() => void runCommand()}>
           Run in active folder
         </button>
 
-        <pre>{output}</pre>
+        <pre className="adj-output">{output}</pre>
       </aside>
     </main>
   );

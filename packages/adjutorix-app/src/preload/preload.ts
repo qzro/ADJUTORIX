@@ -1436,12 +1436,21 @@ function adjutorixUniversalKind(path: string): AdjutorixUniversalWorkspaceFile["
 }
 
 function adjutorixUniversalIgnore(name: string): boolean {
+  if (name === ".github") {
+    return false;
+  }
+
+  if (name.startsWith(".")) {
+    return true;
+  }
+
   return new Set([
-    ".git",
     "node_modules",
     "dist",
     "release",
     "build",
+    "coverage",
+    "reports",
     ".next",
     ".turbo",
     ".pytest_cache",
@@ -1449,6 +1458,7 @@ function adjutorixUniversalIgnore(name: string): boolean {
     ".venv",
     "venv",
     ".DS_Store",
+    ".adjutorix-release",
     ".adjutorix-backups",
   ]).has(name);
 }

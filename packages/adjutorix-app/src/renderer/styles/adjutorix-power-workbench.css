@@ -1,11 +1,12 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
-  background: #05060a;
   color: #f8fbff;
+  background: #05060a;
 }
 
 * {
   box-sizing: border-box;
+  min-width: 0;
 }
 
 body {
@@ -21,262 +22,310 @@ textarea {
 }
 
 button {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.07);
   color: #f8fbff;
   cursor: pointer;
   font-weight: 850;
 }
 
 button:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.13);
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: 0.42;
 }
 
 input,
 textarea {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 13px;
-  background: rgba(0, 0, 0, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: rgba(0, 0, 0, 0.38);
   color: #f8fbff;
   outline: none;
 }
 
-.workspace-shell {
+.adj-shell {
   width: 100vw;
   height: 100vh;
   display: grid;
-  grid-template-columns: 380px minmax(560px, 1fr) 480px;
+  grid-template-columns: clamp(310px, 23vw, 380px) minmax(420px, 1fr) clamp(360px, 28vw, 460px);
+  overflow: hidden;
   background:
-    radial-gradient(circle at 12% -12%, rgba(92, 126, 255, 0.22), transparent 34%),
-    radial-gradient(circle at 88% 0%, rgba(0, 224, 255, 0.12), transparent 34%),
+    radial-gradient(circle at 10% -10%, rgba(77, 103, 255, 0.2), transparent 35%),
+    radial-gradient(circle at 95% 0%, rgba(0, 224, 255, 0.1), transparent 34%),
     #05060a;
 }
 
-.workspace-side,
-.workspace-main,
-.output {
-  min-width: 0;
+.adj-sidebar,
+.adj-editor-pane,
+.adj-output-pane {
   min-height: 0;
+  overflow: hidden;
 }
 
-.workspace-side {
+.adj-sidebar {
   display: grid;
   grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
-  gap: 13px;
+  gap: 12px;
   padding: 16px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
 }
 
-.brand {
+.adj-brand {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 12px;
 }
 
-.brand-mark {
+.adj-logo {
   width: 48px;
   height: 48px;
   display: grid;
   place-items: center;
+  flex: 0 0 auto;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(98, 132, 255, 1), rgba(0, 224, 255, 0.62));
+  background: linear-gradient(135deg, #6d88ff, rgba(0, 224, 255, 0.65));
   font-weight: 950;
 }
 
-.brand strong,
-.topbar strong,
-.output strong {
+.adj-brand-copy strong,
+.adj-editor-head strong,
+.adj-output-head strong {
   display: block;
+  overflow: hidden;
   font-size: 17px;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.brand span,
-.topbar span,
-.output span,
-.stats span {
+.adj-brand-copy span,
+.adj-editor-head span,
+.adj-output-head span,
+.adj-stats span {
   display: block;
+  overflow: hidden;
   margin-top: 3px;
-  color: rgba(248, 251, 255, 0.62);
+  color: rgba(248, 251, 255, 0.6);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.workspace-connect {
+.adj-connect {
   display: grid;
-  gap: 9px;
+  gap: 8px;
 }
 
-.workspace-connect label {
+.adj-connect label {
   color: rgba(248, 251, 255, 0.7);
   font-size: 11px;
   font-weight: 900;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
 }
 
-.workspace-connect input,
-.workspace-connect button,
-.search {
-  padding: 11px;
+.adj-connect input,
+.adj-connect button,
+.adj-search {
+  height: 46px;
+  border-radius: 14px;
+  padding: 0 12px;
 }
 
-.stats {
+.adj-stats {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-.stats div {
+.adj-stats div {
+  min-height: 78px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   padding: 13px;
   background: rgba(255, 255, 255, 0.052);
 }
 
-.stats strong {
+.adj-stats strong {
   display: block;
+  overflow: hidden;
   font-size: 24px;
   letter-spacing: -0.04em;
+  text-overflow: ellipsis;
 }
 
-.filters {
+.adj-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
 }
 
-.filters button {
+.adj-filters button {
   padding: 7px 9px;
   font-size: 11px;
   text-transform: uppercase;
 }
 
-.filters .active {
-  border-color: rgba(0, 224, 255, 0.55);
+.adj-filters .active {
+  border-color: rgba(0, 224, 255, 0.58);
   color: #70efff;
 }
 
-.file-list {
-  overflow: auto;
+.adj-files {
   display: grid;
   align-content: start;
   gap: 8px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
-.file {
+.adj-file {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 50px minmax(0, 1fr);
   gap: 3px 8px;
-  padding: 11px;
+  min-height: 60px;
+  padding: 10px;
   text-align: left;
   background: rgba(255, 255, 255, 0.055);
 }
 
-.file.active {
-  border-color: rgba(0, 224, 255, 0.55);
+.adj-file.active {
+  border-color: rgba(0, 224, 255, 0.58);
   background: rgba(0, 224, 255, 0.09);
 }
 
-.file b {
+.adj-file b {
   grid-row: span 2;
-  color: #48e7ff;
+  align-self: center;
+  overflow: hidden;
+  color: #4ceaff;
   font-size: 10px;
   text-transform: uppercase;
 }
 
-.file strong,
-.file span {
+.adj-file strong,
+.adj-file span {
   overflow: hidden;
-  white-space: nowrap;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.file strong {
+.adj-file strong {
   font-size: 13px;
 }
 
-.file span {
+.adj-file span {
   color: rgba(248, 251, 255, 0.58);
   font-size: 11px;
 }
 
-.workspace-main {
+.adj-editor-pane {
   display: grid;
   grid-template-rows: 76px minmax(0, 1fr);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.topbar {
-  display: flex;
-  justify-content: space-between;
+.adj-editor-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   padding: 14px 16px;
-  background: rgba(255, 255, 255, 0.035);
+  overflow: hidden;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
 }
 
-.top-actions {
+.adj-title {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.adj-title span {
+  max-width: 100%;
+}
+
+.adj-editor-actions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex: 0 0 auto;
   gap: 8px;
 }
 
-.top-actions button {
-  padding: 9px 11px;
+.adj-editor-actions button {
+  min-width: 72px;
+  height: 42px;
+  padding: 0 12px;
 }
 
-.editor {
+.adj-editor {
   resize: none;
   border: 0;
   border-radius: 0;
   padding: 18px;
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.74);
   color: #f8fbff;
   font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
   font-size: 13px;
   line-height: 1.55;
+  overflow: auto;
 }
 
-.output {
+.adj-output-pane {
   display: grid;
-  grid-template-rows: 76px 120px 48px minmax(0, 1fr);
+  grid-template-rows: 76px auto 102px 48px minmax(0, 1fr);
   background: rgba(0, 224, 255, 0.025);
 }
 
-.output header {
+.adj-output-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(0, 224, 255, 0.045);
+}
+
+.adj-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.command {
+.adj-actions button {
+  height: 39px;
+  overflow: hidden;
+  padding: 0 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adj-command {
   resize: none;
+  border: 0;
   border-radius: 0;
-  border-left: 0;
-  border-right: 0;
-  padding: 13px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.42);
   font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.45;
 }
 
-.run {
+.adj-run {
+  border-right: 0;
+  border-left: 0;
   border-radius: 0;
 }
 
-.output pre {
+.adj-output {
   margin: 0;
   padding: 14px;
   overflow: auto;
@@ -286,4 +335,14 @@ textarea {
   font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.45;
+}
+
+@media (max-width: 1300px) {
+  .adj-shell {
+    grid-template-columns: 320px minmax(380px, 1fr) 360px;
+  }
+
+  .adj-actions {
+    grid-template-columns: 1fr;
+  }
 }
