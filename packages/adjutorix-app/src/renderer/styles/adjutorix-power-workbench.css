@@ -23,161 +23,168 @@ textarea {
 
 button {
   border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 13px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.07);
   color: #f8fbff;
   cursor: pointer;
-  font-weight: 850;
+  font-weight: 800;
 }
 
 button:hover {
-  background: rgba(255, 255, 255, 0.13);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.42;
+  opacity: 0.4;
 }
 
 input,
 textarea {
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 12px;
   background: rgba(0, 0, 0, 0.38);
   color: #f8fbff;
   outline: none;
 }
 
-.adj-shell {
+.os-shell {
+  display: grid;
+  grid-template-columns: clamp(310px, 22vw, 390px) minmax(520px, 1fr) clamp(380px, 28vw, 520px);
   width: 100vw;
   height: 100vh;
-  display: grid;
-  grid-template-columns: clamp(310px, 23vw, 380px) minmax(420px, 1fr) clamp(360px, 28vw, 460px);
   overflow: hidden;
   background:
-    radial-gradient(circle at 10% -10%, rgba(77, 103, 255, 0.2), transparent 35%),
-    radial-gradient(circle at 95% 0%, rgba(0, 224, 255, 0.1), transparent 34%),
+    radial-gradient(circle at 10% -10%, rgba(80, 104, 255, 0.22), transparent 35%),
+    radial-gradient(circle at 90% 0%, rgba(0, 224, 255, 0.11), transparent 35%),
     #05060a;
 }
 
-.adj-sidebar,
-.adj-editor-pane,
-.adj-output-pane {
+.os-rail,
+.os-main,
+.os-command {
   min-height: 0;
   overflow: hidden;
 }
 
-.adj-sidebar {
+.os-rail {
   display: grid;
-  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto auto auto minmax(0, 1fr);
   gap: 12px;
-  padding: 16px;
+  padding: 14px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
 }
 
-.adj-brand {
+.os-brand {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.adj-logo {
+.os-mark {
   width: 48px;
   height: 48px;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
   border-radius: 16px;
-  background: linear-gradient(135deg, #6d88ff, rgba(0, 224, 255, 0.65));
+  background: linear-gradient(135deg, #6b83ff, rgba(0, 224, 255, 0.62));
   font-weight: 950;
 }
 
-.adj-brand-copy strong,
-.adj-editor-head strong,
-.adj-output-head strong {
+.os-brand strong,
+.os-command header strong {
   display: block;
   overflow: hidden;
   font-size: 17px;
-  line-height: 1.18;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.adj-brand-copy span,
-.adj-editor-head span,
-.adj-output-head span,
-.adj-stats span {
+.os-brand span,
+.os-command header span {
   display: block;
-  overflow: hidden;
-  margin-top: 3px;
-  color: rgba(248, 251, 255, 0.6);
+  margin-top: 2px;
+  color: rgba(248, 251, 255, 0.62);
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.adj-connect {
+.os-connect {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
   gap: 8px;
 }
 
-.adj-connect label {
-  color: rgba(248, 251, 255, 0.7);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.11em;
+.os-connect input,
+.os-connect button,
+.os-search-input {
+  height: 44px;
+  padding: 0 11px;
+}
+
+.os-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.os-provider-grid div {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.os-provider-grid .ok {
+  border-color: rgba(64, 255, 173, 0.32);
+}
+
+.os-provider-grid .missing {
+  border-color: rgba(255, 196, 87, 0.2);
+}
+
+.os-provider-grid b,
+.os-provider-grid span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.os-provider-grid b {
+  font-size: 12px;
   text-transform: uppercase;
 }
 
-.adj-connect input,
-.adj-connect button,
-.adj-search {
-  height: 46px;
-  border-radius: 14px;
-  padding: 0 12px;
+.os-provider-grid span {
+  margin-top: 3px;
+  color: rgba(248, 251, 255, 0.62);
+  font-size: 11px;
 }
 
-.adj-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.adj-stats div {
-  min-height: 78px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  padding: 13px;
-  background: rgba(255, 255, 255, 0.052);
-}
-
-.adj-stats strong {
-  display: block;
-  overflow: hidden;
-  font-size: 24px;
-  letter-spacing: -0.04em;
-  text-overflow: ellipsis;
-}
-
-.adj-filters {
+.os-tools,
+.os-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
 }
 
-.adj-filters button {
-  padding: 7px 9px;
+.os-tools button,
+.os-filters button {
+  height: 34px;
+  padding: 0 9px;
   font-size: 11px;
-  text-transform: uppercase;
 }
 
-.adj-filters .active {
-  border-color: rgba(0, 224, 255, 0.58);
+.os-filters .active {
+  border-color: rgba(0, 224, 255, 0.62);
   color: #70efff;
 }
 
-.adj-files {
+.os-files {
   display: grid;
   align-content: start;
   gap: 8px;
@@ -185,149 +192,217 @@ textarea {
   padding-right: 2px;
 }
 
-.adj-file {
+.os-file {
   display: grid;
-  grid-template-columns: 50px minmax(0, 1fr);
+  grid-template-columns: 52px minmax(0, 1fr);
   gap: 3px 8px;
-  min-height: 60px;
+  min-height: 58px;
   padding: 10px;
   text-align: left;
   background: rgba(255, 255, 255, 0.055);
 }
 
-.adj-file.active {
-  border-color: rgba(0, 224, 255, 0.58);
+.os-file.active {
+  border-color: rgba(0, 224, 255, 0.6);
   background: rgba(0, 224, 255, 0.09);
 }
 
-.adj-file b {
+.os-file b {
   grid-row: span 2;
   align-self: center;
   overflow: hidden;
-  color: #4ceaff;
+  color: #52eaff;
   font-size: 10px;
   text-transform: uppercase;
 }
 
-.adj-file strong,
-.adj-file span {
+.os-file strong,
+.os-file span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.adj-file strong {
+.os-file strong {
   font-size: 13px;
 }
 
-.adj-file span {
+.os-file span {
   color: rgba(248, 251, 255, 0.58);
   font-size: 11px;
 }
 
-.adj-editor-pane {
+.os-main {
   display: grid;
-  grid-template-rows: 76px minmax(0, 1fr);
+  grid-template-rows: 58px 34px minmax(0, 1fr);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.adj-editor-head {
+.os-tabs {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
-  padding: 14px 16px;
-  overflow: hidden;
+  padding: 10px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.035);
 }
 
-.adj-title {
-  min-width: 0;
-  overflow: hidden;
-}
-
-.adj-title span {
-  max-width: 100%;
-}
-
-.adj-editor-actions {
+.os-tab-list {
   display: flex;
-  flex: 0 0 auto;
   gap: 8px;
-}
-
-.adj-editor-actions button {
-  min-width: 72px;
-  height: 42px;
-  padding: 0 12px;
-}
-
-.adj-editor {
-  resize: none;
-  border: 0;
-  border-radius: 0;
-  padding: 18px;
-  background: rgba(0, 0, 0, 0.74);
-  color: #f8fbff;
-  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.55;
   overflow: auto;
 }
 
-.adj-output-pane {
-  display: grid;
-  grid-template-rows: 76px auto 102px 48px minmax(0, 1fr);
-  background: rgba(0, 224, 255, 0.025);
-}
-
-.adj-output-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 224, 255, 0.045);
-}
-
-.adj-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  padding: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.adj-actions button {
-  height: 39px;
+.tab {
+  max-width: 180px;
+  height: 38px;
+  flex: 0 0 auto;
+  padding: 0 12px;
   overflow: hidden;
-  padding: 0 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.adj-command {
+.tab.active {
+  border-color: rgba(0, 224, 255, 0.58);
+  background: rgba(0, 224, 255, 0.09);
+}
+
+.os-editor-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.os-editor-actions button {
+  height: 38px;
+  min-width: 68px;
+  padding: 0 10px;
+}
+
+.os-pathline {
+  padding: 8px 14px;
+  overflow: hidden;
+  color: rgba(248, 251, 255, 0.66);
+  font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.os-editor {
+  min-height: 0;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.os-empty {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: rgba(248, 251, 255, 0.58);
+}
+
+.os-command {
+  display: grid;
+  grid-template-rows: 58px auto 112px 44px 44px minmax(90px, 160px) minmax(0, 1fr);
+  background: rgba(0, 224, 255, 0.025);
+}
+
+.os-command header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 224, 255, 0.045);
+}
+
+.os-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.os-action-grid button {
+  height: 36px;
+  overflow: hidden;
+  padding: 0 8px;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.os-command textarea {
   resize: none;
   border: 0;
   border-radius: 0;
-  padding: 12px;
+  padding: 11px;
   background: rgba(0, 0, 0, 0.42);
   font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.45;
 }
 
-.adj-run {
+.os-run {
   border-right: 0;
   border-left: 0;
   border-radius: 0;
 }
 
-.adj-output {
+.os-search-run {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px;
+  gap: 8px;
+  padding: 7px;
+}
+
+.os-search-run input,
+.os-search-run button {
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+.os-search-hits {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  overflow: auto;
+  padding: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.os-search-hits button {
+  display: block;
+  padding: 8px;
+  text-align: left;
+}
+
+.os-search-hits strong,
+.os-search-hits span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.os-search-hits strong {
+  font-size: 11px;
+}
+
+.os-search-hits span {
+  margin-top: 3px;
+  color: rgba(248, 251, 255, 0.62);
+  font-size: 11px;
+}
+
+.os-command pre {
   margin: 0;
-  padding: 14px;
+  padding: 12px;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -335,14 +410,5 @@ textarea {
   font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
   line-height: 1.45;
-}
-
-@media (max-width: 1300px) {
-  .adj-shell {
-    grid-template-columns: 320px minmax(380px, 1fr) 360px;
-  }
-
-  .adj-actions {
-    grid-template-columns: 1fr;
-  }
+  background: rgba(0, 0, 0, 0.54);
 }
