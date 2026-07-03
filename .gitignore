@@ -15,7 +15,6 @@ ehthumbs.db
 *.orig
 *~
 *.rej
-
 # Logs / traces / runtime residue
 *.log
 logs/
@@ -24,7 +23,6 @@ logs/
 *.pid
 *.pid.lock
 nohup.out
-
 # Secrets / credentials / tokens / certificates
 .env
 .env.*
@@ -60,7 +58,6 @@ creds/
 auth/
 tokens/
 certs/
-
 # Local config overrides
 *.local
 *.override
@@ -74,7 +71,6 @@ configs/runtime/*.private*
 configs/runtime/*.secret*
 configs/runtime/*.token*
 configs/runtime/*.creds*
-
 # Python
 __pycache__/
 *.py[cod]
@@ -96,7 +92,6 @@ ENV/
 .coverage.*
 htmlcov/
 .pytype/
-
 # Node / JS / TS
 node_modules/
 .pnpm-store/
@@ -111,7 +106,6 @@ node_modules/
 .turbo/
 coverage/
 *.tsbuildinfo
-
 # Build / package / generated
 dist/
 build/
@@ -125,7 +119,6 @@ generated/
 gen/
 tmp/
 temp/
-
 # Databases / dumps / archives
 *.sqlite
 *.sqlite3
@@ -142,7 +135,6 @@ temp/
 *.zip
 *.7z
 *.rar
-
 # Test artifacts / profiling / benchmarks
 .prof/
 profile/
@@ -156,7 +148,6 @@ benchmarks/
 *.gcno
 playwright-report/
 test-results/
-
 # Electron / app packaging artifacts
 *.dmg
 *.pkg
@@ -167,7 +158,6 @@ test-results/
 *.rpm
 *.snap
 *.asar
-
 # IDE / tooling private state
 .idea/
 .vscode/*
@@ -175,91 +165,51 @@ test-results/
 !.vscode/settings.json.example
 !.vscode/tasks.json.example
 !.vscode/launch.json.example
-
 # Project-local private workspace state
 .adjutorix-private/
 workspace-private/
 repo-private/
 *.workspace.private
-
 # GitHub / CI local private files
 .github/*.local.yml
 .github/*.private.yml
-
 # <<< ADJUTORIX HARDENED PRIVACY BLOCK <<<
-
 .adjutorix-audit/
-
 *.bak.*
-
 # >>> ADJUTORIX LOCAL PRIVACY / GENERATED ARTIFACT PERIMETER >>>
 # macOS / editor residue
-.DS_Store
-.AppleDouble
-.LSOverride
-*.swp
-*.swo
-*.tmp
-*.temp
-
 # local logs / forensic scratch / repair archives
-*.log
 __adjutorix_*.log
 __adjutorix_*.tar.gz
-
 # local backups / rejects
-*.bak
-*.bak.*
-*.orig
-*.rej
 *.v*bak-*
-
 # environment / credentials / key material
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-*.p12
-*.pfx
-*.crt
-*.cer
-
 # local databases / mutable runtime state
-*.sqlite
-*.sqlite3
-*.db
 *.db-*
 *.sqlite-*
-
 # package managers / build systems / caches
-node_modules/
 **/node_modules/
-.turbo/
 **/.turbo/
-.tmp/
 **/.tmp/
-.venv/
 .venv*/
 .conda/
-.pytest_cache/
 **/.pytest_cache/
-__pycache__/
 **/__pycache__/
-*.py[cod]
-
 # app/build/release outputs
-dist/
 **/dist/
-release/
 **/release/
-*.dmg
-*.asar
 *.blockmap
-*.zip
-*.tar
-*.tar.gz
-*.tgz
 # <<< ADJUTORIX LOCAL PRIVACY / GENERATED ARTIFACT PERIMETER <<<
-
 .adjutorix/
+# ADJUTORIX generated/runtime surfaces
+packages/*/node_modules/
+packages/*/dist/
+packages/adjutorix-app/dist/
+packages/adjutorix-app/release/
+packages/adjutorix-agent/adjutorix_agent/**/__pycache__/
+packages/adjutorix-cli/adjutorix_cli/**/__pycache__/
+*.pyc
+# local installed/build artifacts
+.local-app/
+builder-debug.yml
+builder-effective-config.yaml

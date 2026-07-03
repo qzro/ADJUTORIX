@@ -1,7 +1,7 @@
 // @ts-nocheck
 import crypto from "node:crypto";
 import { ipcMain } from "electron";
-import { assertMandatoryOperatorKernelGate } from "../operator/operator_kernel_enforcement";
+import { assertMandatoryOperatorKernelGate } from "../operator/operator_kernel_enforcement.js";
 
 /**
  * ADJUTORIX APP — MAIN / IPC / patch_ipc.ts

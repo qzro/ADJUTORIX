@@ -19,9 +19,72 @@ importers:
 
   packages/adjutorix-app:
     dependencies:
+      '@antimatterium/antimatterium':
+        specifier: ^0.2.2
+        version: 0.2.2
+      '@invocorder/recorder':
+        specifier: ^2.0.0
+        version: 2.0.0
+      '@kaaffilm/mk10-pro':
+        specifier: ^1.0.3
+        version: 1.0.3
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@verifrax/archicustos':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@verifrax/attestorium':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@verifrax/auctoriseal':
+        specifier: ^0.1.5
+        version: 0.1.5
+      '@verifrax/cicullis':
+        specifier: ^0.1.3
+        version: 0.1.3
+      '@verifrax/corpiform':
+        specifier: ^0.1.7
+        version: 0.1.7
+      '@verifrax/guillotine':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@verifrax/irrevocull':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@verifrax/kairoclasp':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@verifrax/limenward':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@verifrax/originseal':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@verifrax/root':
+        specifier: ^0.0.2
+        version: 0.0.2
+      '@verifrax/sigillarium':
+        specifier: ^0.1.4
+        version: 0.1.4
+      '@verifrax/validexor':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@verifrax/verifrax':
+        specifier: ^0.1.4
+        version: 0.1.4
+      '@verifrax/verifrax-api':
+        specifier: ^0.0.4
+        version: 0.0.4
+      '@verifrax/verifrax-profiles':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@verifrax/verifrax-spec':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@verifrax/verifrax-verify':
+        specifier: ^0.1.6
+        version: 0.1.6
       date-fns:
         specifier: ^3.6.0
         version: 3.6.0
@@ -167,6 +230,10 @@ packages:
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
+
+  '@antimatterium/antimatterium@0.2.2':
+    resolution: {integrity: sha512-lCoHNPv+DVNUYMmlCg2ZXgxAZAwFeOzTGfkD+ZeOplF+NCTx0DgHhWR8vYX4aMPiHJYFdR4u0fMF4fRMCcFkag==}
+    hasBin: true
 
   '@asamuzakjp/css-color@5.1.10':
     resolution: {integrity: sha512-02OhhkKtgNRuicQ/nF3TRnGsxL9wp0r3Y7VlKWyOHHGmGyvXv03y+PnymU8FKFJMTjIr1Bk8U2g1HWSLrpAHww==}
@@ -537,6 +604,10 @@ packages:
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
 
+  '@invocorder/recorder@2.0.0':
+    resolution: {integrity: sha512-NS3cIO0WNiasd6orMpq7LPYhr0j+JB4bneVcfCvkb45ewPgDLdu2G2hL5we6maSwn1TdAJ9niotfvp1+OREGMA==}
+    hasBin: true
+
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
     engines: {node: '>=12'}
@@ -559,6 +630,11 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.9':
     resolution: {integrity: sha512-3Belt6tdc8bPgAtbcmdtNJlirVoTmEb5e2gC94PnkwEW9jI6CAHUeoG85tjWP5WquqfavoMtMwiG4P926ZKKuQ==}
+
+  '@kaaffilm/mk10-pro@1.0.3':
+    resolution: {integrity: sha512-1tfocHCucwMzlQ4IABjPNVSgg+mQszlr7F6C9qgVPLqBZk96g/cP8SoZMMXsg++OFqHLoBohU5JYrSC0ER8WpQ==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   '@malept/cross-spawn-promise@1.1.1':
     resolution: {integrity: sha512-RTBGWL5FWQcg9orDOCcp4LvItNzUPcyEU9bwaeJX0rJ1IQxzucC48Y0/sQLp/g6t99IQgAlGIaesJS+gTn7tVQ==}
@@ -725,6 +801,22 @@ packages:
     resolution: {integrity: sha512-PrsWNQ8BuE00O3Xsx3ALh2Df8fAj9+cvvX9AIA6o4KpATR98c9mud4XtDWVvsEuyia5U4tVSTKygawyJkjm60w==}
     cpu: [x64]
     os: [win32]
+
+  '@sigstore/bundle@4.0.0':
+    resolution: {integrity: sha512-NwCl5Y0V6Di0NexvkTqdoVfmjTaQwoLM236r89KEojGmq/jMls8S+zb7yOwAPdXvbwfKDlP+lmXgAL4vKSQT+A==}
+    engines: {node: ^20.17.0 || >=22.9.0}
+
+  '@sigstore/core@3.2.1':
+    resolution: {integrity: sha512-qRsxPnCrbC/puegGxKuynfnxgLiHqWStrSjxkoB4YKqq3Z3s4cyZyj42ZdWFAEblNP65C+rBH8EuREHIXoi83g==}
+    engines: {node: ^20.17.0 || >=22.9.0}
+
+  '@sigstore/protobuf-specs@0.5.1':
+    resolution: {integrity: sha512-/ScWUhhoFasJsSRGTVBwId1loQjjnjAfE4djL6ZhrXRpNCmPTnUKF5Jokd58ILseOMjzET3UrMOtJPS9sYeI0g==}
+    engines: {node: ^18.17.0 || >=20.5.0}
+
+  '@sigstore/verify@3.0.0':
+    resolution: {integrity: sha512-moXtHH33AobOhTZF8xcX1MpOFqdvfCk7v6+teJL8zymBiDXwEsQH6XG9HGx2VIxnJZNm4cNSzflTLDnQLmIdmw==}
+    engines: {node: ^20.17.0 || >=22.9.0}
 
   '@sindresorhus/is@4.6.0':
     resolution: {integrity: sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw==}
@@ -928,6 +1020,74 @@ packages:
   '@typescript-eslint/visitor-keys@7.18.0':
     resolution: {integrity: sha512-cDF0/Gf81QpY3xYyJKDV14Zwdmid5+uuENhjH2EqFaF0ni+yAyq/LzMaIJdhNJXZI7uLzwIlA+V7oWoyn6Curg==}
     engines: {node: ^18.18.0 || >=20.0.0}
+
+  '@verifrax/archicustos@0.1.1':
+    resolution: {integrity: sha512-Myr0FkXLHafhcmOuw/duuE9iXAWmy3hOCuhg05p5wxTIZZ/jIadFChSivsAioaQ5rb5/8CgOynRcbM2t2H/4Mw==}
+    hasBin: true
+
+  '@verifrax/attestorium@0.1.1':
+    resolution: {integrity: sha512-ZO4G49m5HsCeFIUHk6WfY/nbzlJeG8i8yU6dpMzJj+KS1WnCh8wNXM25sXjLX1gUoL0WCau5AFtbfPwlBo02UQ==}
+    hasBin: true
+
+  '@verifrax/auctoriseal@0.1.5':
+    resolution: {integrity: sha512-v32Rcuarp7Ryjr3P9fyEa05KD07JEDGKOlGTjmHgxBdGkw8F5g5KXLsWrdahr7717vKIU9dwnMs/Ao9r3m8asw==}
+    engines: {node: '>=20'}
+
+  '@verifrax/cicullis@0.1.3':
+    resolution: {integrity: sha512-4GBt50MYzy9bgZ333dqfwrJwhsMBfkw2V/Vgp6TWLBjCrSsW/YKy7G4rMhF1k9VJGKysAkl7UpypmnxCHj75AQ==}
+    hasBin: true
+
+  '@verifrax/corpiform@0.1.7':
+    resolution: {integrity: sha512-4k5fmf6IgUO95Fon5TdElHutTE0K/4fQBaJF8CVET85OVToEXI+X4H3JBiVvJAGU5/vE53rqqlSfA80z3geofQ==}
+    hasBin: true
+
+  '@verifrax/guillotine@0.1.1':
+    resolution: {integrity: sha512-StCJrTc39Qyu8Y6Ztncv6+sL8r6Ugbyel4nsn0d4ID/Rt3/FLh8bMVCFM34+nzVLMEmzca/Bb/qDIOxpsq1dig==}
+    hasBin: true
+
+  '@verifrax/irrevocull@0.1.1':
+    resolution: {integrity: sha512-5M65/e7qFQi6dd2n19kAw1IUQv2RZhe+Smb0/7rS1WbgI4+wYjnNsTmYPMQJ1JIpGtuzUspvGC2ROL1UikbcFw==}
+    hasBin: true
+
+  '@verifrax/kairoclasp@0.1.1':
+    resolution: {integrity: sha512-2dWIdiVfppn63UXer6XltGJfEoGI2Q3ThUlxtsvLZMxzywSUXBRGzyo4UrYB3cbJnpJ04tOwMDvF/qBOqtq9VQ==}
+    hasBin: true
+
+  '@verifrax/limenward@0.1.1':
+    resolution: {integrity: sha512-QYnowI38Zyauep5WgPv7fNiDC0wOYOKVw0lyV4EmH5ocrki8qhSb0Rrw3p8V1zV79L8i6nCmgJ5Pn2ieGy2Gag==}
+    hasBin: true
+
+  '@verifrax/originseal@0.1.1':
+    resolution: {integrity: sha512-OAQJ0e5XZfuDSNqYRAXqSGN9xA54nho+WjQKo4wTuxdPxOYRuj3mjIYlSqlwMhCbmX5whEoIW404b8HBZLE9pQ==}
+    hasBin: true
+
+  '@verifrax/root@0.0.2':
+    resolution: {integrity: sha512-mVhS8F3AP5ExS0tTBHeDC6g7kv+/klyhqYtlqLQ8L/I37Wmd0Jo/wSRisyqRvFhCj9abnpKvBS//p3QRLhQSag==}
+    hasBin: true
+
+  '@verifrax/sigillarium@0.1.4':
+    resolution: {integrity: sha512-cdgnf0wMOA3au6tFS6C4ae51gT5Oh02HjCZQSQ8DbuTW3Rl5hEiXfoTHZHFaOL1wNu7ptxHohMIuG8BHKmx3VQ==}
+    engines: {node: '>=18'}
+
+  '@verifrax/validexor@0.1.1':
+    resolution: {integrity: sha512-jfSjhor0UK4fDRHtEpZHbXFMLRRa9AMQkLL2ff+UU0peLj/FdBcMij0MAnYS47JxdS+f1blWXYaJS6Lvban4Bg==}
+    hasBin: true
+
+  '@verifrax/verifrax-api@0.0.4':
+    resolution: {integrity: sha512-eGNLBarUzWb0Is2lC/2RJQ357M9Pz2l+hW6RCBn6dCWHtvKyoUNqHLHikg+tha1n8Rna345D9BD186WNl2Ob5w==}
+
+  '@verifrax/verifrax-profiles@0.1.1':
+    resolution: {integrity: sha512-qFXEeCaRuofl0luF3deLyxrZIsmu36v8FTBZJ5r8TFGDEHbCPQCdNCmbfXnD+1BBp3hxODNXTNymskhjaTCGQw==}
+
+  '@verifrax/verifrax-spec@0.1.1':
+    resolution: {integrity: sha512-anBjA66+wDQ1jmW46dC9NW+Rn1Z674T/fwj4o9wo4ONugnDJKUIkJSUxad967B2pBmYAdCnl4iqJIAGrrs7rYw==}
+
+  '@verifrax/verifrax-verify@0.1.6':
+    resolution: {integrity: sha512-AhQBDwuSWYAwze6EGx3EltDVmEWFo/kKzyX/23fXilx1DobM1lteAm//2pWA3TXmKPUgYxgYhrCON5shM6MPZg==}
+
+  '@verifrax/verifrax@0.1.4':
+    resolution: {integrity: sha512-b4Hnc9O0uWvPsHcWSk+Fd0lPzLEX96uYqjafkZ9A6ZcuHuMGJvBe1l8dNyGETwsZdQOLhBuwkKw8rkpEtq1xfg==}
+    hasBin: true
 
   '@vitejs/plugin-react@5.0.0':
     resolution: {integrity: sha512-Jx9JfsTa05bYkS9xo0hkofp2dCmp1blrKjw9JONs5BTHOvJCgLbaPSuZLGSVJW6u2qe0tc4eevY0+gSNNi0YCw==}
@@ -2853,6 +3013,8 @@ snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
 
+  '@antimatterium/antimatterium@0.2.2': {}
+
   '@asamuzakjp/css-color@5.1.10':
     dependencies:
       '@csstools/css-calc': 3.2.0(@csstools/css-parser-algorithms@4.0.0(@csstools/css-tokenizer@4.0.0))(@csstools/css-tokenizer@4.0.0)
@@ -3199,6 +3361,8 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
+  '@invocorder/recorder@2.0.0': {}
+
   '@isaacs/cliui@8.0.2':
     dependencies:
       string-width: 5.1.2
@@ -3231,6 +3395,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@kaaffilm/mk10-pro@1.0.3': {}
 
   '@malept/cross-spawn-promise@1.1.1':
     dependencies:
@@ -3349,6 +3515,20 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.60.0':
     optional: true
+
+  '@sigstore/bundle@4.0.0':
+    dependencies:
+      '@sigstore/protobuf-specs': 0.5.1
+
+  '@sigstore/core@3.2.1': {}
+
+  '@sigstore/protobuf-specs@0.5.1': {}
+
+  '@sigstore/verify@3.0.0':
+    dependencies:
+      '@sigstore/bundle': 4.0.0
+      '@sigstore/core': 3.2.1
+      '@sigstore/protobuf-specs': 0.5.1
 
   '@sindresorhus/is@4.6.0': {}
 
@@ -3580,6 +3760,48 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 7.18.0
       eslint-visitor-keys: 3.4.3
+
+  '@verifrax/archicustos@0.1.1': {}
+
+  '@verifrax/attestorium@0.1.1': {}
+
+  '@verifrax/auctoriseal@0.1.5': {}
+
+  '@verifrax/cicullis@0.1.3': {}
+
+  '@verifrax/corpiform@0.1.7': {}
+
+  '@verifrax/guillotine@0.1.1': {}
+
+  '@verifrax/irrevocull@0.1.1': {}
+
+  '@verifrax/kairoclasp@0.1.1': {}
+
+  '@verifrax/limenward@0.1.1': {}
+
+  '@verifrax/originseal@0.1.1': {}
+
+  '@verifrax/root@0.0.2':
+    dependencies:
+      '@sigstore/verify': 3.0.0
+
+  '@verifrax/sigillarium@0.1.4': {}
+
+  '@verifrax/validexor@0.1.1': {}
+
+  '@verifrax/verifrax-api@0.0.4':
+    dependencies:
+      '@sigstore/verify': 3.0.0
+
+  '@verifrax/verifrax-profiles@0.1.1': {}
+
+  '@verifrax/verifrax-spec@0.1.1': {}
+
+  '@verifrax/verifrax-verify@0.1.6': {}
+
+  '@verifrax/verifrax@0.1.4':
+    dependencies:
+      '@sigstore/verify': 3.0.0
 
   '@vitejs/plugin-react@5.0.0(vite@5.4.21(@types/node@20.19.37))':
     dependencies:

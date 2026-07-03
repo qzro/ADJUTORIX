@@ -6,7 +6,7 @@ import {
   assertMandatoryOperatorKernelGate,
   requirePatchIdFromKernelGatedPayload,
   type OperatorKernelGatePayload,
-} from "../operator/operator_kernel_enforcement";
+} from "../operator/operator_kernel_enforcement.js";
 
 import {
   loadMainEnvironment,

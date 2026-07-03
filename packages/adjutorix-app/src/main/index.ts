@@ -9,13 +9,34 @@ import os from "node:os";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { spawn, ChildProcess } from "node:child_process";
-import { registerOperatorKernelIpc } from "./ipc/operator_kernel_ipc";
+import { registerOperatorKernelIpc } from "./ipc/operator_kernel_ipc.js";
+import * as adjutorixRendererFs from "node:fs";
+import * as adjutorixRendererPath from "node:path";
+
+function resolveAdjutorixRendererIndexHtml(): string {
+  const candidates = [
+    adjutorixRendererPath.join(app.getAppPath(), "dist", "renderer", "index.html"),
+    adjutorixRendererPath.join(process.resourcesPath, "app.asar", "dist", "renderer", "index.html"),
+    adjutorixRendererPath.join(process.resourcesPath, "app", "dist", "renderer", "index.html"),
+    adjutorixRendererPath.join(process.cwd(), "packages", "adjutorix-app", "dist", "renderer", "index.html"),
+    adjutorixRendererPath.join(process.cwd(), "dist", "renderer", "index.html"),
+  ];
+
+  const found = candidates.find((candidate) => adjutorixRendererFs.existsSync(candidate));
+
+  if (!found) {
+    throw new Error(`ADJUTORIX_RENDERER_ENTRY_MISSING candidates=${candidates.join(" | ")}`);
+  }
+
+  console.info(`[adjutorix-app] renderer_entry=${found}`);
+  return found;
+}
+
 import {
   assertMandatoryOperatorKernelGate,
   requirePatchIdFromKernelGatedPayload,
   type OperatorKernelGatePayload,
-} from "./operator/operator_kernel_enforcement";
-
+} from "./operator/operator_kernel_enforcement.js";
 /**
  * ADJUTORIX APP — MAIN / index.ts
  *
@@ -523,7 +544,49 @@ async function shutdownAgent(): Promise<void> {
 // WINDOW / RENDERER
 // -----------------------------------------------------------------------------
 
-function buildBrowserWindow(config: RuntimeConfig): BrowserWindow {
+
+/* ADJUTORIX_POST_RENDER_PROBE_BEGIN */
+function installAdjutorixPostRenderProbe(window: BrowserWindow): void {
+  window.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    console.log(`[adjutorix-renderer-console:${level}] ${message} (${sourceId}:${line})`);
+  });
+
+  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[adjutorix-renderer-load-failed] code=${errorCode} description=${errorDescription} url=${validatedURL}`);
+  });
+
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error(`[adjutorix-renderer-gone] ${JSON.stringify(details)}`);
+  });
+
+  window.webContents.on("did-finish-load", () => {
+    setTimeout(() => {
+      void window.webContents.executeJavaScript(
+        `(() => {
+          const text = document.body ? document.body.innerText.trim() : "";
+          return {
+            title: document.title,
+            textLength: text.length,
+            textPreview: text.slice(0, 700),
+            hasNativeIde: Boolean(document.querySelector("[data-adjutorix-real-workbench='true']")),
+            hasAgentPrompt: text.includes("Tell it what to change."),
+            hasFeatureGrid: text.includes("ADJUTORIX FEATURES"),
+            rendererBoot: document.documentElement.dataset.adjutorixRendererBoot || null
+          };
+        })()`,
+        true,
+      ).then((snapshot) => {
+        console.log(`[adjutorix-post-render-dom] ${JSON.stringify(snapshot)}`);
+      }).catch((error: unknown) => {
+        console.error(`[adjutorix-post-render-dom-failed] ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }, 2500);
+  });
+}
+/* ADJUTORIX_POST_RENDER_PROBE_END */
+
+
+async function buildBrowserWindow(config: RuntimeConfig): Promise<BrowserWindow> {
   const window = new BrowserWindow({
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
@@ -594,7 +657,8 @@ function buildBrowserWindow(config: RuntimeConfig): BrowserWindow {
 
 async function loadRenderer(window: BrowserWindow, config: RuntimeConfig): Promise<void> {
   assert(fs.existsSync(config.build.rendererIndex), "renderer_index_missing_at_load");
-  await window.loadFile(config.build.rendererIndex);
+  installAdjutorixPostRenderProbe(window);
+  await window.loadFile(resolveAdjutorixRendererIndexHtml());
 }
 
 // -----------------------------------------------------------------------------
@@ -759,12 +823,12 @@ function buildCompatAgentHealthProjection(): Record<string, Json> {
     provider: "adjutorix-agent",
     providerName: "adjutorix-agent",
     auth,
-    authState: auth.state,
-    authStatus: auth.authStatus,
-    authenticated: auth.authenticated,
-    tokenLoaded: auth.tokenLoaded,
-    tokenLength: auth.tokenLength,
-    tokenFingerprint: auth.tokenFingerprint,
+    authState: auth.state ?? null,
+    authStatus: auth.authStatus ?? null,
+    authenticated: auth.authenticated ?? null,
+    tokenLoaded: auth.tokenLoaded ?? null,
+    tokenLength: auth.tokenLength ?? null,
+    tokenFingerprint: auth.tokenFingerprint ?? null,
   };
 }
 
@@ -894,7 +958,7 @@ function registerIpc(config: RuntimeConfig): void {
         cpu_load_avg: os.loadavg(),
       },
     };
-    const payload = { ok: true, snapshot, ...snapshot };
+    const payload = { ...snapshot, snapshot };
     return payload as Json;
   });
 
@@ -1266,12 +1330,24 @@ function buildRendererWorkspaceTreeProjection(rootPath: string | null): Json {
 // -----------------------------------------------------------------------------
 
 async function createMainWindow(config: RuntimeConfig): Promise<BrowserWindow> {
-  const window = buildBrowserWindow(config);
+  // ADJUTORIX_ELECTRON_READY_GATE_CREATEMAINWINDOW
+  if (!app.isReady()) {
+    await app.whenReady();
+  }
+
+
+  const window = await buildBrowserWindow(config);
   await loadRenderer(window, config);
   return window;
 }
 
 async function bootstrap(): Promise<void> {
+  // ADJUTORIX_ELECTRON_READY_GATE_BOOTSTRAP
+  if (!app.isReady()) {
+    await app.whenReady();
+  }
+
+
   appDiagnostics.phase = "bootstrap";
   flushDiagnostics();
 
@@ -1337,9 +1413,9 @@ function registerGlobalHandlers(): void {
     }
   });
 
-  app.on("activate", () => {
+  app.on("activate", async () => {
     if (BrowserWindow.getAllWindows().length === 0 && runtimeConfig) {
-      void createMainWindow(runtimeConfig).then((window) => {
+      void await createMainWindow(runtimeConfig).then((window) => {
         mainWindow = window;
       }).catch((error) => {
         recordCrash("activate-create-window", error);
@@ -1368,6 +1444,12 @@ function registerGlobalHandlers(): void {
 // -----------------------------------------------------------------------------
 
 async function main(): Promise<void> {
+  // ADJUTORIX_ELECTRON_READY_GATE_MAIN
+  if (!app.isReady()) {
+    await app.whenReady();
+  }
+
+
   ensureDir(LOG_ROOT);
   flushDiagnostics();
   registerGlobalHandlers();

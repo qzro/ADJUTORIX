@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import {
   createOperatorKernelReceipt,
   readLastOperatorKernelHash,
-} from "../operator/real_operator_kernel";
+} from "../operator/real_operator_kernel.js";
 
 type OperatorKernelReceiptInput = Parameters<typeof createOperatorKernelReceipt>[0];
 

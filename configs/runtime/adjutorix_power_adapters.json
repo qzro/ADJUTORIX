@@ -1,0 +1,66 @@
+{
+  "schema": "adjutorix.power-adapters.v1",
+  "status": "runtime_adapter_registry_enabled",
+  "install_surface": "packages/adjutorix-app",
+  "adapter_policy": {
+    "no_fake_execution": true,
+    "inventory_first": true,
+    "package_json_probe_required": true,
+    "direct_mutation_disallowed": true,
+    "verify_before_apply": true,
+    "update_command": "pnpm power:update",
+    "verify_command": "pnpm power:verify"
+  },
+  "groups": [
+    {
+      "id": "verifrax",
+      "title": "VERIFRAX power packages",
+      "purpose": "origin, authority, verification, seal, custody, gate and profile package plane",
+      "packages": [
+        "@verifrax/originseal",
+        "@verifrax/archicustos",
+        "@verifrax/kairoclasp",
+        "@verifrax/limenward",
+        "@verifrax/validexor",
+        "@verifrax/attestorium",
+        "@verifrax/irrevocull",
+        "@verifrax/guillotine",
+        "@verifrax/auctoriseal",
+        "@verifrax/corpiform",
+        "@verifrax/cicullis",
+        "@verifrax/verifrax-verify",
+        "@verifrax/verifrax-profiles",
+        "@verifrax/verifrax-spec",
+        "@verifrax/verifrax",
+        "@verifrax/sigillarium",
+        "@verifrax/verifrax-api",
+        "@verifrax/root"
+      ]
+    },
+    {
+      "id": "kaaffilm",
+      "title": "KAAFFILM package plane",
+      "purpose": "cinematic issuance package availability",
+      "packages": [
+        "@kaaffilm/mk10-pro"
+      ]
+    },
+    {
+      "id": "invocorder",
+      "title": "INVOCORDER package plane",
+      "purpose": "machine-action boundary recording package availability",
+      "packages": [
+        "@invocorder/recorder"
+      ]
+    },
+    {
+      "id": "antimatterium",
+      "title": "ANTIMATTERIUM package plane",
+      "purpose": "antimatterium package availability",
+      "packages": [
+        "@antimatterium/antimatterium"
+      ]
+    }
+  ],
+  "registry_file": "configs/runtime/adjutorix_power_adapters.json"
+}
