@@ -115,7 +115,7 @@ const COMMANDS: Record<FeatureKey, Array<{ label: string; command: string }>> = 
     { label: "Installed app", command: "find /Applications/Adjutorix.app/Contents -maxdepth 4 -type f | head -160" },
   ],
   ipc: [
-    { label: "IPC handlers", command: "grep -RIn \"ipcMain.handle\\|safeHandle\\|exposeInMainWorld\\|ipcRenderer.invoke\" packages/adjutorix-app/src | head -220" },
+    { label: "IPC handlers", command: "grep -RIn \"ipcMain.handle\\|safeHandle\\|exposeInMainWorld\" packages/adjutorix-app/src | head -220" },
     { label: "Preload bridge", command: "grep -RIn \"exposeInMainWorld\\|adjutorixPower\\|adjutorixOperatorKernel\" packages/adjutorix-app/src/preload packages/adjutorix-app/src/renderer | head -180" },
     { label: "IPC registry", command: "node scripts/ci/guard-ipc-channel-registry.mjs 2>/dev/null || true" },
   ],
