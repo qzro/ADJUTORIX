@@ -130,7 +130,6 @@ function App(): JSX.Element {
       .sort((a, b) => rank(a) - rank(b) || a.path.localeCompare(b.path));
   }, [files, kind, query]);
 
-  const activeFile = files.find((file) => file.path === activePath) ?? null;
   const activeContent = activePath ? buffers[activePath] ?? "" : "";
   const dirtyActive = Boolean(activePath && dirty.includes(activePath));
 
