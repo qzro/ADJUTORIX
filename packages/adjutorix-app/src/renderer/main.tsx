@@ -1351,3 +1351,266 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiPatchVerifyRunway();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_EVIDENCE_RECORDER_V1
+ *
+ * Records local evidence for the AI patch runway:
+ * - patch JSON/current patch output
+ * - verify commands
+ * - verify command output
+ * - optional git diff snapshot
+ * - workspace and timestamp
+ * - manual RECORD confirmation
+ *
+ * Evidence is written through adjutorixWorkspaceOS.writeText into:
+ * .adjutorix-ai-runway/<timestamp>-evidence.json
+ */
+
+interface AdjutorixEvidenceWorkspaceBridge {
+  defaults?: () => Promise<{ workspace?: string }>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+  gitDiff?: (request: { workspace?: string }) => Promise<unknown>;
+}
+
+interface AdjutorixEvidenceRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixEvidenceWorkspaceBridge;
+}
+
+function adjutorixEvidenceWindow(): AdjutorixEvidenceRuntimeWindow {
+  return window as unknown as AdjutorixEvidenceRuntimeWindow;
+}
+
+async function adjutorixEvidenceWorkspace(): Promise<string> {
+  const bridge = adjutorixEvidenceWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  const defaults = await bridge.defaults();
+  return typeof defaults.workspace === "string" ? defaults.workspace : "";
+}
+
+function adjutorixEvidenceText(selector: string): string {
+  const element = document.querySelector(selector);
+
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.textContent || "";
+  }
+
+  return "";
+}
+
+function adjutorixEvidenceTimestamp(): string {
+  return new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function installAdjutorixAiRunwayEvidenceRecorder(): Promise<void> {
+  if (document.getElementById("adjutorix-ai-runway-evidence-recorder")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-evidence-recorder";
+  panel.className = "adjutorix-ai-runway-evidence-recorder";
+  panel.setAttribute("aria-label", "Adjutorix AI runway evidence recorder");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-runway-evidence-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Runway Evidence";
+
+  const confirm = document.createElement("input");
+  confirm.className = "adjutorix-ai-runway-evidence-confirm";
+  confirm.placeholder = "Type RECORD";
+  confirm.spellcheck = false;
+
+  header.appendChild(title);
+  header.appendChild(confirm);
+
+  const note = document.createElement("textarea");
+  note.className = "adjutorix-ai-runway-evidence-note";
+  note.placeholder = "Operator note for this evidence object...";
+  note.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-runway-evidence-actions";
+
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.textContent = "Preview Evidence";
+
+  const recordButton = document.createElement("button");
+  recordButton.type = "button";
+  recordButton.textContent = "Record Evidence";
+
+  const diffButton = document.createElement("button");
+  diffButton.type = "button";
+  diffButton.textContent = "Refresh Diff";
+
+  actions.appendChild(previewButton);
+  actions.appendChild(diffButton);
+  actions.appendChild(recordButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-runway-evidence-output";
+  output.textContent = "Evidence recorder mounted. Type RECORD before writing evidence.";
+
+  let latestDiff = "";
+
+  async function buildEvidenceObject(includeDiff: boolean): Promise<Record<string, unknown>> {
+    const workspace = await adjutorixEvidenceWorkspace();
+    const bridge = adjutorixEvidenceWindow().adjutorixWorkspaceOS;
+
+    if (includeDiff && bridge?.gitDiff) {
+      const diff = await bridge.gitDiff({ workspace });
+      latestDiff = typeof diff === "string" ? diff : JSON.stringify(diff, null, 2);
+    }
+
+    return {
+      schema: "adjutorix.ai_runway_evidence.v1",
+      source: "adjutorix-ai-runway-evidence-recorder",
+      recorded_at: new Date().toISOString(),
+      workspace,
+      operator_note: note.value,
+      ai_provider_panel: {
+        output: adjutorixEvidenceText(".adjutorix-ai-output"),
+      },
+      patch_runway: {
+        target_path: adjutorixEvidenceText(".adjutorix-ai-patch-path"),
+        instruction: adjutorixEvidenceText(".adjutorix-ai-patch-instruction"),
+        patch_output: adjutorixEvidenceText(".adjutorix-ai-patch-output"),
+      },
+      verify_runway: {
+        commands: adjutorixEvidenceText(".adjutorix-ai-patch-verify-commands"),
+        output: adjutorixEvidenceText(".adjutorix-ai-patch-verify-output"),
+      },
+      git_diff_snapshot: latestDiff,
+    };
+  }
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  diffButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixEvidenceWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.gitDiff) {
+        setOutput("Workspace OS git diff bridge unavailable.");
+        return;
+      }
+
+      setBusy(diffButton, true);
+      try {
+        const workspace = await adjutorixEvidenceWorkspace();
+        const diff = await bridge.gitDiff({ workspace });
+        latestDiff = typeof diff === "string" ? diff : JSON.stringify(diff, null, 2);
+        setOutput(latestDiff || "No diff returned.");
+        console.log("ADJUTORIX_AI_RUNWAY_EVIDENCE_DIFF_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-evidence-recorder",
+          workspace,
+          bytes: latestDiff.length,
+        }));
+      } catch (error) {
+        setOutput(`DIFF SNAPSHOT FAILED\n${String(error)}`);
+      } finally {
+        setBusy(diffButton, false);
+      }
+    })();
+  });
+
+  previewButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(previewButton, true);
+      try {
+        const evidence = await buildEvidenceObject(false);
+        setOutput(JSON.stringify(evidence, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_EVIDENCE_PREVIEW_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-evidence-recorder",
+        }));
+      } catch (error) {
+        setOutput(`EVIDENCE PREVIEW FAILED\n${String(error)}`);
+      } finally {
+        setBusy(previewButton, false);
+      }
+    })();
+  });
+
+  recordButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixEvidenceWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.writeText) {
+        setOutput("Workspace OS write bridge unavailable.");
+        return;
+      }
+
+      if (confirm.value.trim() !== "RECORD") {
+        setOutput("Evidence write blocked. Type RECORD in the confirmation field.");
+        return;
+      }
+
+      setBusy(recordButton, true);
+      try {
+        const evidence = await buildEvidenceObject(true);
+        const workspace = typeof evidence.workspace === "string" ? evidence.workspace : "";
+        const path = `.adjutorix-ai-runway/${adjutorixEvidenceTimestamp()}-evidence.json`;
+        const content = JSON.stringify(evidence, null, 2) + "\n";
+
+        await bridge.writeText({ workspace, path, content });
+
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, path, bytes: content.length, evidence }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_EVIDENCE_RECORDED", JSON.stringify({
+          source: "adjutorix-ai-runway-evidence-recorder",
+          path,
+          bytes: content.length,
+          workspace,
+        }));
+      } catch (error) {
+        setOutput(`EVIDENCE RECORD FAILED\n${String(error)}`);
+      } finally {
+        setBusy(recordButton, false);
+      }
+    })();
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(note);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_EVIDENCE_RECORDER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-evidence-recorder",
+    writes: ".adjutorix-ai-runway",
+    requires: "manual-record-confirmation",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    void installAdjutorixAiRunwayEvidenceRecorder();
+  }, { once: true });
+} else {
+  void installAdjutorixAiRunwayEvidenceRecorder();
+}
