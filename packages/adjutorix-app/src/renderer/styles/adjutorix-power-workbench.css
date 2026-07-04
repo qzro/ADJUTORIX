@@ -554,3 +554,80 @@ textarea {
 .adjutorix-ai-patch-output {
   min-height: 120px;
 }
+
+
+/* ADJUTORIX_AI_PATCH_VERIFY_RUNWAY_CSS_V1 */
+
+.adjutorix-ai-patch-verify-runway {
+  position: fixed;
+  left: 496px;
+  bottom: 18px;
+  z-index: 78;
+  display: grid;
+  grid-template-rows: auto minmax(70px, 130px) auto minmax(120px, 260px);
+  gap: 10px;
+  width: min(420px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(74, 222, 128, 0.28);
+  border-radius: 18px;
+  background: rgba(5, 20, 18, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-patch-verify-header,
+.adjutorix-ai-patch-verify-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-patch-verify-confirm,
+.adjutorix-ai-patch-verify-commands,
+.adjutorix-ai-patch-verify-output,
+.adjutorix-ai-patch-verify-actions button {
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(226, 232, 240);
+}
+
+.adjutorix-ai-patch-verify-confirm,
+.adjutorix-ai-patch-verify-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-patch-verify-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-patch-verify-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-patch-verify-commands {
+  width: 100%;
+  padding: 10px;
+  resize: vertical;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.adjutorix-ai-patch-verify-output {
+  min-height: 120px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+@media (max-width: 1160px) {
+  .adjutorix-ai-patch-verify-runway {
+    left: 18px;
+    bottom: 430px;
+  }
+}
