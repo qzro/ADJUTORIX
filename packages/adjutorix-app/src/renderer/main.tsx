@@ -543,3 +543,205 @@ const root = document.getElementById("root");
 if (!root) throw new Error("Adjutorix root element not found");
 
 createRoot(root).render(<App />);
+
+
+/**
+ * ADJUTORIX_AI_ASSISTANT_PANEL_V1
+ *
+ * Imperative overlay mounted beside the workspace OS shell.
+ * It uses the preload provider bridge and never fabricates availability.
+ */
+
+type AdjutorixAiProviderName = "ollama" | "openai" | "anthropic";
+
+interface AdjutorixAiCompleteResult {
+  ok: boolean;
+  provider: AdjutorixAiProviderName;
+  model: string;
+  text: string;
+  error?: string;
+  elapsedMs: number;
+}
+
+interface AdjutorixAiProviderRecord {
+  configured: boolean;
+  available: boolean;
+  provider: AdjutorixAiProviderName;
+  model: string;
+  endpoint: string;
+  reason?: string;
+}
+
+interface AdjutorixAiStatusResult {
+  ok: boolean;
+  providers: Record<AdjutorixAiProviderName, AdjutorixAiProviderRecord>;
+}
+
+interface AdjutorixAiBridge {
+  status: () => Promise<AdjutorixAiStatusResult>;
+  complete: (request: {
+    provider?: AdjutorixAiProviderName;
+    prompt: string;
+    workspace?: string;
+    context?: string;
+    instruction?: string;
+  }) => Promise<AdjutorixAiCompleteResult>;
+}
+
+declare global {
+  interface Window {
+    adjutorixAI?: AdjutorixAiBridge;
+  }
+}
+
+function adjutorixAiWorkspaceFromLocation(): string {
+  const titleText = document.title || "Adjutorix";
+  const workspaceText = window.localStorage.getItem("adjutorix.workspace") || "";
+  return workspaceText || titleText;
+}
+
+function installAdjutorixAiAssistantPanel(): void {
+  if (document.getElementById("adjutorix-ai-assistant")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-assistant";
+  panel.className = "adjutorix-ai-assistant";
+  panel.setAttribute("aria-label", "Adjutorix AI assistant");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "AI Workbench Bridge";
+
+  const provider = document.createElement("select");
+  provider.className = "adjutorix-ai-provider";
+  for (const value of ["ollama", "openai", "anthropic"] as AdjutorixAiProviderName[]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    provider.appendChild(option);
+  }
+
+  header.appendChild(title);
+  header.appendChild(provider);
+
+  const prompt = document.createElement("textarea");
+  prompt.className = "adjutorix-ai-prompt";
+  prompt.placeholder = "Ask for a code action, diagnosis, refactor, command sequence, or patch plan...";
+  prompt.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-actions";
+
+  const statusButton = document.createElement("button");
+  statusButton.type = "button";
+  statusButton.textContent = "Provider Status";
+
+  const runButton = document.createElement("button");
+  runButton.type = "button";
+  runButton.textContent = "Run AI";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Output";
+
+  actions.appendChild(statusButton);
+  actions.appendChild(runButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-output";
+  output.textContent = "Provider bridge mounted. Run status first.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  statusButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = window.adjutorixAI;
+
+      if (!bridge) {
+        setOutput("AI bridge unavailable on window.adjutorixAI.");
+        return;
+      }
+
+      statusButton.setAttribute("disabled", "true");
+      try {
+        const result = await bridge.status();
+        setOutput(JSON.stringify(result, null, 2));
+        console.log("ADJUTORIX_AI_PROVIDER_STATUS", JSON.stringify(result));
+      } catch (error) {
+        setOutput(`AI STATUS FAILED\n${String(error)}`);
+      } finally {
+        statusButton.removeAttribute("disabled");
+      }
+    })();
+  });
+
+  runButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = window.adjutorixAI;
+      const text = prompt.value.trim();
+
+      if (!bridge) {
+        setOutput("AI bridge unavailable on window.adjutorixAI.");
+        return;
+      }
+
+      if (!text) {
+        setOutput("Enter a request before running AI.");
+        return;
+      }
+
+      runButton.setAttribute("disabled", "true");
+      setOutput("Running provider call...");
+
+      try {
+        const result = await bridge.complete({
+          provider: provider.value as AdjutorixAiProviderName,
+          prompt: text,
+          workspace: adjutorixAiWorkspaceFromLocation(),
+          instruction: "Return executable developer guidance for Adjutorix. Include file paths, shell commands, test commands, and risk notes. Do not claim execution.",
+        });
+
+        setOutput(JSON.stringify(result, null, 2));
+        console.log("ADJUTORIX_AI_PROVIDER_COMPLETION", JSON.stringify({
+          ok: result.ok,
+          provider: result.provider,
+          model: result.model,
+          elapsedMs: result.elapsedMs,
+        }));
+      } catch (error) {
+        setOutput(`AI RUN FAILED\n${String(error)}`);
+      } finally {
+        runButton.removeAttribute("disabled");
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(prompt);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_ASSISTANT_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-provider-bridge",
+    providers: ["ollama", "openai", "anthropic"],
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiAssistantPanel, { once: true });
+} else {
+  installAdjutorixAiAssistantPanel();
+}
