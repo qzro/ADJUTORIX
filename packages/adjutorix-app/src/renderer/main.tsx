@@ -745,3 +745,363 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiAssistantPanel();
 }
+
+
+/**
+ * ADJUTORIX_AI_PATCH_RUNWAY_V1
+ *
+ * Real AI-to-patch runway:
+ * - Builds strict JSON edit prompts from a target file.
+ * - Calls the already-mounted adjutorixAI provider bridge.
+ * - Applies only explicit JSON full-file edits.
+ * - Requires manual APPLY confirmation before mutation.
+ * - Uses adjutorixWorkspaceOS.writeText, so mutations remain in the local workspace bridge.
+ */
+
+type AdjutorixPatchProviderName = "ollama" | "openai" | "anthropic";
+
+interface AdjutorixPatchDefaults {
+  workspace?: string;
+}
+
+interface AdjutorixPatchReadResult {
+  content?: string;
+  path?: string;
+}
+
+interface AdjutorixPatchEdit {
+  path: string;
+  content: string;
+  reason?: string;
+}
+
+interface AdjutorixPatchPlan {
+  edits: AdjutorixPatchEdit[];
+  commands?: string[];
+  risks?: string[];
+}
+
+interface AdjutorixPatchWorkspaceBridge {
+  defaults?: () => Promise<AdjutorixPatchDefaults>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<AdjutorixPatchReadResult>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+  gitDiff?: (request: { workspace?: string }) => Promise<unknown>;
+}
+
+interface AdjutorixPatchAiBridge {
+  complete?: (request: {
+    provider?: AdjutorixPatchProviderName;
+    prompt: string;
+    workspace?: string;
+    context?: string;
+    instruction?: string;
+  }) => Promise<{ ok: boolean; provider: string; model: string; text: string; error?: string; elapsedMs: number }>;
+}
+
+type AdjutorixPatchRuntimeWindow = {
+  adjutorixWorkspaceOS?: AdjutorixPatchWorkspaceBridge;
+  adjutorixAI?: AdjutorixPatchAiBridge;
+};
+
+function adjutorixPatchWindow(): AdjutorixPatchRuntimeWindow {
+  return window as unknown as AdjutorixPatchRuntimeWindow;
+}
+
+async function adjutorixPatchWorkspace(): Promise<string> {
+  const bridge = adjutorixPatchWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  const defaults = await bridge.defaults();
+  return typeof defaults.workspace === "string" ? defaults.workspace : "";
+}
+
+function adjutorixPatchExtractJson(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+
+  if (start >= 0 && end > start) {
+    return text.slice(start, end + 1);
+  }
+
+  return text.trim();
+}
+
+function adjutorixPatchParsePlan(text: string): AdjutorixPatchPlan {
+  const parsed = JSON.parse(adjutorixPatchExtractJson(text)) as AdjutorixPatchPlan;
+
+  if (!Array.isArray(parsed.edits)) {
+    throw new Error("Patch JSON must contain edits array.");
+  }
+
+  for (const edit of parsed.edits) {
+    if (typeof edit.path !== "string" || !edit.path.trim()) {
+      throw new Error("Every edit requires a non-empty path.");
+    }
+
+    if (typeof edit.content !== "string") {
+      throw new Error(`Edit for ${edit.path} requires full replacement content string.`);
+    }
+  }
+
+  return parsed;
+}
+
+function installAdjutorixAiPatchRunway(): void {
+  if (document.getElementById("adjutorix-ai-patch-runway")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-patch-runway";
+  panel.className = "adjutorix-ai-patch-runway";
+  panel.setAttribute("aria-label", "Adjutorix AI patch runway");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-patch-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "AI Patch Runway";
+
+  const provider = document.createElement("select");
+  provider.className = "adjutorix-ai-patch-provider";
+
+  for (const value of ["ollama", "openai", "anthropic"] as AdjutorixPatchProviderName[]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    provider.appendChild(option);
+  }
+
+  header.appendChild(title);
+  header.appendChild(provider);
+
+  const pathInput = document.createElement("input");
+  pathInput.className = "adjutorix-ai-patch-path";
+  pathInput.placeholder = "Target file path, e.g. packages/adjutorix-app/src/renderer/main.tsx";
+  pathInput.spellcheck = false;
+
+  const instruction = document.createElement("textarea");
+  instruction.className = "adjutorix-ai-patch-instruction";
+  instruction.placeholder = "Describe the code change. AI must return strict JSON with full-file replacement edits.";
+  instruction.spellcheck = false;
+
+  const confirmation = document.createElement("input");
+  confirmation.className = "adjutorix-ai-patch-confirm";
+  confirmation.placeholder = "Type APPLY to allow mutation";
+  confirmation.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-patch-actions";
+
+  const loadButton = document.createElement("button");
+  loadButton.type = "button";
+  loadButton.textContent = "Load File";
+
+  const askButton = document.createElement("button");
+  askButton.type = "button";
+  askButton.textContent = "Ask AI JSON";
+
+  const applyButton = document.createElement("button");
+  applyButton.type = "button";
+  applyButton.textContent = "Apply JSON";
+
+  const diffButton = document.createElement("button");
+  diffButton.type = "button";
+  diffButton.textContent = "Git Diff";
+
+  actions.appendChild(loadButton);
+  actions.appendChild(askButton);
+  actions.appendChild(applyButton);
+  actions.appendChild(diffButton);
+
+  const output = document.createElement("textarea");
+  output.className = "adjutorix-ai-patch-output";
+  output.placeholder = "Loaded file context, AI JSON patch plan, apply result, or git diff appears here.";
+  output.spellcheck = false;
+
+  function setOutput(value: string): void {
+    output.value = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  loadButton.addEventListener("click", () => {
+    void (async () => {
+      const osBridge = adjutorixPatchWindow().adjutorixWorkspaceOS;
+      const path = pathInput.value.trim();
+
+      if (!osBridge?.readText) {
+        setOutput("Workspace OS read bridge unavailable.");
+        return;
+      }
+
+      if (!path) {
+        setOutput("Enter a target file path.");
+        return;
+      }
+
+      setBusy(loadButton, true);
+      try {
+        const workspace = await adjutorixPatchWorkspace();
+        const result = await osBridge.readText({ workspace, path });
+        setOutput(String(result.content || ""));
+        console.log("ADJUTORIX_AI_PATCH_FILE_LOADED", JSON.stringify({ path, workspace, bytes: String(result.content || "").length }));
+      } catch (error) {
+        setOutput(`LOAD FILE FAILED\n${String(error)}`);
+      } finally {
+        setBusy(loadButton, false);
+      }
+    })();
+  });
+
+  askButton.addEventListener("click", () => {
+    void (async () => {
+      const aiBridge = adjutorixPatchWindow().adjutorixAI;
+      const path = pathInput.value.trim();
+      const request = instruction.value.trim();
+      const currentContent = output.value;
+
+      if (!aiBridge?.complete) {
+        setOutput("AI provider bridge unavailable.");
+        return;
+      }
+
+      if (!path || !request) {
+        setOutput("Enter target file path and patch instruction.");
+        return;
+      }
+
+      setBusy(askButton, true);
+      try {
+        const workspace = await adjutorixPatchWorkspace();
+        const prompt = [
+          "Return STRICT JSON only. No markdown.",
+          "Schema:",
+          '{"edits":[{"path":"relative/path","content":"FULL replacement file content","reason":"why"}],"commands":["verification command"],"risks":["risk note"]}',
+          "",
+          `Target path: ${path}`,
+          "",
+          "Instruction:",
+          request,
+          "",
+          "Current file content:",
+          currentContent,
+        ].join("\n");
+
+        const result = await aiBridge.complete({
+          provider: provider.value as AdjutorixPatchProviderName,
+          workspace,
+          prompt,
+          instruction: "You are Adjutorix AI Patch Runway. Return strict JSON only. Every edit must contain full replacement content. Do not claim execution.",
+        });
+
+        setOutput(result.text || JSON.stringify(result, null, 2));
+        console.log("ADJUTORIX_AI_PATCH_PLAN_CREATED", JSON.stringify({
+          ok: result.ok,
+          provider: result.provider,
+          model: result.model,
+          elapsedMs: result.elapsedMs,
+          path,
+        }));
+      } catch (error) {
+        setOutput(`AI PATCH PLAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(askButton, false);
+      }
+    })();
+  });
+
+  applyButton.addEventListener("click", () => {
+    void (async () => {
+      const osBridge = adjutorixPatchWindow().adjutorixWorkspaceOS;
+
+      if (!osBridge?.writeText) {
+        setOutput("Workspace OS write bridge unavailable.");
+        return;
+      }
+
+      if (confirmation.value.trim() !== "APPLY") {
+        setOutput("Mutation blocked. Type APPLY in the confirmation field before applying JSON edits.");
+        return;
+      }
+
+      setBusy(applyButton, true);
+      try {
+        const workspace = await adjutorixPatchWorkspace();
+        const plan = adjutorixPatchParsePlan(output.value);
+        const applied: string[] = [];
+
+        for (const edit of plan.edits) {
+          await osBridge.writeText({ workspace, path: edit.path, content: edit.content });
+          applied.push(edit.path);
+        }
+
+        confirmation.value = "";
+        setOutput(JSON.stringify({ ok: true, applied, commands: plan.commands || [], risks: plan.risks || [] }, null, 2));
+        console.log("ADJUTORIX_AI_PATCH_APPLIED", JSON.stringify({ applied, workspace, source: "adjutorix-ai-patch-runway" }));
+      } catch (error) {
+        setOutput(`APPLY JSON FAILED\n${String(error)}`);
+      } finally {
+        setBusy(applyButton, false);
+      }
+    })();
+  });
+
+  diffButton.addEventListener("click", () => {
+    void (async () => {
+      const osBridge = adjutorixPatchWindow().adjutorixWorkspaceOS;
+
+      if (!osBridge?.gitDiff) {
+        setOutput("Workspace OS git diff bridge unavailable.");
+        return;
+      }
+
+      setBusy(diffButton, true);
+      try {
+        const workspace = await adjutorixPatchWorkspace();
+        const diff = await osBridge.gitDiff({ workspace });
+        setOutput(typeof diff === "string" ? diff : JSON.stringify(diff, null, 2));
+        console.log("ADJUTORIX_AI_PATCH_DIFF_READY", JSON.stringify({ workspace, source: "adjutorix-ai-patch-runway" }));
+      } catch (error) {
+        setOutput(`GIT DIFF FAILED\n${String(error)}`);
+      } finally {
+        setBusy(diffButton, false);
+      }
+    })();
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(pathInput);
+  panel.appendChild(instruction);
+  panel.appendChild(confirmation);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_PATCH_RUNWAY_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-patch-runway",
+    requires: "manual-apply-confirmation",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiPatchRunway, { once: true });
+} else {
+  installAdjutorixAiPatchRunway();
+}
