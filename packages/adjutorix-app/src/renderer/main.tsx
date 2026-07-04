@@ -1983,3 +1983,243 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiWorkspaceContextPack();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_MISSION_CONTROL_V1
+ *
+ * Unified AI runway control surface:
+ * - detects mounted workspace OS, provider bridge, context pack, patch runway, verify runway, evidence recorder
+ * - checks provider status through adjutorixAI.status
+ * - checks workspace defaults through adjutorixWorkspaceOS.defaults
+ * - emits one live readiness object for the whole installed product chain
+ * - no fake execution; this is a state/control spine over the already-real bridges
+ */
+
+interface AdjutorixMissionProviderRecord {
+  configured?: boolean;
+  available?: boolean;
+  provider?: string;
+  model?: string;
+  endpoint?: string;
+  reason?: string;
+}
+
+interface AdjutorixMissionAiBridge {
+  status?: () => Promise<{
+    ok: boolean;
+    providers: Record<string, AdjutorixMissionProviderRecord>;
+  }>;
+}
+
+interface AdjutorixMissionWorkspaceBridge {
+  defaults?: () => Promise<{ workspace?: string }>;
+  gitDiff?: (request: { workspace?: string }) => Promise<unknown>;
+}
+
+interface AdjutorixMissionRuntimeWindow {
+  adjutorixAI?: AdjutorixMissionAiBridge;
+  adjutorixWorkspaceOS?: AdjutorixMissionWorkspaceBridge;
+}
+
+function adjutorixMissionWindow(): AdjutorixMissionRuntimeWindow {
+  return window as unknown as AdjutorixMissionRuntimeWindow;
+}
+
+function adjutorixMissionMounted(selector: string): boolean {
+  return Boolean(document.querySelector(selector));
+}
+
+function adjutorixMissionText(selector: string): string {
+  const element = document.querySelector(selector);
+
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.textContent || "";
+  }
+
+  return "";
+}
+
+async function installAdjutorixAiRunwayMissionControl(): Promise<void> {
+  if (document.getElementById("adjutorix-ai-runway-mission-control")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-mission-control";
+  panel.className = "adjutorix-ai-runway-mission-control";
+  panel.setAttribute("aria-label", "Adjutorix AI runway mission control");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-mission-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "AI Mission Control";
+
+  const stateBadge = document.createElement("span");
+  stateBadge.className = "adjutorix-ai-mission-state";
+  stateBadge.textContent = "checking";
+
+  header.appendChild(title);
+  header.appendChild(stateBadge);
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-mission-actions";
+
+  const refreshButton = document.createElement("button");
+  refreshButton.type = "button";
+  refreshButton.textContent = "Refresh";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Snapshot";
+
+  const diffButton = document.createElement("button");
+  diffButton.type = "button";
+  diffButton.textContent = "Diff Snapshot";
+
+  actions.appendChild(refreshButton);
+  actions.appendChild(diffButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-mission-output";
+  output.textContent = "Mission control mounted.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  async function buildSnapshot(includeDiff: boolean): Promise<Record<string, unknown>> {
+    const runtime = adjutorixMissionWindow();
+    const workspace = runtime.adjutorixWorkspaceOS?.defaults
+      ? await runtime.adjutorixWorkspaceOS.defaults()
+      : {};
+
+    const providers = runtime.adjutorixAI?.status
+      ? await runtime.adjutorixAI.status()
+      : { ok: false, providers: {} };
+
+    let diffSnapshot = "";
+
+    if (includeDiff && runtime.adjutorixWorkspaceOS?.gitDiff) {
+      const diff = await runtime.adjutorixWorkspaceOS.gitDiff({ workspace: workspace.workspace });
+      diffSnapshot = typeof diff === "string" ? diff : JSON.stringify(diff, null, 2);
+    }
+
+    const surfaces = {
+      workspace_os: Boolean(runtime.adjutorixWorkspaceOS),
+      ai_provider_bridge: Boolean(runtime.adjutorixAI),
+      ai_assistant: adjutorixMissionMounted("#adjutorix-ai-assistant"),
+      patch_runway: adjutorixMissionMounted("#adjutorix-ai-patch-runway"),
+      verify_runway: adjutorixMissionMounted("#adjutorix-ai-patch-verify-runway"),
+      evidence_recorder: adjutorixMissionMounted("#adjutorix-ai-runway-evidence-recorder"),
+      context_pack: adjutorixMissionMounted("#adjutorix-ai-workspace-context-pack"),
+    };
+
+    const ready = Object.values(surfaces).every(Boolean);
+    const patchPlanBytes = adjutorixMissionText(".adjutorix-ai-patch-output").length;
+    const contextBytes = adjutorixMissionText(".adjutorix-ai-context-output").length;
+    const verifyBytes = adjutorixMissionText(".adjutorix-ai-patch-verify-output").length;
+
+    return {
+      schema: "adjutorix.ai_runway_mission_control_snapshot.v1",
+      source: "adjutorix-ai-runway-mission-control",
+      created_at: new Date().toISOString(),
+      ready,
+      workspace: workspace.workspace || "",
+      surfaces,
+      providers,
+      live_payload_sizes: {
+        context_pack_chars: contextBytes,
+        patch_plan_chars: patchPlanBytes,
+        verify_output_chars: verifyBytes,
+      },
+      diff_snapshot: diffSnapshot,
+    };
+  }
+
+  async function refresh(includeDiff: boolean): Promise<void> {
+    const snapshot = await buildSnapshot(includeDiff);
+    stateBadge.textContent = snapshot.ready ? "ready" : "incomplete";
+    panel.setAttribute("data-ready", snapshot.ready ? "true" : "false");
+    setOutput(JSON.stringify(snapshot, null, 2));
+    console.log("ADJUTORIX_AI_RUNWAY_MISSION_CONTROL_SNAPSHOT", JSON.stringify({
+      source: "adjutorix-ai-runway-mission-control",
+      ready: snapshot.ready,
+      workspace: snapshot.workspace,
+    }));
+  }
+
+  refreshButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(refreshButton, true);
+      try {
+        await refresh(false);
+      } catch (error) {
+        stateBadge.textContent = "error";
+        setOutput(`MISSION SNAPSHOT FAILED\n${String(error)}`);
+      } finally {
+        setBusy(refreshButton, false);
+      }
+    })();
+  });
+
+  diffButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(diffButton, true);
+      try {
+        await refresh(true);
+      } catch (error) {
+        stateBadge.textContent = "error";
+        setOutput(`MISSION DIFF SNAPSHOT FAILED\n${String(error)}`);
+      } finally {
+        setBusy(diffButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_MISSION_CONTROL_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-mission-control",
+    surfaces: [
+      "workspace-os",
+      "ai-provider-bridge",
+      "context-pack",
+      "patch-runway",
+      "verify-runway",
+      "evidence-recorder",
+    ],
+  }));
+
+  await refresh(false);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    void installAdjutorixAiRunwayMissionControl();
+  }, { once: true });
+} else {
+  void installAdjutorixAiRunwayMissionControl();
+}
