@@ -2050,3 +2050,247 @@ contextBridge.exposeInMainWorld("adjutorixWorkspaceOS", {
 
 /* ADJUTORIX_WORKSPACE_OS_BRIDGE_END */
 
+
+
+/**
+ * ADJUTORIX_AI_PROVIDER_BRIDGE_V1
+ *
+ * Real provider bridge:
+ * - Ollama/local HTTP generate endpoint
+ * - OpenAI-compatible keyed chat completion endpoint
+ * - Anthropic keyed messages endpoint
+ *
+ * This bridge does not claim configured providers are available.
+ * Missing keys, missing local daemon, and HTTP failures are returned as runtime facts.
+ */
+
+type AdjutorixAiProviderName = "ollama" | "openai" | "anthropic";
+
+interface AdjutorixAiCompleteRequest {
+  provider?: AdjutorixAiProviderName;
+  prompt: string;
+  workspace?: string;
+  context?: string;
+  instruction?: string;
+}
+
+interface AdjutorixAiCompleteResult {
+  ok: boolean;
+  provider: AdjutorixAiProviderName;
+  model: string;
+  text: string;
+  error?: string;
+  elapsedMs: number;
+}
+
+interface AdjutorixAiProviderRecord {
+  configured: boolean;
+  available: boolean;
+  provider: AdjutorixAiProviderName;
+  model: string;
+  endpoint: string;
+  reason?: string;
+}
+
+interface AdjutorixAiStatusResult {
+  ok: boolean;
+  providers: Record<AdjutorixAiProviderName, AdjutorixAiProviderRecord>;
+}
+
+function adjutorixAiAsRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixAiAsString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+async function adjutorixAiPostJson(
+  endpoint: string,
+  headers: Record<string, string>,
+  payload: unknown,
+  timeoutMs = 90000,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${text.slice(0, 1600)}`);
+    }
+
+    if (!text.trim()) {
+      return {};
+    }
+
+    return JSON.parse(text) as unknown;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function adjutorixAiProbe(endpoint: string, timeoutMs = 1200): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(endpoint, { method: "GET", signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function adjutorixAiPrompt(request: AdjutorixAiCompleteRequest): string {
+  const workspaceLine = request.workspace ? `Workspace: ${request.workspace}` : "Workspace: not supplied";
+  const contextLine = request.context?.trim() ? `\n\nWorkspace context:\n${request.context.trim()}` : "";
+  const instructionLine = request.instruction?.trim()
+    ? request.instruction.trim()
+    : "You are Adjutorix inside a local developer workbench. Return concrete code actions, shell commands, file paths, and risks. Do not pretend a tool ran if it did not run.";
+
+  return `${instructionLine}\n\n${workspaceLine}${contextLine}\n\nUser request:\n${request.prompt}`;
+}
+
+async function adjutorixAiStatus(): Promise<AdjutorixAiStatusResult> {
+  const ollamaEndpoint = process.env.ADJUTORIX_OLLAMA_ENDPOINT || "http://127.0.0.1:11434";
+  const ollamaModel = process.env.ADJUTORIX_OLLAMA_MODEL || "llama3.1";
+  const openaiEndpoint = process.env.ADJUTORIX_OPENAI_ENDPOINT || "https://api.openai.com/v1/chat/completions";
+  const openaiModel = process.env.ADJUTORIX_OPENAI_MODEL || "gpt-4o-mini";
+  const anthropicEndpoint = process.env.ADJUTORIX_ANTHROPIC_ENDPOINT || "https://api.anthropic.com/v1/messages";
+  const anthropicModel = process.env.ADJUTORIX_ANTHROPIC_MODEL || "claude-3-5-sonnet-latest";
+
+  const ollamaAvailable = await adjutorixAiProbe(`${ollamaEndpoint.replace(/\/$/, "")}/api/tags`);
+
+  return {
+    ok: true,
+    providers: {
+      ollama: {
+        configured: true,
+        available: ollamaAvailable,
+        provider: "ollama",
+        model: ollamaModel,
+        endpoint: ollamaEndpoint,
+        reason: ollamaAvailable ? undefined : "local Ollama daemon not reachable",
+      },
+      openai: {
+        configured: Boolean(process.env.OPENAI_API_KEY),
+        available: Boolean(process.env.OPENAI_API_KEY),
+        provider: "openai",
+        model: openaiModel,
+        endpoint: openaiEndpoint,
+        reason: process.env.OPENAI_API_KEY ? undefined : "OPENAI_API_KEY missing",
+      },
+      anthropic: {
+        configured: Boolean(process.env.ANTHROPIC_API_KEY),
+        available: Boolean(process.env.ANTHROPIC_API_KEY),
+        provider: "anthropic",
+        model: anthropicModel,
+        endpoint: anthropicEndpoint,
+        reason: process.env.ANTHROPIC_API_KEY ? undefined : "ANTHROPIC_API_KEY missing",
+      },
+    },
+  };
+}
+
+async function adjutorixAiComplete(request: AdjutorixAiCompleteRequest): Promise<AdjutorixAiCompleteResult> {
+  const started = Date.now();
+  const provider = request.provider || "ollama";
+  const prompt = adjutorixAiPrompt(request);
+
+  try {
+    if (provider === "ollama") {
+      const endpoint = (process.env.ADJUTORIX_OLLAMA_ENDPOINT || "http://127.0.0.1:11434").replace(/\/$/, "");
+      const model = process.env.ADJUTORIX_OLLAMA_MODEL || "llama3.1";
+      const payload = { model, prompt, stream: false };
+      const json = adjutorixAiAsRecord(await adjutorixAiPostJson(`${endpoint}/api/generate`, { "Content-Type": "application/json" }, payload));
+      const text = adjutorixAiAsString(json.response);
+
+      return { ok: true, provider, model, text, elapsedMs: Date.now() - started };
+    }
+
+    if (provider === "openai") {
+      const key = process.env.OPENAI_API_KEY || "";
+      const endpoint = process.env.ADJUTORIX_OPENAI_ENDPOINT || "https://api.openai.com/v1/chat/completions";
+      const model = process.env.ADJUTORIX_OPENAI_MODEL || "gpt-4o-mini";
+
+      if (!key) {
+        throw new Error("OPENAI_API_KEY missing");
+      }
+
+      const payload = {
+        model,
+        messages: [
+          { role: "system", content: "You are Adjutorix, a local software workbench assistant. Be precise and action-oriented." },
+          { role: "user", content: prompt },
+        ],
+      };
+
+      const json = adjutorixAiAsRecord(await adjutorixAiPostJson(endpoint, {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      }, payload));
+
+      const choices = Array.isArray(json.choices) ? json.choices : [];
+      const first = adjutorixAiAsRecord(choices[0]);
+      const message = adjutorixAiAsRecord(first.message);
+      const text = adjutorixAiAsString(message.content);
+
+      return { ok: true, provider, model, text, elapsedMs: Date.now() - started };
+    }
+
+    const key = process.env.ANTHROPIC_API_KEY || "";
+    const endpoint = process.env.ADJUTORIX_ANTHROPIC_ENDPOINT || "https://api.anthropic.com/v1/messages";
+    const model = process.env.ADJUTORIX_ANTHROPIC_MODEL || "claude-3-5-sonnet-latest";
+
+    if (!key) {
+      throw new Error("ANTHROPIC_API_KEY missing");
+    }
+
+    const payload = {
+      model,
+      max_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    };
+
+    const json = adjutorixAiAsRecord(await adjutorixAiPostJson(endpoint, {
+      "anthropic-version": "2023-06-01",
+      "x-api-key": key,
+      "Content-Type": "application/json",
+    }, payload));
+
+    const content = Array.isArray(json.content) ? json.content : [];
+    const first = adjutorixAiAsRecord(content[0]);
+    const text = adjutorixAiAsString(first.text);
+
+    return { ok: true, provider, model, text, elapsedMs: Date.now() - started };
+  } catch (error) {
+    return {
+      ok: false,
+      provider,
+      model: process.env.ADJUTORIX_AI_MODEL || "not-resolved",
+      text: "",
+      error: error instanceof Error ? error.message : String(error),
+      elapsedMs: Date.now() - started,
+    };
+  }
+}
+
+contextBridge.exposeInMainWorld("adjutorixAI", {
+  status: adjutorixAiStatus,
+  complete: adjutorixAiComplete,
+});
