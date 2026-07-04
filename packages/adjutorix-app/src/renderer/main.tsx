@@ -1105,3 +1105,249 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiPatchRunway();
 }
+
+
+/**
+ * ADJUTORIX_AI_PATCH_VERIFY_RUNWAY_V1
+ *
+ * Adds real post-patch verification execution:
+ * - Parses commands from the AI patch JSON output.
+ * - Requires manual RUN confirmation.
+ * - Executes through adjutorixWorkspaceOS.run.
+ * - Captures outputs as evidence in the panel.
+ */
+
+interface AdjutorixVerifyRunCommandResult {
+  command?: string;
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+  code?: number;
+  ok?: boolean;
+  elapsedMs?: number;
+}
+
+interface AdjutorixVerifyRunWorkspaceBridge {
+  defaults?: () => Promise<{ workspace?: string }>;
+  run?: (request: { workspace?: string; command: string }) => Promise<AdjutorixVerifyRunCommandResult>;
+}
+
+interface AdjutorixVerifyRunRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixVerifyRunWorkspaceBridge;
+}
+
+function adjutorixVerifyRunWindow(): AdjutorixVerifyRunRuntimeWindow {
+  return window as unknown as AdjutorixVerifyRunRuntimeWindow;
+}
+
+function adjutorixVerifyRunExtractJson(text: string): string {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+
+  if (fenced?.[1]) {
+    return fenced[1].trim();
+  }
+
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+
+  if (start >= 0 && end > start) {
+    return text.slice(start, end + 1);
+  }
+
+  return text.trim();
+}
+
+function adjutorixVerifyRunExtractCommands(text: string): string[] {
+  const parsed = JSON.parse(adjutorixVerifyRunExtractJson(text)) as { commands?: unknown };
+  const commands = Array.isArray(parsed.commands) ? parsed.commands : [];
+
+  return commands
+    .filter((command): command is string => typeof command === "string")
+    .map((command) => command.trim())
+    .filter(Boolean);
+}
+
+async function adjutorixVerifyRunWorkspace(): Promise<string> {
+  const bridge = adjutorixVerifyRunWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  const defaults = await bridge.defaults();
+  return typeof defaults.workspace === "string" ? defaults.workspace : "";
+}
+
+function installAdjutorixAiPatchVerifyRunway(): void {
+  if (document.getElementById("adjutorix-ai-patch-verify-runway")) {
+    return;
+  }
+
+  const patchPanel = document.getElementById("adjutorix-ai-patch-runway");
+  const anchor = patchPanel || document.body;
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-patch-verify-runway";
+  panel.className = "adjutorix-ai-patch-verify-runway";
+  panel.setAttribute("aria-label", "Adjutorix AI patch verify runway");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-patch-verify-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Patch Verify";
+
+  const confirm = document.createElement("input");
+  confirm.className = "adjutorix-ai-patch-verify-confirm";
+  confirm.placeholder = "Type RUN";
+  confirm.spellcheck = false;
+
+  header.appendChild(title);
+  header.appendChild(confirm);
+
+  const commands = document.createElement("textarea");
+  commands.className = "adjutorix-ai-patch-verify-commands";
+  commands.placeholder = "Commands. One per line. Or click Extract JSON Commands from patch runway output.";
+  commands.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-patch-verify-actions";
+
+  const extractButton = document.createElement("button");
+  extractButton.type = "button";
+  extractButton.textContent = "Extract JSON Commands";
+
+  const defaultButton = document.createElement("button");
+  defaultButton.type = "button";
+  defaultButton.textContent = "Default Checks";
+
+  const runButton = document.createElement("button");
+  runButton.type = "button";
+  runButton.textContent = "Run Verify";
+
+  actions.appendChild(extractButton);
+  actions.appendChild(defaultButton);
+  actions.appendChild(runButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-patch-verify-output";
+  output.textContent = "Verification runway mounted. Type RUN before executing commands.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  extractButton.addEventListener("click", () => {
+    const source = document.querySelector<HTMLTextAreaElement>(".adjutorix-ai-patch-output");
+
+    if (!source) {
+      setOutput("Patch runway output not found.");
+      return;
+    }
+
+    try {
+      const extracted = adjutorixVerifyRunExtractCommands(source.value);
+      commands.value = extracted.join("\n");
+      setOutput(JSON.stringify({ ok: true, commandCount: extracted.length, commands: extracted }, null, 2));
+      console.log("ADJUTORIX_AI_PATCH_VERIFY_COMMANDS_EXTRACTED", JSON.stringify({ commandCount: extracted.length }));
+    } catch (error) {
+      setOutput(`COMMAND EXTRACTION FAILED\n${String(error)}`);
+    }
+  });
+
+  defaultButton.addEventListener("click", () => {
+    commands.value = [
+      "pnpm --filter @adjutorix/app run build:ts",
+      "pnpm --filter @adjutorix/app run lint",
+      "bash scripts/check.sh",
+    ].join("\n");
+
+    setOutput("Default verification commands loaded.");
+  });
+
+  runButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixVerifyRunWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.run) {
+        setOutput("Workspace OS run bridge unavailable.");
+        return;
+      }
+
+      if (confirm.value.trim() !== "RUN") {
+        setOutput("Command execution blocked. Type RUN in the confirmation field.");
+        return;
+      }
+
+      const planned = commands.value
+        .split("\n")
+        .map((command) => command.trim())
+        .filter(Boolean);
+
+      if (!planned.length) {
+        setOutput("No commands to run.");
+        return;
+      }
+
+      setBusy(runButton, true);
+
+      const workspace = await adjutorixVerifyRunWorkspace();
+      const results: Array<{ command: string; result: AdjutorixVerifyRunCommandResult | { error: string } }> = [];
+
+      try {
+        for (const command of planned) {
+          setOutput(JSON.stringify({ running: command, completed: results.length, total: planned.length }, null, 2));
+
+          try {
+            const result = await bridge.run({ workspace, command });
+            results.push({ command, result });
+          } catch (error) {
+            results.push({ command, result: { error: String(error) } });
+            break;
+          }
+        }
+
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, workspace, results }, null, 2));
+        console.log("ADJUTORIX_AI_PATCH_VERIFY_RUN_COMPLETED", JSON.stringify({
+          source: "adjutorix-ai-patch-verify-runway",
+          commandCount: planned.length,
+          resultCount: results.length,
+          workspace,
+        }));
+      } finally {
+        setBusy(runButton, false);
+      }
+    })();
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(commands);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  if (patchPanel?.parentElement) {
+    patchPanel.parentElement.appendChild(panel);
+  } else {
+    anchor.appendChild(panel);
+  }
+
+  console.log("ADJUTORIX_AI_PATCH_VERIFY_RUNWAY_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-patch-verify-runway",
+    requires: "manual-run-confirmation",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiPatchVerifyRunway, { once: true });
+} else {
+  installAdjutorixAiPatchVerifyRunway();
+}
