@@ -1643,7 +1643,7 @@ interface AdjutorixContextPackSearchMatch {
 
 interface AdjutorixContextPackWorkspaceBridge {
   defaults?: () => Promise<{ workspace?: string }>;
-  scan?: (request?: { workspace?: string; limit?: number }) => Promise<unknown>;
+  scan?: (request?: unknown) => Promise<unknown>;
   readText?: (request: { workspace?: string; path: string }) => Promise<{ content?: string; path?: string }>;
   searchText?: (request: { workspace?: string; query: string; limit?: number }) => Promise<unknown>;
 }
@@ -1663,8 +1663,57 @@ async function adjutorixContextPackWorkspace(): Promise<string> {
     return "";
   }
 
-  const defaults = await bridge.defaults();
-  return typeof defaults.workspace === "string" ? defaults.workspace : "";
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixContextPackRecord(defaults);
+    const workspace = record.workspace || record.root || record.cwd || record.path || record.workspacePath;
+
+    if (typeof workspace === "string" && workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+/* ADJUTORIX_AI_CONTEXT_WORKSPACE_POLLING_FIX_V1 */
+
+
+/* ADJUTORIX_AI_CONTEXT_SCAN_SIGNATURE_FIX_V1 */
+
+async function adjutorixContextPackScanWorkspace(
+  bridge: AdjutorixContextPackWorkspaceBridge,
+  workspace: string,
+): Promise<unknown> {
+  const scan = bridge.scan;
+
+  if (!scan) {
+    throw new Error("Workspace OS scan bridge unavailable.");
+  }
+
+  const attempts: unknown[] = workspace ? [workspace, undefined] : [undefined];
+  let lastError: unknown = new Error("Workspace scan did not run.");
+
+  for (let round = 0; round < 32; round += 1) {
+    for (const attempt of attempts) {
+      try {
+        const result = await scan(attempt);
+        const fileCount = adjutorixMissionFileCountFromScan(result);
+
+        if (fileCount > 300 || round === 31) {
+          return result;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 function adjutorixContextPackRecord(value: unknown): Record<string, unknown> {
@@ -1862,7 +1911,7 @@ function installAdjutorixAiWorkspaceContextPack(): void {
       setBusy(scanButton, true);
       try {
         const workspace = await adjutorixContextPackWorkspace();
-        const result = await bridge.scan({ workspace, limit: 12000 });
+        const result = await adjutorixContextPackScanWorkspace(bridge, workspace);
         const found = adjutorixContextPackFilesFromScan(result);
 
         setOutput(JSON.stringify({ ok: true, workspace, count: found.length, files: found }, null, 2));
@@ -2014,6 +2063,7 @@ interface AdjutorixMissionAiBridge {
 
 interface AdjutorixMissionWorkspaceBridge {
   defaults?: () => Promise<{ workspace?: string }>;
+  scan?: (request?: unknown) => Promise<unknown>;
   gitDiff?: (request: { workspace?: string }) => Promise<unknown>;
 }
 
@@ -2042,6 +2092,115 @@ function adjutorixMissionText(selector: string): string {
   }
 
   return "";
+}
+
+
+/* ADJUTORIX_AI_MISSION_WORKSPACE_READINESS_V1 */
+
+function adjutorixMissionRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixMissionString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixMissionNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function adjutorixMissionWorkspaceFromScan(scanResult: unknown): string {
+  const record = adjutorixMissionRecord(scanResult);
+  return adjutorixMissionString(record.workspace || record.root || record.cwd);
+}
+
+
+/* ADJUTORIX_AI_MISSION_WORKSPACE_POLLING_FIX_V1 */
+
+async function adjutorixMissionResolveWorkspace(
+  bridge: AdjutorixMissionWorkspaceBridge | undefined,
+): Promise<string> {
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    try {
+      const defaults = await bridge.defaults();
+      const record = adjutorixMissionRecord(defaults);
+      const workspace = adjutorixMissionString(
+        record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+      );
+
+      if (workspace) {
+        return workspace;
+      }
+    } catch {
+      // keep polling until workspace OS finishes mounting
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixMissionFileCountFromScan(scanResult: unknown): number {
+  const record = adjutorixMissionRecord(scanResult);
+  const explicit = adjutorixMissionNumber(record.count || record.fileCount || record.filesCount);
+
+  if (explicit > 0) {
+    return explicit;
+  }
+
+  const files = record.files || record.entries || record.items;
+
+  if (Array.isArray(files)) {
+    return files.length;
+  }
+
+  return 0;
+}
+
+
+/* ADJUTORIX_AI_MISSION_SCAN_SIGNATURE_FIX_V1 */
+
+async function adjutorixMissionScanWorkspace(
+  bridge: AdjutorixMissionWorkspaceBridge,
+  workspace: string,
+): Promise<unknown> {
+  const scan = bridge.scan;
+
+  if (!scan) {
+    throw new Error("Workspace OS scan bridge unavailable.");
+  }
+
+  if (!workspace) {
+    throw new Error("workspace_path_required");
+  }
+
+  let lastError: unknown = new Error("Workspace scan did not run.");
+
+  for (let round = 0; round < 40; round += 1) {
+    try {
+      const result = await scan(workspace);
+      const fileCount = adjutorixMissionFileCountFromScan(result);
+
+      if (fileCount > 300 || round === 39) {
+        return result;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 async function installAdjutorixAiRunwayMissionControl(): Promise<void> {
@@ -2104,9 +2263,23 @@ async function installAdjutorixAiRunwayMissionControl(): Promise<void> {
 
   async function buildSnapshot(includeDiff: boolean): Promise<Record<string, unknown>> {
     const runtime = adjutorixMissionWindow();
-    const workspace = runtime.adjutorixWorkspaceOS?.defaults
-      ? await runtime.adjutorixWorkspaceOS.defaults()
-      : {};
+
+    let workspaceValue = "";
+    let workspaceFileCount = 0;
+    let workspaceScanOk = false;
+
+    workspaceValue = await adjutorixMissionResolveWorkspace(runtime.adjutorixWorkspaceOS);
+
+    if (runtime.adjutorixWorkspaceOS?.scan && workspaceValue) {
+      const scanResult = await adjutorixMissionScanWorkspace(runtime.adjutorixWorkspaceOS, workspaceValue);
+      const scanWorkspace = adjutorixMissionWorkspaceFromScan(scanResult);
+      workspaceFileCount = adjutorixMissionFileCountFromScan(scanResult);
+      workspaceScanOk = workspaceFileCount > 300;
+
+      if (!workspaceValue && scanWorkspace) {
+        workspaceValue = scanWorkspace;
+      }
+    }
 
     const providers = runtime.adjutorixAI?.status
       ? await runtime.adjutorixAI.status()
@@ -2115,7 +2288,7 @@ async function installAdjutorixAiRunwayMissionControl(): Promise<void> {
     let diffSnapshot = "";
 
     if (includeDiff && runtime.adjutorixWorkspaceOS?.gitDiff) {
-      const diff = await runtime.adjutorixWorkspaceOS.gitDiff({ workspace: workspace.workspace });
+      const diff = await runtime.adjutorixWorkspaceOS.gitDiff({ workspace: workspaceValue });
       diffSnapshot = typeof diff === "string" ? diff : JSON.stringify(diff, null, 2);
     }
 
@@ -2129,7 +2302,10 @@ async function installAdjutorixAiRunwayMissionControl(): Promise<void> {
       context_pack: adjutorixMissionMounted("#adjutorix-ai-workspace-context-pack"),
     };
 
-    const ready = Object.values(surfaces).every(Boolean);
+    const surfacesReady = Object.values(surfaces).every(Boolean);
+    const workspaceReady = Boolean(workspaceValue) && workspaceScanOk;
+    const ready = surfacesReady && workspaceReady;
+
     const patchPlanBytes = adjutorixMissionText(".adjutorix-ai-patch-output").length;
     const contextBytes = adjutorixMissionText(".adjutorix-ai-context-output").length;
     const verifyBytes = adjutorixMissionText(".adjutorix-ai-patch-verify-output").length;
@@ -2137,9 +2313,13 @@ async function installAdjutorixAiRunwayMissionControl(): Promise<void> {
     return {
       schema: "adjutorix.ai_runway_mission_control_snapshot.v1",
       source: "adjutorix-ai-runway-mission-control",
+      readiness_source: "adjutorix-ai-mission-workspace-readiness",
       created_at: new Date().toISOString(),
       ready,
-      workspace: workspace.workspace || "",
+      surfaces_ready: surfacesReady,
+      workspace_ready: workspaceReady,
+      workspace: workspaceValue,
+      workspace_file_count: workspaceFileCount,
       surfaces,
       providers,
       live_payload_sizes: {
@@ -2159,7 +2339,11 @@ async function installAdjutorixAiRunwayMissionControl(): Promise<void> {
     console.log("ADJUTORIX_AI_RUNWAY_MISSION_CONTROL_SNAPSHOT", JSON.stringify({
       source: "adjutorix-ai-runway-mission-control",
       ready: snapshot.ready,
+      workspace_ready: snapshot.workspace_ready,
+      surfaces_ready: snapshot.surfaces_ready,
       workspace: snapshot.workspace,
+      workspace_file_count: snapshot.workspace_file_count,
+      readiness_source: snapshot.readiness_source,
     }));
   }
 
@@ -2223,3 +2407,6 @@ if (document.readyState === "loading") {
 } else {
   void installAdjutorixAiRunwayMissionControl();
 }
+
+
+/* ADJUTORIX_AI_SCAN_NO_OBJECT_ATTEMPTS_V1 */
