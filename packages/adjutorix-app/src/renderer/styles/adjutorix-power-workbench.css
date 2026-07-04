@@ -70,7 +70,7 @@ textarea {
 
 .os-rail {
   display: grid;
-  grid-template-rows: auto auto auto auto auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto auto auto auto minmax(0, 1fr);
   gap: 12px;
   padding: 14px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
@@ -120,7 +120,8 @@ textarea {
 
 .os-connect input,
 .os-connect button,
-.os-search-input {
+.os-search-input,
+.os-path-input {
   height: 44px;
   padding: 0 11px;
 }

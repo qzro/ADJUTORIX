@@ -115,6 +115,7 @@ function App(): JSX.Element {
   const [command, setCommand] = useState(ACTIONS[0]?.command ?? "pwd");
   const [output, setOutput] = useState("Adjutorix Workspace OS ready. Connect a folder. No single-folder binding. No fake AI claim.");
   const [searchNeedle, setSearchNeedle] = useState("");
+  const [pathInput, setPathInput] = useState("");
   const [searchHits, setSearchHits] = useState<SearchHit[]>([]);
   const [providers, setProviders] = useState<Record<string, boolean>>({});
 
@@ -209,12 +210,17 @@ function App(): JSX.Element {
   }
 
   async function createFile(): Promise<void> {
-    const path = window.prompt("New file path inside workspace:");
-    if (!path) return;
+    const path = pathInput.trim();
+
+    if (!path) {
+      print("CREATE FILE BLOCKED\nEnter a relative file path in the path input.");
+      return;
+    }
 
     setBusy(true);
     try {
       await bridge().createFile({ workspace, path, content: "" });
+      setPathInput("");
       await refresh(workspace);
       await openFile(path, workspace);
     } catch (error) {
@@ -225,12 +231,17 @@ function App(): JSX.Element {
   }
 
   async function createFolder(): Promise<void> {
-    const path = window.prompt("New folder path inside workspace:");
-    if (!path) return;
+    const path = pathInput.trim();
+
+    if (!path) {
+      print("CREATE FOLDER BLOCKED\nEnter a relative folder path in the path input.");
+      return;
+    }
 
     setBusy(true);
     try {
       const result = await bridge().makeDirectory({ workspace, path });
+      setPathInput("");
       print(`FOLDER CREATED\n${JSON.stringify(result, null, 2)}`);
       await refresh(workspace);
     } catch (error) {
@@ -241,9 +252,23 @@ function App(): JSX.Element {
   }
 
   async function renameActive(): Promise<void> {
-    if (!activePath) return;
-    const next = window.prompt("Move / rename path:", activePath);
-    if (!next || next === activePath) return;
+    if (!activePath) {
+      print("MOVE BLOCKED\nNo active file.");
+      return;
+    }
+
+    const next = pathInput.trim();
+
+    if (!next) {
+      setPathInput(activePath);
+      print("MOVE ARMED\nEdit the path input to the destination path, then press Move again.");
+      return;
+    }
+
+    if (next === activePath) {
+      print("MOVE BLOCKED\nDestination equals current path.");
+      return;
+    }
 
     setBusy(true);
     try {
@@ -254,6 +279,7 @@ function App(): JSX.Element {
         delete copy[activePath];
         return copy;
       });
+      setPathInput("");
       setActivePath(next);
       print(`MOVED\n${JSON.stringify(result, null, 2)}`);
       await refresh(workspace);
@@ -265,8 +291,16 @@ function App(): JSX.Element {
   }
 
   async function trashActive(): Promise<void> {
-    if (!activePath) return;
-    if (!window.confirm(`Move to .adjutorix-trash?\n${activePath}`)) return;
+    if (!activePath) {
+      print("TRASH BLOCKED\nNo active file.");
+      return;
+    }
+
+    if (pathInput.trim() !== activePath) {
+      setPathInput(activePath);
+      print("TRASH ARMED\nThe active path has been copied into the path input. Press Trash Safe again to move it to .adjutorix-trash.");
+      return;
+    }
 
     setBusy(true);
     try {
@@ -277,6 +311,7 @@ function App(): JSX.Element {
         delete copy[activePath];
         return copy;
       });
+      setPathInput("");
       setActivePath("");
       print(`TRASHED\n${JSON.stringify(result, null, 2)}`);
       await refresh(workspace);
@@ -391,6 +426,14 @@ function App(): JSX.Element {
           <button disabled={busy || !activePath} onClick={() => void renameActive()}>Move</button>
           <button disabled={busy || !activePath} onClick={() => void trashActive()}>Trash Safe</button>
         </div>
+
+        <input
+          className="os-path-input"
+          value={pathInput}
+          onChange={(event) => setPathInput(event.target.value)}
+          placeholder="New / move / trash relative path..."
+          spellCheck={false}
+        />
 
         <input className="os-search-input" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter files..." spellCheck={false} />
 
