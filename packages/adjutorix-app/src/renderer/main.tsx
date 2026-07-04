@@ -1614,3 +1614,372 @@ if (document.readyState === "loading") {
 } else {
   void installAdjutorixAiRunwayEvidenceRecorder();
 }
+
+
+/**
+ * ADJUTORIX_AI_WORKSPACE_CONTEXT_PACK_V1
+ *
+ * Real repo-context builder:
+ * - scans workspace through adjutorixWorkspaceOS.scan
+ * - reads selected files through adjutorixWorkspaceOS.readText
+ * - searches workspace through adjutorixWorkspaceOS.searchText
+ * - builds bounded JSON context packs
+ * - injects context into AI assistant and patch runway prompts
+ */
+
+interface AdjutorixContextPackFileEntry {
+  path?: string;
+  relativePath?: string;
+  size?: number;
+  bytes?: number;
+}
+
+interface AdjutorixContextPackSearchMatch {
+  path?: string;
+  line?: number;
+  text?: string;
+  preview?: string;
+}
+
+interface AdjutorixContextPackWorkspaceBridge {
+  defaults?: () => Promise<{ workspace?: string }>;
+  scan?: (request?: { workspace?: string; limit?: number }) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<{ content?: string; path?: string }>;
+  searchText?: (request: { workspace?: string; query: string; limit?: number }) => Promise<unknown>;
+}
+
+interface AdjutorixContextPackRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixContextPackWorkspaceBridge;
+}
+
+function adjutorixContextPackWindow(): AdjutorixContextPackRuntimeWindow {
+  return window as unknown as AdjutorixContextPackRuntimeWindow;
+}
+
+async function adjutorixContextPackWorkspace(): Promise<string> {
+  const bridge = adjutorixContextPackWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  const defaults = await bridge.defaults();
+  return typeof defaults.workspace === "string" ? defaults.workspace : "";
+}
+
+function adjutorixContextPackRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixContextPackArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixContextPackPath(entry: unknown): string {
+  const record = adjutorixContextPackRecord(entry);
+  const path = record.path || record.relativePath || record.file || record.name;
+  return typeof path === "string" ? path : "";
+}
+
+function adjutorixContextPackFilesFromScan(value: unknown): string[] {
+  const record = adjutorixContextPackRecord(value);
+  const rawFiles = adjutorixContextPackArray(record.files || record.entries || record.items);
+
+  return rawFiles
+    .map(adjutorixContextPackPath)
+    .filter(Boolean)
+    .filter((path) => !path.includes("node_modules/"))
+    .filter((path) => !path.includes("/dist/"))
+    .filter((path) => !path.includes("/release/"))
+    .slice(0, 400);
+}
+
+function adjutorixContextPackSearchMatches(value: unknown): Array<Record<string, unknown>> {
+  const record = adjutorixContextPackRecord(value);
+  const raw = adjutorixContextPackArray(record.matches || record.results || record.items);
+
+  return raw
+    .map(adjutorixContextPackRecord)
+    .slice(0, 80);
+}
+
+function adjutorixContextPackSelectedPaths(value: string): string[] {
+  return value
+    .split(/\n|,/)
+    .map((path) => path.trim())
+    .filter(Boolean)
+    .slice(0, 20);
+}
+
+function adjutorixContextPackClampText(value: string, maxBytes: number): string {
+  if (value.length <= maxBytes) {
+    return value;
+  }
+
+  return `${value.slice(0, maxBytes)}\n\n/* ADJUTORIX_CONTEXT_TRUNCATED ${value.length - maxBytes} chars omitted */`;
+}
+
+function installAdjutorixAiWorkspaceContextPack(): void {
+  if (document.getElementById("adjutorix-ai-workspace-context-pack")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-workspace-context-pack";
+  panel.className = "adjutorix-ai-workspace-context-pack";
+  panel.setAttribute("aria-label", "Adjutorix AI workspace context pack");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-context-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Workspace Context";
+
+  const budget = document.createElement("input");
+  budget.className = "adjutorix-ai-context-budget";
+  budget.type = "number";
+  budget.min = "1000";
+  budget.max = "120000";
+  budget.value = "24000";
+  budget.title = "Max characters per context pack";
+
+  header.appendChild(title);
+  header.appendChild(budget);
+
+  const paths = document.createElement("textarea");
+  paths.className = "adjutorix-ai-context-paths";
+  paths.placeholder = "File paths to include, one per line. Use Scan to discover.";
+  paths.spellcheck = false;
+
+  const query = document.createElement("input");
+  query.className = "adjutorix-ai-context-query";
+  query.placeholder = "Search query to include matches, e.g. ADJUTORIX_AI_PATCH";
+  query.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-context-actions";
+
+  const scanButton = document.createElement("button");
+  scanButton.type = "button";
+  scanButton.textContent = "Scan";
+
+  const searchButton = document.createElement("button");
+  searchButton.type = "button";
+  searchButton.textContent = "Search";
+
+  const buildButton = document.createElement("button");
+  buildButton.type = "button";
+  buildButton.textContent = "Build Pack";
+
+  const injectAiButton = document.createElement("button");
+  injectAiButton.type = "button";
+  injectAiButton.textContent = "Inject AI";
+
+  const injectPatchButton = document.createElement("button");
+  injectPatchButton.type = "button";
+  injectPatchButton.textContent = "Inject Patch";
+
+  actions.appendChild(scanButton);
+  actions.appendChild(searchButton);
+  actions.appendChild(buildButton);
+  actions.appendChild(injectAiButton);
+  actions.appendChild(injectPatchButton);
+
+  const output = document.createElement("textarea");
+  output.className = "adjutorix-ai-context-output";
+  output.placeholder = "Context pack JSON appears here.";
+  output.spellcheck = false;
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  function setOutput(value: string): void {
+    output.value = value;
+  }
+
+  async function buildPack(includeSearch: boolean): Promise<Record<string, unknown>> {
+    const bridge = adjutorixContextPackWindow().adjutorixWorkspaceOS;
+
+    if (!bridge?.readText) {
+      throw new Error("Workspace OS read bridge unavailable.");
+    }
+
+    const workspace = await adjutorixContextPackWorkspace();
+    const maxChars = Number.parseInt(budget.value, 10) || 24000;
+    const selected = adjutorixContextPackSelectedPaths(paths.value);
+    const perFileBudget = Math.max(1600, Math.floor(maxChars / Math.max(1, selected.length || 1)));
+    const files: Array<{ path: string; content: string; chars: number }> = [];
+
+    for (const path of selected) {
+      const result = await bridge.readText({ workspace, path });
+      const content = adjutorixContextPackClampText(String(result.content || ""), perFileBudget);
+      files.push({ path, content, chars: content.length });
+    }
+
+    let search: unknown[] = [];
+
+    if (includeSearch && bridge.searchText && query.value.trim()) {
+      const result = await bridge.searchText({ workspace, query: query.value.trim(), limit: 80 });
+      search = adjutorixContextPackSearchMatches(result);
+    }
+
+    const pack = {
+      schema: "adjutorix.ai_workspace_context_pack.v1",
+      source: "adjutorix-ai-workspace-context-pack",
+      created_at: new Date().toISOString(),
+      workspace,
+      budget: {
+        max_chars: maxChars,
+        per_file_chars: perFileBudget,
+      },
+      selected_paths: selected,
+      search_query: query.value.trim(),
+      files,
+      search,
+    };
+
+    return pack;
+  }
+
+  scanButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixContextPackWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.scan) {
+        setOutput("Workspace OS scan bridge unavailable.");
+        return;
+      }
+
+      setBusy(scanButton, true);
+      try {
+        const workspace = await adjutorixContextPackWorkspace();
+        const result = await bridge.scan({ workspace, limit: 12000 });
+        const found = adjutorixContextPackFilesFromScan(result);
+
+        setOutput(JSON.stringify({ ok: true, workspace, count: found.length, files: found }, null, 2));
+        console.log("ADJUTORIX_AI_CONTEXT_SCAN_READY", JSON.stringify({
+          source: "adjutorix-ai-workspace-context-pack",
+          workspace,
+          files: found.length,
+        }));
+      } catch (error) {
+        setOutput(`CONTEXT SCAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(scanButton, false);
+      }
+    })();
+  });
+
+  searchButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixContextPackWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.searchText) {
+        setOutput("Workspace OS search bridge unavailable.");
+        return;
+      }
+
+      if (!query.value.trim()) {
+        setOutput("Enter a search query.");
+        return;
+      }
+
+      setBusy(searchButton, true);
+      try {
+        const workspace = await adjutorixContextPackWorkspace();
+        const result = await bridge.searchText({ workspace, query: query.value.trim(), limit: 80 });
+        const matches = adjutorixContextPackSearchMatches(result);
+
+        setOutput(JSON.stringify({ ok: true, workspace, query: query.value.trim(), matches }, null, 2));
+        console.log("ADJUTORIX_AI_CONTEXT_SEARCH_READY", JSON.stringify({
+          source: "adjutorix-ai-workspace-context-pack",
+          workspace,
+          matches: matches.length,
+        }));
+      } catch (error) {
+        setOutput(`CONTEXT SEARCH FAILED\n${String(error)}`);
+      } finally {
+        setBusy(searchButton, false);
+      }
+    })();
+  });
+
+  buildButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(buildButton, true);
+      try {
+        const pack = await buildPack(true);
+        setOutput(JSON.stringify(pack, null, 2));
+        console.log("ADJUTORIX_AI_CONTEXT_PACK_READY", JSON.stringify({
+          source: "adjutorix-ai-workspace-context-pack",
+          files: Array.isArray(pack.files) ? pack.files.length : 0,
+          search: Array.isArray(pack.search) ? pack.search.length : 0,
+        }));
+      } catch (error) {
+        setOutput(`CONTEXT PACK FAILED\n${String(error)}`);
+      } finally {
+        setBusy(buildButton, false);
+      }
+    })();
+  });
+
+  injectAiButton.addEventListener("click", () => {
+    const prompt = document.querySelector<HTMLTextAreaElement>(".adjutorix-ai-prompt");
+
+    if (!prompt) {
+      setOutput("AI prompt field not found.");
+      return;
+    }
+
+    prompt.value = `${prompt.value.trim()}\n\nADJUTORIX WORKSPACE CONTEXT PACK:\n${output.value}`.trim();
+    console.log("ADJUTORIX_AI_CONTEXT_INJECTED", JSON.stringify({
+      source: "adjutorix-ai-workspace-context-pack",
+      target: "ai-assistant",
+      bytes: output.value.length,
+    }));
+  });
+
+  injectPatchButton.addEventListener("click", () => {
+    const instruction = document.querySelector<HTMLTextAreaElement>(".adjutorix-ai-patch-instruction");
+
+    if (!instruction) {
+      setOutput("Patch runway instruction field not found.");
+      return;
+    }
+
+    instruction.value = `${instruction.value.trim()}\n\nADJUTORIX WORKSPACE CONTEXT PACK:\n${output.value}`.trim();
+    console.log("ADJUTORIX_AI_CONTEXT_INJECTED", JSON.stringify({
+      source: "adjutorix-ai-workspace-context-pack",
+      target: "patch-runway",
+      bytes: output.value.length,
+    }));
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(paths);
+  panel.appendChild(query);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_WORKSPACE_CONTEXT_PACK_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-workspace-context-pack",
+    bridges: ["scan", "readText", "searchText"],
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiWorkspaceContextPack, { once: true });
+} else {
+  installAdjutorixAiWorkspaceContextPack();
+}

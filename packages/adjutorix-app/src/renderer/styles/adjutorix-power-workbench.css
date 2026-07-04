@@ -701,3 +701,79 @@ textarea {
   white-space: pre-wrap;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
+
+
+/* ADJUTORIX_AI_WORKSPACE_CONTEXT_PACK_CSS_V1 */
+
+.adjutorix-ai-workspace-context-pack {
+  position: fixed;
+  left: 18px;
+  top: 18px;
+  z-index: 76;
+  display: grid;
+  grid-template-rows: auto minmax(70px, 125px) auto auto minmax(120px, 260px);
+  gap: 10px;
+  width: min(460px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  border-radius: 18px;
+  background: rgba(18, 8, 28, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-context-header,
+.adjutorix-ai-context-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-context-budget,
+.adjutorix-ai-context-paths,
+.adjutorix-ai-context-query,
+.adjutorix-ai-context-output,
+.adjutorix-ai-context-actions button {
+  border: 1px solid rgba(168, 85, 247, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(226, 232, 240);
+}
+
+.adjutorix-ai-context-budget,
+.adjutorix-ai-context-query,
+.adjutorix-ai-context-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-context-budget {
+  width: 120px;
+}
+
+.adjutorix-ai-context-actions {
+  flex-wrap: wrap;
+}
+
+.adjutorix-ai-context-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-context-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-context-paths,
+.adjutorix-ai-context-output {
+  width: 100%;
+  padding: 10px;
+  resize: vertical;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.adjutorix-ai-context-output {
+  min-height: 120px;
+}
