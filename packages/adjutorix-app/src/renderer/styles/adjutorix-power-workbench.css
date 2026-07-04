@@ -777,3 +777,81 @@ textarea {
 .adjutorix-ai-context-output {
   min-height: 120px;
 }
+
+
+/* ADJUTORIX_AI_RUNWAY_MISSION_CONTROL_CSS_V1 */
+
+.adjutorix-ai-runway-mission-control {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  z-index: 75;
+  display: grid;
+  grid-template-rows: auto auto minmax(120px, 260px);
+  gap: 10px;
+  width: min(430px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 18px;
+  background: rgba(2, 16, 28, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  transform: translateX(-50%);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-mission-header,
+.adjutorix-ai-mission-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-mission-state {
+  padding: 5px 9px;
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  border-radius: 999px;
+  color: rgb(224, 242, 254);
+  background: rgba(14, 116, 144, 0.22);
+  font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  text-transform: uppercase;
+}
+
+.adjutorix-ai-runway-mission-control[data-ready="true"] .adjutorix-ai-mission-state {
+  border-color: rgba(74, 222, 128, 0.44);
+  color: rgb(220, 252, 231);
+  background: rgba(21, 128, 61, 0.22);
+}
+
+.adjutorix-ai-mission-actions {
+  flex-wrap: wrap;
+}
+
+.adjutorix-ai-mission-actions button,
+.adjutorix-ai-mission-output {
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(226, 232, 240);
+}
+
+.adjutorix-ai-mission-actions button {
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.adjutorix-ai-mission-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-mission-output {
+  min-height: 120px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
