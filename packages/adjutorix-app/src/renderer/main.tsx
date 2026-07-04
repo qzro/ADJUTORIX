@@ -392,7 +392,6 @@ function App(): JSX.Element {
         void refresh(chosen);
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
