@@ -49,4 +49,10 @@ bash ./scripts/package-macos.sh
 
 ## License
 
-Licensed under the Apache License, Version 2.0.
+This repository is licensed under the GNU Affero General Public License v3.0 only.
+
+SPDX-License-Identifier: AGPL-3.0-only
+
+Copyright (C) 2026 qzro / Midia Kiasat.
+
+See [LICENSE](LICENSE), [COPYRIGHT.md](COPYRIGHT.md), and [.reuse/dep5](.reuse/dep5).
