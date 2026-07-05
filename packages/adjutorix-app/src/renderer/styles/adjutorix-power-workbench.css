@@ -1002,3 +1002,73 @@ textarea {
   white-space: pre-wrap;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
+
+
+/* ADJUTORIX_AI_RUNWAY_VERIFICATION_SEAL_CSS_V1 */
+
+.adjutorix-ai-runway-verification-seal {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 81;
+  display: grid;
+  grid-template-rows: auto minmax(46px, 82px) auto minmax(110px, 230px);
+  gap: 10px;
+  width: min(450px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(129, 140, 248, 0.32);
+  border-radius: 18px;
+  background: rgba(14, 14, 35, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  transform: translateX(-50%);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-verification-seal-header,
+.adjutorix-ai-verification-seal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-verification-seal-confirm,
+.adjutorix-ai-verification-seal-note,
+.adjutorix-ai-verification-seal-output,
+.adjutorix-ai-verification-seal-actions button {
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(226, 232, 240);
+}
+
+.adjutorix-ai-verification-seal-confirm,
+.adjutorix-ai-verification-seal-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-verification-seal-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-verification-seal-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-verification-seal-note,
+.adjutorix-ai-verification-seal-output {
+  width: 100%;
+  padding: 10px;
+  resize: vertical;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.adjutorix-ai-verification-seal-output {
+  min-height: 110px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+}
