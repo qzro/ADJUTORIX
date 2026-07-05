@@ -4065,3 +4065,409 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayArtifactIndex();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_ARTIFACT_INDEX_VERIFIER_V1
+ *
+ * Artifact index verifier:
+ * - scans .adjutorix-ai-runway for artifact-index JSON files
+ * - reads a selected index through workspace OS
+ * - validates index schema/source/workspace/counts
+ * - re-reads each indexed artifact
+ * - recomputes SHA-256 and compares against index entries
+ * - emits an index verification report
+ */
+
+interface AdjutorixArtifactIndexVerifierWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<unknown>;
+}
+
+interface AdjutorixArtifactIndexVerifierRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixArtifactIndexVerifierWorkspaceBridge;
+}
+
+interface AdjutorixArtifactIndexVerifierValidation {
+  ok: boolean;
+  failures: string[];
+}
+
+function adjutorixArtifactIndexVerifierWindow(): AdjutorixArtifactIndexVerifierRuntimeWindow {
+  return window as unknown as AdjutorixArtifactIndexVerifierRuntimeWindow;
+}
+
+function adjutorixArtifactIndexVerifierRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixArtifactIndexVerifierArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixArtifactIndexVerifierString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixArtifactIndexVerifierNumber(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function adjutorixArtifactIndexVerifierPath(value: unknown): string {
+  const record = adjutorixArtifactIndexVerifierRecord(value);
+  return adjutorixArtifactIndexVerifierString(record.path || record.relativePath || record.file || record.name);
+}
+
+async function adjutorixArtifactIndexVerifierWorkspace(): Promise<string> {
+  const bridge = adjutorixArtifactIndexVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixArtifactIndexVerifierRecord(defaults);
+    const workspace = adjutorixArtifactIndexVerifierString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixArtifactIndexVerifierFilesFromScan(scanResult: unknown): string[] {
+  const record = adjutorixArtifactIndexVerifierRecord(scanResult);
+  const files = adjutorixArtifactIndexVerifierArray(record.files || record.entries || record.items);
+
+  return files
+    .map(adjutorixArtifactIndexVerifierPath)
+    .filter((path) => path.includes(".adjutorix-ai-runway/"))
+    .filter((path) => path.includes("artifact-index"))
+    .filter((path) => path.endsWith(".json"))
+    .sort();
+}
+
+async function adjutorixArtifactIndexVerifierSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixArtifactIndexVerifierValidateIndex(index: Record<string, unknown>): AdjutorixArtifactIndexVerifierValidation {
+  const failures: string[] = [];
+  const artifacts = adjutorixArtifactIndexVerifierArray(index.artifacts);
+  const artifactCount = adjutorixArtifactIndexVerifierNumber(index.artifact_count);
+
+  if (index.schema !== "adjutorix.ai_runway_artifact_index.v1") {
+    failures.push("schema_mismatch");
+  }
+
+  if (index.source !== "adjutorix-ai-runway-artifact-index") {
+    failures.push("source_mismatch");
+  }
+
+  if (!adjutorixArtifactIndexVerifierString(index.indexed_at)) {
+    failures.push("indexed_at_missing");
+  }
+
+  if (!adjutorixArtifactIndexVerifierString(index.workspace)) {
+    failures.push("workspace_missing");
+  }
+
+  if (!Array.isArray(index.artifacts)) {
+    failures.push("artifacts_not_array");
+  }
+
+  if (artifactCount !== artifacts.length) {
+    failures.push("artifact_count_mismatch");
+  }
+
+  if (typeof index.counts_by_schema !== "object" || index.counts_by_schema === null || Array.isArray(index.counts_by_schema)) {
+    failures.push("counts_by_schema_invalid");
+  }
+
+  return { ok: failures.length === 0, failures };
+}
+
+async function adjutorixArtifactIndexVerifierVerifyArtifacts(
+  workspace: string,
+  index: Record<string, unknown>,
+): Promise<Array<Record<string, unknown>>> {
+  const bridge = adjutorixArtifactIndexVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.readText) {
+    throw new Error("workspace_read_bridge_unavailable");
+  }
+
+  const artifacts = adjutorixArtifactIndexVerifierArray(index.artifacts);
+  const results: Array<Record<string, unknown>> = [];
+
+  for (const artifact of artifacts) {
+    const record = adjutorixArtifactIndexVerifierRecord(artifact);
+    const path = adjutorixArtifactIndexVerifierString(record.path);
+    const expectedSha256 = adjutorixArtifactIndexVerifierString(record.sha256);
+
+    if (!path) {
+      results.push({
+        ok: false,
+        path,
+        failure: "artifact_path_missing",
+      });
+      continue;
+    }
+
+    try {
+      const readResult = await bridge.readText({ workspace, path });
+      const readRecord = adjutorixArtifactIndexVerifierRecord(readResult);
+      const content = adjutorixArtifactIndexVerifierString(readRecord.content || readResult);
+      const actualSha256 = await adjutorixArtifactIndexVerifierSha256(content);
+
+      results.push({
+        ok: actualSha256 === expectedSha256,
+        path,
+        expected_sha256: expectedSha256,
+        actual_sha256: actualSha256,
+        bytes: content.length,
+        failure: actualSha256 === expectedSha256 ? "" : "sha256_mismatch",
+      });
+    } catch (error) {
+      results.push({
+        ok: false,
+        path,
+        expected_sha256: expectedSha256,
+        actual_sha256: "",
+        failure: String(error),
+      });
+    }
+  }
+
+  return results;
+}
+
+function installAdjutorixAiRunwayArtifactIndexVerifier(): void {
+  if (document.getElementById("adjutorix-ai-runway-artifact-index-verifier")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-artifact-index-verifier";
+  panel.className = "adjutorix-ai-runway-artifact-index-verifier";
+  panel.setAttribute("aria-label", "Adjutorix AI runway artifact index verifier");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-artifact-index-verifier-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Index Verifier";
+
+  const state = document.createElement("span");
+  state.className = "adjutorix-ai-artifact-index-verifier-state";
+  state.textContent = "idle";
+
+  header.appendChild(title);
+  header.appendChild(state);
+
+  const select = document.createElement("select");
+  select.className = "adjutorix-ai-artifact-index-verifier-select";
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-artifact-index-verifier-actions";
+
+  const scanButton = document.createElement("button");
+  scanButton.type = "button";
+  scanButton.textContent = "Scan Indexes";
+
+  const verifyButton = document.createElement("button");
+  verifyButton.type = "button";
+  verifyButton.textContent = "Verify Index";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Report";
+
+  actions.appendChild(scanButton);
+  actions.appendChild(verifyButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-artifact-index-verifier-output";
+  output.textContent = "Artifact index verifier mounted. Scan for indexes.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setState(value: string): void {
+    state.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  scanButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixArtifactIndexVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.scan) {
+        setOutput("Workspace OS scan bridge unavailable.");
+        return;
+      }
+
+      setBusy(scanButton, true);
+      setState("scanning");
+
+      try {
+        const workspace = await adjutorixArtifactIndexVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const scanResult = await bridge.scan(workspace);
+        const indexes = adjutorixArtifactIndexVerifierFilesFromScan(scanResult);
+
+        select.replaceChildren();
+
+        for (const indexPath of indexes) {
+          const option = document.createElement("option");
+          option.value = indexPath;
+          option.textContent = indexPath;
+          select.appendChild(option);
+        }
+
+        setState(indexes.length ? "indexes found" : "no indexes");
+        setOutput(JSON.stringify({
+          ok: true,
+          workspace,
+          index_count: indexes.length,
+          indexes,
+        }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_ARTIFACT_INDEX_VERIFIER_SCAN_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-artifact-index-verifier",
+          workspace,
+          index_count: indexes.length,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`INDEX SCAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(scanButton, false);
+      }
+    })();
+  });
+
+  verifyButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixArtifactIndexVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.readText) {
+        setOutput("Workspace OS read bridge unavailable.");
+        return;
+      }
+
+      if (!select.value) {
+        setOutput("No artifact index selected.");
+        return;
+      }
+
+      setBusy(verifyButton, true);
+      setState("verifying");
+
+      try {
+        const workspace = await adjutorixArtifactIndexVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const readResult = await bridge.readText({ workspace, path: select.value });
+        const readRecord = adjutorixArtifactIndexVerifierRecord(readResult);
+        const content = adjutorixArtifactIndexVerifierString(readRecord.content || readResult);
+        const parsed = adjutorixArtifactIndexVerifierRecord(JSON.parse(content));
+        const indexSha256 = await adjutorixArtifactIndexVerifierSha256(content);
+        const indexValidation = adjutorixArtifactIndexVerifierValidateIndex(parsed);
+        const artifactResults = await adjutorixArtifactIndexVerifierVerifyArtifacts(workspace, parsed);
+        const artifactFailures = artifactResults.filter((result) => result.ok !== true);
+        const ok = indexValidation.ok && artifactFailures.length === 0;
+
+        const report = {
+          schema: "adjutorix.ai_runway_artifact_index_verification_report.v1",
+          source: "adjutorix-ai-runway-artifact-index-verifier",
+          verified_at: new Date().toISOString(),
+          workspace,
+          path: select.value,
+          index_sha256: indexSha256,
+          ok,
+          index_validation: indexValidation,
+          artifact_count: artifactResults.length,
+          artifact_failure_count: artifactFailures.length,
+          artifact_results: artifactResults,
+          index: parsed,
+        };
+
+        setState(ok ? "valid" : "invalid");
+        setOutput(JSON.stringify(report, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_ARTIFACT_INDEX_VERIFIED", JSON.stringify({
+          source: "adjutorix-ai-runway-artifact-index-verifier",
+          workspace,
+          path: select.value,
+          index_sha256: indexSha256,
+          ok,
+          artifact_count: artifactResults.length,
+          artifact_failure_count: artifactFailures.length,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`INDEX VERIFY FAILED\n${String(error)}`);
+      } finally {
+        setBusy(verifyButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(select);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_ARTIFACT_INDEX_VERIFIER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-artifact-index-verifier",
+    reads: ".adjutorix-ai-runway",
+    verifies: "adjutorix.ai_runway_artifact_index.v1",
+    recomputes: "sha256",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayArtifactIndexVerifier, { once: true });
+} else {
+  installAdjutorixAiRunwayArtifactIndexVerifier();
+}

@@ -1211,3 +1211,80 @@ textarea {
   white-space: pre-wrap;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
+
+
+/* ADJUTORIX_AI_RUNWAY_ARTIFACT_INDEX_VERIFIER_CSS_V1 */
+
+.adjutorix-ai-runway-artifact-index-verifier {
+  position: fixed;
+  right: 18px;
+  top: 50%;
+  z-index: 84;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(120px, 250px);
+  gap: 10px;
+  width: min(480px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(244, 114, 182, 0.32);
+  border-radius: 18px;
+  background: rgba(32, 12, 26, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  transform: translateY(-50%);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-artifact-index-verifier-header,
+.adjutorix-ai-artifact-index-verifier-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-artifact-index-verifier-state {
+  padding: 5px 9px;
+  border: 1px solid rgba(244, 114, 182, 0.32);
+  border-radius: 999px;
+  color: rgb(252, 231, 243);
+  background: rgba(157, 23, 77, 0.22);
+  font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  text-transform: uppercase;
+}
+
+.adjutorix-ai-artifact-index-verifier-select,
+.adjutorix-ai-artifact-index-verifier-output,
+.adjutorix-ai-artifact-index-verifier-actions button {
+  border: 1px solid rgba(244, 114, 182, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(226, 232, 240);
+}
+
+.adjutorix-ai-artifact-index-verifier-select,
+.adjutorix-ai-artifact-index-verifier-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-artifact-index-verifier-select {
+  width: 100%;
+}
+
+.adjutorix-ai-artifact-index-verifier-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-artifact-index-verifier-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-artifact-index-verifier-output {
+  min-height: 120px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
