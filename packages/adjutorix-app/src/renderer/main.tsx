@@ -2410,3 +2410,339 @@ if (document.readyState === "loading") {
 
 
 /* ADJUTORIX_AI_SCAN_NO_OBJECT_ATTEMPTS_V1 */
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_MISSION_LOCK_V1
+ *
+ * Manual mission lock recorder:
+ * - requires LOCK confirmation
+ * - resolves workspace through workspace OS
+ * - captures mission-control snapshot text
+ * - captures provider status
+ * - captures git diff snapshot
+ * - can run default verification commands
+ * - writes durable JSON lock object to .adjutorix-ai-runway/
+ */
+
+interface AdjutorixMissionLockRunResult {
+  command?: string;
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+  code?: number;
+  ok?: boolean;
+  elapsedMs?: number;
+}
+
+interface AdjutorixMissionLockWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  gitDiff?: (request: { workspace?: string }) => Promise<unknown>;
+  run?: (request: { workspace?: string; command: string }) => Promise<AdjutorixMissionLockRunResult>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+}
+
+interface AdjutorixMissionLockAiBridge {
+  status?: () => Promise<unknown>;
+}
+
+interface AdjutorixMissionLockRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixMissionLockWorkspaceBridge;
+  adjutorixAI?: AdjutorixMissionLockAiBridge;
+}
+
+function adjutorixMissionLockWindow(): AdjutorixMissionLockRuntimeWindow {
+  return window as unknown as AdjutorixMissionLockRuntimeWindow;
+}
+
+function adjutorixMissionLockRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixMissionLockText(selector: string): string {
+  const element = document.querySelector(selector);
+
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.textContent || "";
+  }
+
+  return "";
+}
+
+function adjutorixMissionLockTimestamp(): string {
+  return new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function adjutorixMissionLockWorkspace(): Promise<string> {
+  const bridge = adjutorixMissionLockWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixMissionLockRecord(defaults);
+    const workspace = record.workspace || record.root || record.cwd || record.path || record.workspacePath;
+
+    if (typeof workspace === "string" && workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function installAdjutorixAiRunwayMissionLock(): void {
+  if (document.getElementById("adjutorix-ai-runway-mission-lock")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-mission-lock";
+  panel.className = "adjutorix-ai-runway-mission-lock";
+  panel.setAttribute("aria-label", "Adjutorix AI runway mission lock");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-mission-lock-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Mission Lock";
+
+  const confirm = document.createElement("input");
+  confirm.className = "adjutorix-ai-mission-lock-confirm";
+  confirm.placeholder = "Type LOCK";
+  confirm.spellcheck = false;
+
+  header.appendChild(title);
+  header.appendChild(confirm);
+
+  const note = document.createElement("textarea");
+  note.className = "adjutorix-ai-mission-lock-note";
+  note.placeholder = "Operator lock note...";
+  note.spellcheck = false;
+
+  const commands = document.createElement("textarea");
+  commands.className = "adjutorix-ai-mission-lock-commands";
+  commands.spellcheck = false;
+  commands.value = [
+    "pnpm --filter @adjutorix/app run build:ts",
+    "pnpm --filter @adjutorix/app run lint",
+    "bash scripts/check.sh",
+  ].join("\n");
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-mission-lock-actions";
+
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.textContent = "Preview Lock";
+
+  const runButton = document.createElement("button");
+  runButton.type = "button";
+  runButton.textContent = "Run + Lock";
+
+  const lockButton = document.createElement("button");
+  lockButton.type = "button";
+  lockButton.textContent = "Lock Only";
+
+  actions.appendChild(previewButton);
+  actions.appendChild(runButton);
+  actions.appendChild(lockButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-mission-lock-output";
+  output.textContent = "Mission lock mounted. Type LOCK before writing a lock object.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  async function buildLockObject(runChecks: boolean): Promise<Record<string, unknown>> {
+    const runtime = adjutorixMissionLockWindow();
+    const workspace = await adjutorixMissionLockWorkspace();
+
+    if (!workspace) {
+      throw new Error("workspace_not_resolved");
+    }
+
+    const providers = runtime.adjutorixAI?.status ? await runtime.adjutorixAI.status() : {};
+    const diff = runtime.adjutorixWorkspaceOS?.gitDiff
+      ? await runtime.adjutorixWorkspaceOS.gitDiff({ workspace })
+      : "";
+
+    const plannedCommands = commands.value
+      .split("\n")
+      .map((command) => command.trim())
+      .filter(Boolean);
+
+    const commandResults: Array<{ command: string; result: AdjutorixMissionLockRunResult | { error: string } }> = [];
+
+    if (runChecks) {
+      if (!runtime.adjutorixWorkspaceOS?.run) {
+        throw new Error("workspace_run_bridge_unavailable");
+      }
+
+      for (const command of plannedCommands) {
+        setOutput(JSON.stringify({
+          running: command,
+          completed: commandResults.length,
+          total: plannedCommands.length,
+        }, null, 2));
+
+        try {
+          const result = await runtime.adjutorixWorkspaceOS.run({ workspace, command });
+          commandResults.push({ command, result });
+        } catch (error) {
+          commandResults.push({ command, result: { error: String(error) } });
+          break;
+        }
+      }
+    }
+
+    return {
+      schema: "adjutorix.ai_runway_mission_lock.v1",
+      source: "adjutorix-ai-runway-mission-lock",
+      locked_at: new Date().toISOString(),
+      workspace,
+      operator_note: note.value,
+      mission_control_snapshot_text: adjutorixMissionLockText(".adjutorix-ai-mission-output"),
+      context_pack_text: adjutorixMissionLockText(".adjutorix-ai-context-output"),
+      patch_plan_text: adjutorixMissionLockText(".adjutorix-ai-patch-output"),
+      verify_output_text: adjutorixMissionLockText(".adjutorix-ai-patch-verify-output"),
+      providers,
+      git_diff_snapshot: typeof diff === "string" ? diff : JSON.stringify(diff, null, 2),
+      planned_commands: plannedCommands,
+      command_results: commandResults,
+      ran_checks: runChecks,
+    };
+  }
+
+  async function writeLockObject(lock: Record<string, unknown>): Promise<{ path: string; bytes: number }> {
+    const bridge = adjutorixMissionLockWindow().adjutorixWorkspaceOS;
+
+    if (!bridge?.writeText) {
+      throw new Error("workspace_write_bridge_unavailable");
+    }
+
+    const workspace = typeof lock.workspace === "string" ? lock.workspace : "";
+    const path = `.adjutorix-ai-runway/${adjutorixMissionLockTimestamp()}-mission-lock.json`;
+    const content = JSON.stringify(lock, null, 2) + "\n";
+
+    await bridge.writeText({ workspace, path, content });
+
+    return { path, bytes: content.length };
+  }
+
+  previewButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(previewButton, true);
+      try {
+        const lock = await buildLockObject(false);
+        setOutput(JSON.stringify(lock, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_MISSION_LOCK_PREVIEW_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-mission-lock",
+          workspace: lock.workspace,
+        }));
+      } catch (error) {
+        setOutput(`MISSION LOCK PREVIEW FAILED\n${String(error)}`);
+      } finally {
+        setBusy(previewButton, false);
+      }
+    })();
+  });
+
+  lockButton.addEventListener("click", () => {
+    void (async () => {
+      if (confirm.value.trim() !== "LOCK") {
+        setOutput("Mission lock blocked. Type LOCK in the confirmation field.");
+        return;
+      }
+
+      setBusy(lockButton, true);
+      try {
+        const lock = await buildLockObject(false);
+        const written = await writeLockObject(lock);
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, ...written, lock }, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_MISSION_LOCK_RECORDED", JSON.stringify({
+          source: "adjutorix-ai-runway-mission-lock",
+          path: written.path,
+          bytes: written.bytes,
+          workspace: lock.workspace,
+          ran_checks: false,
+        }));
+      } catch (error) {
+        setOutput(`MISSION LOCK FAILED\n${String(error)}`);
+      } finally {
+        setBusy(lockButton, false);
+      }
+    })();
+  });
+
+  runButton.addEventListener("click", () => {
+    void (async () => {
+      if (confirm.value.trim() !== "LOCK") {
+        setOutput("Mission run+lock blocked. Type LOCK in the confirmation field.");
+        return;
+      }
+
+      setBusy(runButton, true);
+      try {
+        const lock = await buildLockObject(true);
+        const written = await writeLockObject(lock);
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, ...written, lock }, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_MISSION_LOCK_RECORDED", JSON.stringify({
+          source: "adjutorix-ai-runway-mission-lock",
+          path: written.path,
+          bytes: written.bytes,
+          workspace: lock.workspace,
+          ran_checks: true,
+        }));
+      } catch (error) {
+        setOutput(`MISSION RUN+LOCK FAILED\n${String(error)}`);
+      } finally {
+        setBusy(runButton, false);
+      }
+    })();
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(note);
+  panel.appendChild(commands);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_MISSION_LOCK_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-mission-lock",
+    writes: ".adjutorix-ai-runway",
+    requires: "manual-lock-confirmation",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayMissionLock, { once: true });
+} else {
+  installAdjutorixAiRunwayMissionLock();
+}
