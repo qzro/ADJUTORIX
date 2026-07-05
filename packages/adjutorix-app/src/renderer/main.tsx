@@ -4811,3 +4811,402 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayFinalityManifest();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_FINALITY_MANIFEST_VERIFIER_V1
+ *
+ * Finality manifest verifier:
+ * - scans .adjutorix-ai-runway for finality-manifest JSON files
+ * - reads selected manifest through workspace OS
+ * - validates manifest schema/source/workspace/surfaces/payload hashes
+ * - recomputes SHA-256 for captured payload text and git diff snapshot
+ * - emits finality verification report
+ */
+
+interface AdjutorixFinalityManifestVerifierWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<unknown>;
+}
+
+interface AdjutorixFinalityManifestVerifierRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixFinalityManifestVerifierWorkspaceBridge;
+}
+
+interface AdjutorixFinalityManifestVerifierValidation {
+  ok: boolean;
+  failures: string[];
+}
+
+function adjutorixFinalityManifestVerifierWindow(): AdjutorixFinalityManifestVerifierRuntimeWindow {
+  return window as unknown as AdjutorixFinalityManifestVerifierRuntimeWindow;
+}
+
+function adjutorixFinalityManifestVerifierRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixFinalityManifestVerifierArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixFinalityManifestVerifierString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixFinalityManifestVerifierBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+function adjutorixFinalityManifestVerifierPath(value: unknown): string {
+  const record = adjutorixFinalityManifestVerifierRecord(value);
+  return adjutorixFinalityManifestVerifierString(record.path || record.relativePath || record.file || record.name);
+}
+
+async function adjutorixFinalityManifestVerifierWorkspace(): Promise<string> {
+  const bridge = adjutorixFinalityManifestVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixFinalityManifestVerifierRecord(defaults);
+    const workspace = adjutorixFinalityManifestVerifierString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixFinalityManifestVerifierFilesFromScan(scanResult: unknown): string[] {
+  const record = adjutorixFinalityManifestVerifierRecord(scanResult);
+  const files = adjutorixFinalityManifestVerifierArray(record.files || record.entries || record.items);
+
+  return files
+    .map(adjutorixFinalityManifestVerifierPath)
+    .filter((path) => path.includes(".adjutorix-ai-runway/"))
+    .filter((path) => path.includes("finality-manifest"))
+    .filter((path) => path.endsWith(".json"))
+    .sort();
+}
+
+async function adjutorixFinalityManifestVerifierSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function adjutorixFinalityManifestVerifierValidatePayloads(
+  manifest: Record<string, unknown>,
+): Promise<Array<Record<string, unknown>>> {
+  const payloads = adjutorixFinalityManifestVerifierArray(manifest.payloads);
+  const results: Array<Record<string, unknown>> = [];
+
+  for (const payload of payloads) {
+    const record = adjutorixFinalityManifestVerifierRecord(payload);
+    const name = adjutorixFinalityManifestVerifierString(record.name);
+    const expectedSha256 = adjutorixFinalityManifestVerifierString(record.sha256);
+    const text = adjutorixFinalityManifestVerifierString(record.text);
+    const actualSha256 = await adjutorixFinalityManifestVerifierSha256(text);
+
+    results.push({
+      ok: expectedSha256 === actualSha256,
+      name,
+      selector: adjutorixFinalityManifestVerifierString(record.selector),
+      chars: text.length,
+      expected_sha256: expectedSha256,
+      actual_sha256: actualSha256,
+      failure: expectedSha256 === actualSha256 ? "" : "payload_sha256_mismatch",
+    });
+  }
+
+  return results;
+}
+
+function adjutorixFinalityManifestVerifierValidateManifest(
+  manifest: Record<string, unknown>,
+): AdjutorixFinalityManifestVerifierValidation {
+  const failures: string[] = [];
+  const surfaces = adjutorixFinalityManifestVerifierRecord(manifest.surfaces);
+  const payloads = adjutorixFinalityManifestVerifierArray(manifest.payloads);
+
+  if (manifest.schema !== "adjutorix.ai_runway_finality_manifest.v1") {
+    failures.push("schema_mismatch");
+  }
+
+  if (manifest.source !== "adjutorix-ai-runway-finality-manifest") {
+    failures.push("source_mismatch");
+  }
+
+  if (!adjutorixFinalityManifestVerifierString(manifest.finalized_at)) {
+    failures.push("finalized_at_missing");
+  }
+
+  if (!adjutorixFinalityManifestVerifierString(manifest.workspace)) {
+    failures.push("workspace_missing");
+  }
+
+  if (manifest.ready !== true) {
+    failures.push("ready_not_true");
+  }
+
+  if (!Object.keys(surfaces).length) {
+    failures.push("surfaces_missing");
+  }
+
+  if (Object.keys(surfaces).some((key) => surfaces[key] !== true)) {
+    failures.push("surface_not_true");
+  }
+
+  if (!payloads.length) {
+    failures.push("payloads_missing");
+  }
+
+  if (!adjutorixFinalityManifestVerifierString(manifest.git_diff_sha256)) {
+    failures.push("git_diff_sha256_missing");
+  }
+
+  return { ok: failures.length === 0, failures };
+}
+
+function installAdjutorixAiRunwayFinalityManifestVerifier(): void {
+  if (document.getElementById("adjutorix-ai-runway-finality-manifest-verifier")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-finality-manifest-verifier";
+  panel.className = "adjutorix-ai-runway-finality-manifest-verifier";
+  panel.setAttribute("aria-label", "Adjutorix AI runway finality manifest verifier");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-finality-manifest-verifier-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Finality Verifier";
+
+  const state = document.createElement("span");
+  state.className = "adjutorix-ai-finality-manifest-verifier-state";
+  state.textContent = "idle";
+
+  header.appendChild(title);
+  header.appendChild(state);
+
+  const select = document.createElement("select");
+  select.className = "adjutorix-ai-finality-manifest-verifier-select";
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-finality-manifest-verifier-actions";
+
+  const scanButton = document.createElement("button");
+  scanButton.type = "button";
+  scanButton.textContent = "Scan Manifests";
+
+  const verifyButton = document.createElement("button");
+  verifyButton.type = "button";
+  verifyButton.textContent = "Verify Manifest";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Report";
+
+  actions.appendChild(scanButton);
+  actions.appendChild(verifyButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-finality-manifest-verifier-output";
+  output.textContent = "Finality manifest verifier mounted. Scan for finality manifests.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setState(value: string): void {
+    state.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  scanButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixFinalityManifestVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.scan) {
+        setOutput("Workspace OS scan bridge unavailable.");
+        return;
+      }
+
+      setBusy(scanButton, true);
+      setState("scanning");
+
+      try {
+        const workspace = await adjutorixFinalityManifestVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const scanResult = await bridge.scan(workspace);
+        const manifests = adjutorixFinalityManifestVerifierFilesFromScan(scanResult);
+
+        select.replaceChildren();
+
+        for (const manifestPath of manifests) {
+          const option = document.createElement("option");
+          option.value = manifestPath;
+          option.textContent = manifestPath;
+          select.appendChild(option);
+        }
+
+        setState(manifests.length ? "manifests found" : "no manifests");
+        setOutput(JSON.stringify({
+          ok: true,
+          workspace,
+          manifest_count: manifests.length,
+          manifests,
+        }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_FINALITY_MANIFEST_VERIFIER_SCAN_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-finality-manifest-verifier",
+          workspace,
+          manifest_count: manifests.length,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`FINALITY MANIFEST SCAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(scanButton, false);
+      }
+    })();
+  });
+
+  verifyButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixFinalityManifestVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.readText) {
+        setOutput("Workspace OS read bridge unavailable.");
+        return;
+      }
+
+      if (!select.value) {
+        setOutput("No finality manifest selected.");
+        return;
+      }
+
+      setBusy(verifyButton, true);
+      setState("verifying");
+
+      try {
+        const workspace = await adjutorixFinalityManifestVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const readResult = await bridge.readText({ workspace, path: select.value });
+        const readRecord = adjutorixFinalityManifestVerifierRecord(readResult);
+        const content = adjutorixFinalityManifestVerifierString(readRecord.content || readResult);
+        const parsed = adjutorixFinalityManifestVerifierRecord(JSON.parse(content));
+        const manifestSha256 = await adjutorixFinalityManifestVerifierSha256(content);
+        const manifestValidation = adjutorixFinalityManifestVerifierValidateManifest(parsed);
+        const payloadResults = await adjutorixFinalityManifestVerifierValidatePayloads(parsed);
+        const payloadFailures = payloadResults.filter((result) => result.ok !== true);
+
+        const gitDiffText = adjutorixFinalityManifestVerifierString(parsed.git_diff_snapshot);
+        const expectedGitDiffSha256 = adjutorixFinalityManifestVerifierString(parsed.git_diff_sha256);
+        const actualGitDiffSha256 = await adjutorixFinalityManifestVerifierSha256(gitDiffText);
+        const gitDiffOk = expectedGitDiffSha256 === actualGitDiffSha256;
+
+        const ok = manifestValidation.ok && payloadFailures.length === 0 && gitDiffOk;
+
+        const report = {
+          schema: "adjutorix.ai_runway_finality_manifest_verification_report.v1",
+          source: "adjutorix-ai-runway-finality-manifest-verifier",
+          verified_at: new Date().toISOString(),
+          workspace,
+          path: select.value,
+          manifest_sha256: manifestSha256,
+          ok,
+          manifest_validation: manifestValidation,
+          payload_count: payloadResults.length,
+          payload_failure_count: payloadFailures.length,
+          payload_results: payloadResults,
+          git_diff_hash: {
+            ok: gitDiffOk,
+            expected_sha256: expectedGitDiffSha256,
+            actual_sha256: actualGitDiffSha256,
+          },
+          manifest: parsed,
+        };
+
+        setState(ok ? "valid" : "invalid");
+        setOutput(JSON.stringify(report, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_FINALITY_MANIFEST_VERIFIED", JSON.stringify({
+          source: "adjutorix-ai-runway-finality-manifest-verifier",
+          workspace,
+          path: select.value,
+          manifest_sha256: manifestSha256,
+          ok,
+          payload_count: payloadResults.length,
+          payload_failure_count: payloadFailures.length,
+          git_diff_ok: gitDiffOk,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`FINALITY MANIFEST VERIFY FAILED\n${String(error)}`);
+      } finally {
+        setBusy(verifyButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(select);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_FINALITY_MANIFEST_VERIFIER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-finality-manifest-verifier",
+    reads: ".adjutorix-ai-runway",
+    verifies: "adjutorix.ai_runway_finality_manifest.v1",
+    recomputes: "sha256",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayFinalityManifestVerifier, { once: true });
+} else {
+  installAdjutorixAiRunwayFinalityManifestVerifier();
+}
