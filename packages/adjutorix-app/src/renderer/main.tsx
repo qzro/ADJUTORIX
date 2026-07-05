@@ -4471,3 +4471,343 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayArtifactIndexVerifier();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_FINALITY_MANIFEST_V1
+ *
+ * Finality manifest recorder:
+ * - summarizes the AI runway mission surface chain
+ * - captures mission/control/verifier/index panel evidence text
+ * - computes SHA-256 over each captured surface payload
+ * - captures provider status and git diff snapshot when available
+ * - writes a durable finality manifest JSON under .adjutorix-ai-runway/
+ * - requires manual FINALIZE confirmation
+ */
+
+interface AdjutorixFinalityManifestWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  gitDiff?: (request: { workspace?: string }) => Promise<unknown>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+}
+
+interface AdjutorixFinalityManifestAiBridge {
+  status?: () => Promise<unknown>;
+}
+
+interface AdjutorixFinalityManifestRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixFinalityManifestWorkspaceBridge;
+  adjutorixAI?: AdjutorixFinalityManifestAiBridge;
+}
+
+function adjutorixFinalityManifestWindow(): AdjutorixFinalityManifestRuntimeWindow {
+  return window as unknown as AdjutorixFinalityManifestRuntimeWindow;
+}
+
+function adjutorixFinalityManifestRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixFinalityManifestString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixFinalityManifestText(selector: string): string {
+  const element = document.querySelector(selector);
+
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.textContent || "";
+  }
+
+  return "";
+}
+
+function adjutorixFinalityManifestMounted(selector: string): boolean {
+  return Boolean(document.querySelector(selector));
+}
+
+function adjutorixFinalityManifestTimestamp(): string {
+  return new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function adjutorixFinalityManifestSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function adjutorixFinalityManifestWorkspace(): Promise<string> {
+  const bridge = adjutorixFinalityManifestWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixFinalityManifestRecord(defaults);
+    const workspace = adjutorixFinalityManifestString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+async function adjutorixFinalityManifestPayload(name: string, selector: string): Promise<Record<string, unknown>> {
+  const text = adjutorixFinalityManifestText(selector);
+
+  return {
+    name,
+    selector,
+    present: Boolean(text),
+    chars: text.length,
+    sha256: await adjutorixFinalityManifestSha256(text),
+    text,
+  };
+}
+
+async function adjutorixFinalityManifestBuild(note: string): Promise<Record<string, unknown>> {
+  const runtime = adjutorixFinalityManifestWindow();
+  const workspace = await adjutorixFinalityManifestWorkspace();
+
+  if (!workspace) {
+    throw new Error("workspace_not_resolved");
+  }
+
+  let providers: unknown = {};
+  let diffSnapshot = "";
+
+  if (runtime.adjutorixAI?.status) {
+    try {
+      providers = await runtime.adjutorixAI.status();
+    } catch (error) {
+      providers = { ok: false, error: String(error) };
+    }
+  }
+
+  if (runtime.adjutorixWorkspaceOS?.gitDiff) {
+    try {
+      const diff = await runtime.adjutorixWorkspaceOS.gitDiff({ workspace });
+      diffSnapshot = typeof diff === "string" ? diff : JSON.stringify(diff, null, 2);
+    } catch (error) {
+      diffSnapshot = `git_diff_unavailable: ${String(error)}`;
+    }
+  }
+
+  const surfaces = {
+    ai_assistant: adjutorixFinalityManifestMounted("#adjutorix-ai-assistant"),
+    patch_runway: adjutorixFinalityManifestMounted("#adjutorix-ai-patch-runway"),
+    verify_runway: adjutorixFinalityManifestMounted("#adjutorix-ai-patch-verify-runway"),
+    evidence_recorder: adjutorixFinalityManifestMounted("#adjutorix-ai-runway-evidence-recorder"),
+    context_pack: adjutorixFinalityManifestMounted("#adjutorix-ai-workspace-context-pack"),
+    mission_control: adjutorixFinalityManifestMounted("#adjutorix-ai-runway-mission-control"),
+    mission_lock: adjutorixFinalityManifestMounted("#adjutorix-ai-runway-mission-lock"),
+    lock_verifier: adjutorixFinalityManifestMounted("#adjutorix-ai-runway-lock-verifier"),
+    verification_seal: adjutorixFinalityManifestMounted("#adjutorix-ai-runway-verification-seal"),
+    seal_verifier: adjutorixFinalityManifestMounted("#adjutorix-ai-runway-seal-verifier"),
+    artifact_index: adjutorixFinalityManifestMounted("#adjutorix-ai-runway-artifact-index"),
+    artifact_index_verifier: adjutorixFinalityManifestMounted("#adjutorix-ai-runway-artifact-index-verifier"),
+  };
+
+  const payloads = [
+    await adjutorixFinalityManifestPayload("ai_provider_output", ".adjutorix-ai-output"),
+    await adjutorixFinalityManifestPayload("context_pack", ".adjutorix-ai-context-output"),
+    await adjutorixFinalityManifestPayload("patch_plan", ".adjutorix-ai-patch-output"),
+    await adjutorixFinalityManifestPayload("verify_output", ".adjutorix-ai-patch-verify-output"),
+    await adjutorixFinalityManifestPayload("evidence_recorder", ".adjutorix-ai-evidence-output"),
+    await adjutorixFinalityManifestPayload("mission_control", ".adjutorix-ai-mission-output"),
+    await adjutorixFinalityManifestPayload("mission_lock", ".adjutorix-ai-mission-lock-output"),
+    await adjutorixFinalityManifestPayload("lock_verifier", ".adjutorix-ai-lock-verifier-output"),
+    await adjutorixFinalityManifestPayload("verification_seal", ".adjutorix-ai-verification-seal-output"),
+    await adjutorixFinalityManifestPayload("seal_verifier", ".adjutorix-ai-seal-verifier-output"),
+    await adjutorixFinalityManifestPayload("artifact_index", ".adjutorix-ai-artifact-index-output"),
+    await adjutorixFinalityManifestPayload("artifact_index_verifier", ".adjutorix-ai-artifact-index-verifier-output"),
+  ];
+
+  const surfaceReady = Object.values(surfaces).every(Boolean);
+  const diffSha256 = await adjutorixFinalityManifestSha256(diffSnapshot);
+
+  return {
+    schema: "adjutorix.ai_runway_finality_manifest.v1",
+    source: "adjutorix-ai-runway-finality-manifest",
+    finalized_at: new Date().toISOString(),
+    workspace,
+    operator_note: note,
+    ready: surfaceReady,
+    surfaces,
+    providers,
+    payloads,
+    git_diff_snapshot: diffSnapshot,
+    git_diff_sha256: diffSha256,
+  };
+}
+
+function installAdjutorixAiRunwayFinalityManifest(): void {
+  if (document.getElementById("adjutorix-ai-runway-finality-manifest")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-finality-manifest";
+  panel.className = "adjutorix-ai-runway-finality-manifest";
+  panel.setAttribute("aria-label", "Adjutorix AI runway finality manifest");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-finality-manifest-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Finality Manifest";
+
+  const confirm = document.createElement("input");
+  confirm.className = "adjutorix-ai-finality-manifest-confirm";
+  confirm.placeholder = "Type FINALIZE";
+  confirm.spellcheck = false;
+
+  header.appendChild(title);
+  header.appendChild(confirm);
+
+  const note = document.createElement("textarea");
+  note.className = "adjutorix-ai-finality-manifest-note";
+  note.placeholder = "Operator finality note...";
+  note.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-finality-manifest-actions";
+
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.textContent = "Preview Manifest";
+
+  const writeButton = document.createElement("button");
+  writeButton.type = "button";
+  writeButton.textContent = "Write Manifest";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Manifest";
+
+  actions.appendChild(previewButton);
+  actions.appendChild(writeButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-finality-manifest-output";
+  output.textContent = "Finality manifest mounted. Type FINALIZE before writing.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  async function writeManifest(manifest: Record<string, unknown>): Promise<{ path: string; bytes: number }> {
+    const bridge = adjutorixFinalityManifestWindow().adjutorixWorkspaceOS;
+
+    if (!bridge?.writeText) {
+      throw new Error("workspace_write_bridge_unavailable");
+    }
+
+    const workspace = adjutorixFinalityManifestString(manifest.workspace);
+    const path = `.adjutorix-ai-runway/${adjutorixFinalityManifestTimestamp()}-finality-manifest.json`;
+    const content = JSON.stringify(manifest, null, 2) + "\n";
+
+    await bridge.writeText({ workspace, path, content });
+
+    return { path, bytes: content.length };
+  }
+
+  previewButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(previewButton, true);
+      try {
+        const manifest = await adjutorixFinalityManifestBuild(note.value);
+        setOutput(JSON.stringify(manifest, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_FINALITY_MANIFEST_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-finality-manifest",
+          workspace: manifest.workspace,
+          ready: manifest.ready,
+        }));
+      } catch (error) {
+        setOutput(`FINALITY MANIFEST PREVIEW FAILED\n${String(error)}`);
+      } finally {
+        setBusy(previewButton, false);
+      }
+    })();
+  });
+
+  writeButton.addEventListener("click", () => {
+    void (async () => {
+      if (confirm.value.trim() !== "FINALIZE") {
+        setOutput("Finality manifest write blocked. Type FINALIZE in the confirmation field.");
+        return;
+      }
+
+      setBusy(writeButton, true);
+      try {
+        const manifest = await adjutorixFinalityManifestBuild(note.value);
+        const written = await writeManifest(manifest);
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, ...written, manifest }, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_FINALITY_MANIFEST_RECORDED", JSON.stringify({
+          source: "adjutorix-ai-runway-finality-manifest",
+          workspace: manifest.workspace,
+          path: written.path,
+          bytes: written.bytes,
+          ready: manifest.ready,
+        }));
+      } catch (error) {
+        setOutput(`FINALITY MANIFEST WRITE FAILED\n${String(error)}`);
+      } finally {
+        setBusy(writeButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(note);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_FINALITY_MANIFEST_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-finality-manifest",
+    writes: ".adjutorix-ai-runway",
+    requires: "manual-finalize-confirmation",
+    summarizes: "ai-runway-artifact-chain",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayFinalityManifest, { once: true });
+} else {
+  installAdjutorixAiRunwayFinalityManifest();
+}
