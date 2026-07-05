@@ -56,7 +56,10 @@
         "*.app/**",
         "**/*.dmg",
         "**/*.blockmap",
-        "**/*.app/**"
+        "**/*.app/**",
+        ".reuse/dep5",
+        "COPYRIGHT.md",
+        "LICENSES/AGPL-3.0-only.txt"
       ],
       "allowedReaders": [
         "operator",
@@ -118,7 +121,10 @@
         "packages/*/.adjutorix.*",
         "packages/*/assets/asset-manifest.json",
         "**/*.js.map",
-        "packages/*/.adjutorix*/**"
+        "packages/*/.adjutorix*/**",
+        ".reuse/dep5",
+        "COPYRIGHT.md",
+        "LICENSES/AGPL-3.0-only.txt"
       ],
       "allowedReaders": [
         "operator",
@@ -255,7 +261,10 @@
         "packages/*/tailwind.config.*",
         "product/**",
         "reports/**",
-        "quarantine/**"
+        "quarantine/**",
+        ".reuse/dep5",
+        "COPYRIGHT.md",
+        "LICENSES/AGPL-3.0-only.txt"
       ],
       "allowedReaders": [
         "operator",
@@ -278,5 +287,10 @@
       "reviewVisibilityRule": "full",
       "mutationDenialRule": "deny_without_transaction"
     }
+  ],
+  "patterns": [
+    ".reuse/dep5",
+    "COPYRIGHT.md",
+    "LICENSES/AGPL-3.0-only.txt"
   ]
 }
