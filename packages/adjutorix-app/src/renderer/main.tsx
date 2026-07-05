@@ -5210,3 +5210,304 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayFinalityManifestVerifier();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_FINALITY_CERTIFICATE_V1
+ *
+ * Finality certificate recorder:
+ * - consumes finality-manifest-verifier report output
+ * - validates verifier report schema/source/ok/hash fields
+ * - computes SHA-256 for report text and mission snapshot text
+ * - records a finality certificate JSON into .adjutorix-ai-runway/
+ * - requires manual CERTIFY confirmation
+ */
+
+interface AdjutorixFinalityCertificateWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+}
+
+interface AdjutorixFinalityCertificateRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixFinalityCertificateWorkspaceBridge;
+}
+
+function adjutorixFinalityCertificateWindow(): AdjutorixFinalityCertificateRuntimeWindow {
+  return window as unknown as AdjutorixFinalityCertificateRuntimeWindow;
+}
+
+function adjutorixFinalityCertificateRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixFinalityCertificateString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixFinalityCertificateText(selector: string): string {
+  const element = document.querySelector(selector);
+
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.textContent || "";
+  }
+
+  return "";
+}
+
+function adjutorixFinalityCertificateTimestamp(): string {
+  return new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function adjutorixFinalityCertificateWorkspace(): Promise<string> {
+  const bridge = adjutorixFinalityCertificateWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixFinalityCertificateRecord(defaults);
+    const workspace = adjutorixFinalityCertificateString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+async function adjutorixFinalityCertificateSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixFinalityCertificateParseReport(text: string): Record<string, unknown> {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    throw new Error("finality_verification_report_empty");
+  }
+
+  const parsed = adjutorixFinalityCertificateRecord(JSON.parse(trimmed));
+
+  if (parsed.schema !== "adjutorix.ai_runway_finality_manifest_verification_report.v1") {
+    throw new Error("finality_verification_report_schema_mismatch");
+  }
+
+  if (parsed.source !== "adjutorix-ai-runway-finality-manifest-verifier") {
+    throw new Error("finality_verification_report_source_mismatch");
+  }
+
+  if (parsed.ok !== true) {
+    throw new Error("finality_verification_report_not_ok");
+  }
+
+  if (!adjutorixFinalityCertificateString(parsed.workspace)) {
+    throw new Error("finality_verification_report_workspace_missing");
+  }
+
+  if (!adjutorixFinalityCertificateString(parsed.path)) {
+    throw new Error("finality_verification_report_path_missing");
+  }
+
+  if (!adjutorixFinalityCertificateString(parsed.manifest_sha256)) {
+    throw new Error("finality_verification_report_manifest_sha256_missing");
+  }
+
+  return parsed;
+}
+
+function installAdjutorixAiRunwayFinalityCertificate(): void {
+  if (document.getElementById("adjutorix-ai-runway-finality-certificate")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-finality-certificate";
+  panel.className = "adjutorix-ai-runway-finality-certificate";
+  panel.setAttribute("aria-label", "Adjutorix AI runway finality certificate");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-finality-certificate-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Finality Certificate";
+
+  const confirm = document.createElement("input");
+  confirm.className = "adjutorix-ai-finality-certificate-confirm";
+  confirm.placeholder = "Type CERTIFY";
+  confirm.spellcheck = false;
+
+  header.appendChild(title);
+  header.appendChild(confirm);
+
+  const note = document.createElement("textarea");
+  note.className = "adjutorix-ai-finality-certificate-note";
+  note.placeholder = "Operator certificate note...";
+  note.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-finality-certificate-actions";
+
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.textContent = "Preview Certificate";
+
+  const certifyButton = document.createElement("button");
+  certifyButton.type = "button";
+  certifyButton.textContent = "Write Certificate";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Certificate";
+
+  actions.appendChild(previewButton);
+  actions.appendChild(certifyButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-finality-certificate-output";
+  output.textContent = "Finality certificate mounted. Verify a finality manifest first, then type CERTIFY.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  async function buildCertificate(): Promise<Record<string, unknown>> {
+    const workspace = await adjutorixFinalityCertificateWorkspace();
+
+    if (!workspace) {
+      throw new Error("workspace_not_resolved");
+    }
+
+    const reportText = adjutorixFinalityCertificateText(".adjutorix-ai-finality-manifest-verifier-output");
+    const report = adjutorixFinalityCertificateParseReport(reportText);
+    const reportSha256 = await adjutorixFinalityCertificateSha256(reportText);
+    const missionSnapshotText = adjutorixFinalityCertificateText(".adjutorix-ai-mission-output");
+    const missionSnapshotSha256 = await adjutorixFinalityCertificateSha256(missionSnapshotText);
+
+    return {
+      schema: "adjutorix.ai_runway_finality_certificate.v1",
+      source: "adjutorix-ai-runway-finality-certificate",
+      certified_at: new Date().toISOString(),
+      workspace,
+      operator_note: note.value,
+      finality_verification_report_sha256: reportSha256,
+      mission_snapshot_sha256: missionSnapshotSha256,
+      finality_verification_report: report,
+      mission_control_snapshot_text: missionSnapshotText,
+    };
+  }
+
+  async function writeCertificate(certificate: Record<string, unknown>): Promise<{ path: string; bytes: number }> {
+    const bridge = adjutorixFinalityCertificateWindow().adjutorixWorkspaceOS;
+
+    if (!bridge?.writeText) {
+      throw new Error("workspace_write_bridge_unavailable");
+    }
+
+    const workspace = adjutorixFinalityCertificateString(certificate.workspace);
+    const path = `.adjutorix-ai-runway/${adjutorixFinalityCertificateTimestamp()}-finality-certificate.json`;
+    const content = JSON.stringify(certificate, null, 2) + "\n";
+
+    await bridge.writeText({ workspace, path, content });
+
+    return { path, bytes: content.length };
+  }
+
+  previewButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(previewButton, true);
+      try {
+        const certificate = await buildCertificate();
+        setOutput(JSON.stringify(certificate, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_FINALITY_CERTIFICATE_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-finality-certificate",
+          workspace: certificate.workspace,
+        }));
+      } catch (error) {
+        setOutput(`FINALITY CERTIFICATE PREVIEW FAILED\n${String(error)}`);
+      } finally {
+        setBusy(previewButton, false);
+      }
+    })();
+  });
+
+  certifyButton.addEventListener("click", () => {
+    void (async () => {
+      if (confirm.value.trim() !== "CERTIFY") {
+        setOutput("Finality certificate blocked. Type CERTIFY in the confirmation field.");
+        return;
+      }
+
+      setBusy(certifyButton, true);
+      try {
+        const certificate = await buildCertificate();
+        const written = await writeCertificate(certificate);
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, ...written, certificate }, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_FINALITY_CERTIFICATE_RECORDED", JSON.stringify({
+          source: "adjutorix-ai-runway-finality-certificate",
+          workspace: certificate.workspace,
+          path: written.path,
+          bytes: written.bytes,
+          certifies: "adjutorix.ai_runway_finality_manifest_verification_report.v1",
+        }));
+      } catch (error) {
+        setOutput(`FINALITY CERTIFICATE FAILED\n${String(error)}`);
+      } finally {
+        setBusy(certifyButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(note);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_FINALITY_CERTIFICATE_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-finality-certificate",
+    writes: ".adjutorix-ai-runway",
+    requires: "manual-certify-confirmation",
+    certifies: "adjutorix.ai_runway_finality_manifest_verification_report.v1",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayFinalityCertificate, { once: true });
+} else {
+  installAdjutorixAiRunwayFinalityCertificate();
+}
