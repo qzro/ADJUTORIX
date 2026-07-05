@@ -1148,3 +1148,66 @@ textarea {
   white-space: pre-wrap;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
+
+
+/* ADJUTORIX_AI_RUNWAY_ARTIFACT_INDEX_CSS_V1 */
+
+.adjutorix-ai-runway-artifact-index {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 83;
+  display: grid;
+  grid-template-rows: auto auto minmax(120px, 250px);
+  gap: 10px;
+  width: min(480px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(192, 132, 252, 0.32);
+  border-radius: 18px;
+  background: rgba(24, 14, 35, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-artifact-index-header,
+.adjutorix-ai-artifact-index-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-artifact-index-confirm,
+.adjutorix-ai-artifact-index-output,
+.adjutorix-ai-artifact-index-actions button {
+  border: 1px solid rgba(192, 132, 252, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(226, 232, 240);
+}
+
+.adjutorix-ai-artifact-index-confirm,
+.adjutorix-ai-artifact-index-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-artifact-index-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-artifact-index-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-artifact-index-output {
+  min-height: 120px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
