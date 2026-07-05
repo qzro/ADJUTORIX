@@ -855,3 +855,74 @@ textarea {
   white-space: pre-wrap;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
+
+
+/* ADJUTORIX_AI_RUNWAY_MISSION_LOCK_CSS_V1 */
+
+.adjutorix-ai-runway-mission-lock {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 79;
+  display: grid;
+  grid-template-rows: auto minmax(46px, 82px) minmax(56px, 110px) auto minmax(110px, 220px);
+  gap: 10px;
+  width: min(450px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(248, 113, 113, 0.32);
+  border-radius: 18px;
+  background: rgba(28, 8, 8, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-mission-lock-header,
+.adjutorix-ai-mission-lock-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-mission-lock-confirm,
+.adjutorix-ai-mission-lock-note,
+.adjutorix-ai-mission-lock-commands,
+.adjutorix-ai-mission-lock-output,
+.adjutorix-ai-mission-lock-actions button {
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(226, 232, 240);
+}
+
+.adjutorix-ai-mission-lock-confirm,
+.adjutorix-ai-mission-lock-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-mission-lock-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-mission-lock-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-mission-lock-note,
+.adjutorix-ai-mission-lock-commands,
+.adjutorix-ai-mission-lock-output {
+  width: 100%;
+  padding: 10px;
+  resize: vertical;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.adjutorix-ai-mission-lock-output {
+  min-height: 110px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+}
