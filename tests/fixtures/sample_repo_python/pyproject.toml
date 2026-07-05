@@ -7,7 +7,7 @@ name = "sample-repo-python"
 version = "0.1.0"
 description = "Python repository fixture for ADJUTORIX integration tests"
 readme = "README.md"
-license = { text = "Apache-2.0" }
+license = { text = "AGPL-3.0-only" }
 requires-python = ">=3.11"
 authors = [
 { name = "ADJUTORIX Fixture" }

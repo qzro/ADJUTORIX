@@ -47,6 +47,7 @@ pnpm run verify
 bash ./scripts/package-macos.sh
 ```
 
+
 ## License
 
 This repository is licensed under the GNU Affero General Public License v3.0 only.

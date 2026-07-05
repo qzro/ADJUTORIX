@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Authoritative governed CLI for ADJUTORIX agent, replay, verify, and patch workflows."
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
-license = { text = "MIT" }
+license = { text = "AGPL-3.0-only" }
 authors = [
   { name = "ADJUTORIX" }
 ]
@@ -26,7 +26,7 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: MIT License",
+  "License :: OSI Approved :: GNU Affero General Public License v3.0 only",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.11",
