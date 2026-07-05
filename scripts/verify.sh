@@ -301,6 +301,12 @@ record_phase() {
   local started="$3"
   local finished="$4"
   local duration_ms="$5"
+
+  # ADJUTORIX_VERIFY_RECORD_PHASE_ARTIFACT_DURABILITY
+  ensure_dir "$ADJUTORIX_VERIFY_REPORT_DIR"
+  if [ ! -f "$ADJUTORIX_VERIFY_PHASE_FILE" ]; then
+    printf 'phase\tstatus\tstarted\tfinished\tduration_ms\n' >"$ADJUTORIX_VERIFY_PHASE_FILE"
+  fi
   printf '%s\t%s\t%s\t%s\t%s\n' "$phase" "$status" "$started" "$finished" "$duration_ms" >>"$ADJUTORIX_VERIFY_PHASE_FILE"
   PHASE_RESULTS+=("${phase}:${status}:${duration_ms}")
 }
