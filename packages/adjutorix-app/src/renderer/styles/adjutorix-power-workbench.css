@@ -1435,3 +1435,72 @@ textarea {
   white-space: pre-wrap;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
+
+
+/* ADJUTORIX_AI_RUNWAY_FINALITY_CERTIFICATE_CSS_V1 */
+
+.adjutorix-ai-runway-finality-certificate {
+  position: fixed;
+  left: 18px;
+  top: 18px;
+  z-index: 87;
+  display: grid;
+  grid-template-rows: auto minmax(44px, 76px) auto minmax(120px, 260px);
+  gap: 10px;
+  width: min(520px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(250, 204, 21, 0.32);
+  border-radius: 18px;
+  background: rgba(32, 28, 8, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-finality-certificate-header,
+.adjutorix-ai-finality-certificate-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-finality-certificate-confirm,
+.adjutorix-ai-finality-certificate-note,
+.adjutorix-ai-finality-certificate-output,
+.adjutorix-ai-finality-certificate-actions button {
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(226, 232, 240);
+}
+
+.adjutorix-ai-finality-certificate-confirm,
+.adjutorix-ai-finality-certificate-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-finality-certificate-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-finality-certificate-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-finality-certificate-note,
+.adjutorix-ai-finality-certificate-output {
+  width: 100%;
+  padding: 10px;
+  resize: vertical;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.adjutorix-ai-finality-certificate-output {
+  min-height: 120px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+}
