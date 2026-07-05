@@ -16,7 +16,7 @@ The AGPL-3.0 network-copyleft condition applies to modified versions made availa
 
 All copyright notices, license notices, attribution records, provenance records, repository-level legal notices, and authorship markers must be preserved unless a later written authorization expressly permits removal.
 
-No file, package, release artifact, documentation surface, hosted surface, or downstream distribution may imply that the work is licensed under Apache-2.0, MIT, proprietary-only terms, or any license other than AGPL-3.0-only unless an explicit future governance act changes the repository license.
+No file, package, release artifact, documentation surface, hosted surface, or downstream distribution may imply that the work is licensed under any license other than AGPL-3.0-only unless an explicit future governance act changes the repository license.
 
 ## Trademark and Identity Boundary
 
