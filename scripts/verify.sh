@@ -1,42 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# ADJUTORIX_VERIFY_REPORT_ARTIFACT_DURABILITY_REPAIR_V2
-adjutorix_verify_ensure_report_artifacts() {
-  local phase_file=""
-  if [ -n "${PHASE_FILE:-}" ]; then
-    phase_file="${PHASE_FILE}"
-  elif [ -n "${PHASES_FILE:-}" ]; then
-    phase_file="${PHASES_FILE}"
-  elif [ -n "${ADJUTORIX_VERIFY_PHASE_FILE:-}" ]; then
-    phase_file="${ADJUTORIX_VERIFY_PHASE_FILE}"
-  elif [ -n "${ADJUTORIX_VERIFY_PHASES_FILE:-}" ]; then
-    phase_file="${ADJUTORIX_VERIFY_PHASES_FILE}"
-  elif [ -n "${REPORT_DIR:-}" ]; then
-    phase_file="${REPORT_DIR}/phases.tsv"
-  elif [ -n "${ADJUTORIX_VERIFY_REPORT_DIR:-}" ]; then
-    phase_file="${ADJUTORIX_VERIFY_REPORT_DIR}/phases.tsv"
-  elif [ -n "${REPO_ROOT:-}" ]; then
-    phase_file="${REPO_ROOT}/.tmp/verify/reports/phases.tsv"
-  else
-    phase_file="$(pwd)/.tmp/verify/reports/phases.tsv"
-  fi
-
-  mkdir -p "$(dirname "$phase_file")"
-
-  if [ ! -f "$phase_file" ]; then
-    adjutorix_verify_ensure_report_artifacts
-    printf 'phase\tstatus\tstarted\tfinished\tduration_ms\n' > "$phase_file"
-  fi
-
-  if [ -n "${SUMMARY_FILE:-}" ]; then
-    mkdir -p "$(dirname "$SUMMARY_FILE")"
-    : "${SUMMARY_FILE}"
-  fi
-}
-
-
-
 ###############################################################################
 # ADJUTORIX REPOSITORY VERIFICATION ENTRYPOINT
 #
@@ -303,11 +267,9 @@ contains_value() {
 
 should_run_phase() {
   local phase="$1"
-  adjutorix_verify_ensure_report_artifacts
   if ((${#ONLY_PHASES[@]} > 0)); then
     contains_value "$phase" "${ONLY_PHASES[@]}" || return 1
   fi
-  adjutorix_verify_ensure_report_artifacts
   if ((${#SKIP_PHASES[@]} > 0)); then
     contains_value "$phase" "${SKIP_PHASES[@]}" && return 1
   fi
@@ -333,14 +295,12 @@ run_cmd_logged() {
   "$@" >>"$ADJUTORIX_VERIFY_BOOT_LOG" 2>&1
 }
 
-adjutorix_verify_ensure_report_artifacts
 record_phase() {
   local phase="$1"
   local status="$2"
   local started="$3"
   local finished="$4"
   local duration_ms="$5"
-  adjutorix_verify_ensure_report_artifacts
   printf '%s\t%s\t%s\t%s\t%s\n' "$phase" "$status" "$started" "$finished" "$duration_ms" >>"$ADJUTORIX_VERIFY_PHASE_FILE"
   PHASE_RESULTS+=("${phase}:${status}:${duration_ms}")
 }
@@ -371,7 +331,6 @@ import time
 print(int(time.time() * 1000) - int(${started_epoch_ms}))
 PY
 )"
-    adjutorix_verify_ensure_report_artifacts
     record_phase "$phase" "PASS" "$started" "$finished" "$duration_ms"
     log_info "Phase passed: ${phase} (${duration_ms} ms)"
   else
@@ -381,7 +340,6 @@ import time
 print(int(time.time() * 1000) - int(${started_epoch_ms}))
 PY
 )"
-    adjutorix_verify_ensure_report_artifacts
     record_phase "$phase" "FAIL" "$started" "$finished" "$duration_ms"
     OVERALL_FAILURES=$((OVERALL_FAILURES + 1))
     log_error "Phase failed: ${phase} (${duration_ms} ms)"
@@ -595,9 +553,7 @@ prepare_runtime_dirs() {
   ensure_dir "$ADJUTORIX_VERIFY_REPORT_DIR"
   : >"$ADJUTORIX_VERIFY_BOOT_LOG"
   : >"$ADJUTORIX_VERIFY_SUMMARY_FILE"
-  adjutorix_verify_ensure_report_artifacts
   : >"$ADJUTORIX_VERIFY_PHASE_FILE"
-  adjutorix_verify_ensure_report_artifacts
   printf 'phase\tstatus\tstarted\tfinished\tduration_ms\n' >"$ADJUTORIX_VERIFY_PHASE_FILE"
 }
 
