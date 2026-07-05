@@ -131,6 +131,9 @@ log_raw() {
   local msg="$*"
   local ts
   ts="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  # ADJUTORIX_VERIFY_BOOT_LOG_DURABILITY
+  mkdir -p "$(dirname "$ADJUTORIX_VERIFY_BOOT_LOG")"
+  : >>"$ADJUTORIX_VERIFY_BOOT_LOG"
   printf '[%s] [%s] %s\n' "$ts" "$level" "$msg" | tee -a "$ADJUTORIX_VERIFY_BOOT_LOG" >&2
 }
 
@@ -146,6 +149,9 @@ die() {
 
 section() {
   local title="$1"
+  # ADJUTORIX_VERIFY_BOOT_LOG_DURABILITY
+  mkdir -p "$(dirname "$ADJUTORIX_VERIFY_BOOT_LOG")"
+  : >>"$ADJUTORIX_VERIFY_BOOT_LOG"
   printf '%s==> %s%s\n' "$C_BOLD$C_CYAN" "$title" "$C_RESET" | tee -a "$ADJUTORIX_VERIFY_BOOT_LOG" >&2
 }
 
