@@ -3094,3 +3094,301 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayLockVerifier();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_VERIFICATION_SEAL_V1
+ *
+ * Manual verification seal recorder:
+ * - reads lock verifier report from the verifier panel
+ * - requires SEAL confirmation
+ * - validates report schema/source/workspace/sha256/path fields
+ * - records a durable seal JSON file into .adjutorix-ai-runway/
+ */
+
+interface AdjutorixVerificationSealWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+}
+
+interface AdjutorixVerificationSealRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixVerificationSealWorkspaceBridge;
+}
+
+function adjutorixVerificationSealWindow(): AdjutorixVerificationSealRuntimeWindow {
+  return window as unknown as AdjutorixVerificationSealRuntimeWindow;
+}
+
+function adjutorixVerificationSealRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixVerificationSealString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixVerificationSealText(selector: string): string {
+  const element = document.querySelector(selector);
+
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.textContent || "";
+  }
+
+  return "";
+}
+
+function adjutorixVerificationSealTimestamp(): string {
+  return new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function adjutorixVerificationSealWorkspace(): Promise<string> {
+  const bridge = adjutorixVerificationSealWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixVerificationSealRecord(defaults);
+    const workspace = adjutorixVerificationSealString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+async function adjutorixVerificationSealSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixVerificationSealParseReport(text: string): Record<string, unknown> {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    throw new Error("verification_report_empty");
+  }
+
+  const parsed = adjutorixVerificationSealRecord(JSON.parse(trimmed));
+
+  if (parsed.schema !== "adjutorix.ai_runway_lock_verification_report.v1") {
+    throw new Error("verification_report_schema_mismatch");
+  }
+
+  if (parsed.source !== "adjutorix-ai-runway-lock-verifier") {
+    throw new Error("verification_report_source_mismatch");
+  }
+
+  if (!adjutorixVerificationSealString(parsed.workspace)) {
+    throw new Error("verification_report_workspace_missing");
+  }
+
+  if (!adjutorixVerificationSealString(parsed.path)) {
+    throw new Error("verification_report_path_missing");
+  }
+
+  if (!adjutorixVerificationSealString(parsed.sha256)) {
+    throw new Error("verification_report_sha256_missing");
+  }
+
+  return parsed;
+}
+
+function installAdjutorixAiRunwayVerificationSeal(): void {
+  if (document.getElementById("adjutorix-ai-runway-verification-seal")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-verification-seal";
+  panel.className = "adjutorix-ai-runway-verification-seal";
+  panel.setAttribute("aria-label", "Adjutorix AI runway verification seal");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-verification-seal-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Verification Seal";
+
+  const confirm = document.createElement("input");
+  confirm.className = "adjutorix-ai-verification-seal-confirm";
+  confirm.placeholder = "Type SEAL";
+  confirm.spellcheck = false;
+
+  header.appendChild(title);
+  header.appendChild(confirm);
+
+  const note = document.createElement("textarea");
+  note.className = "adjutorix-ai-verification-seal-note";
+  note.placeholder = "Operator seal note...";
+  note.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-verification-seal-actions";
+
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.textContent = "Preview Seal";
+
+  const sealButton = document.createElement("button");
+  sealButton.type = "button";
+  sealButton.textContent = "Seal Report";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Seal";
+
+  actions.appendChild(previewButton);
+  actions.appendChild(sealButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-verification-seal-output";
+  output.textContent = "Verification seal mounted. Verify a mission lock first, then type SEAL.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  async function buildSeal(): Promise<Record<string, unknown>> {
+    const workspace = await adjutorixVerificationSealWorkspace();
+
+    if (!workspace) {
+      throw new Error("workspace_not_resolved");
+    }
+
+    const reportText = adjutorixVerificationSealText(".adjutorix-ai-lock-verifier-output");
+    const report = adjutorixVerificationSealParseReport(reportText);
+    const reportSha256 = await adjutorixVerificationSealSha256(reportText);
+    const missionSnapshotText = adjutorixVerificationSealText(".adjutorix-ai-mission-output");
+    const missionSnapshotSha256 = await adjutorixVerificationSealSha256(missionSnapshotText);
+
+    return {
+      schema: "adjutorix.ai_runway_verification_seal.v1",
+      source: "adjutorix-ai-runway-verification-seal",
+      sealed_at: new Date().toISOString(),
+      workspace,
+      operator_note: note.value,
+      verification_report_sha256: reportSha256,
+      mission_snapshot_sha256: missionSnapshotSha256,
+      verification_report: report,
+      mission_control_snapshot_text: missionSnapshotText,
+    };
+  }
+
+  async function writeSeal(seal: Record<string, unknown>): Promise<{ path: string; bytes: number }> {
+    const bridge = adjutorixVerificationSealWindow().adjutorixWorkspaceOS;
+
+    if (!bridge?.writeText) {
+      throw new Error("workspace_write_bridge_unavailable");
+    }
+
+    const workspace = adjutorixVerificationSealString(seal.workspace);
+    const path = `.adjutorix-ai-runway/${adjutorixVerificationSealTimestamp()}-verification-seal.json`;
+    const content = JSON.stringify(seal, null, 2) + "\n";
+
+    await bridge.writeText({ workspace, path, content });
+
+    return { path, bytes: content.length };
+  }
+
+  previewButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(previewButton, true);
+      try {
+        const seal = await buildSeal();
+        setOutput(JSON.stringify(seal, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_VERIFICATION_SEAL_PREVIEW_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-verification-seal",
+          workspace: seal.workspace,
+        }));
+      } catch (error) {
+        setOutput(`VERIFICATION SEAL PREVIEW FAILED\n${String(error)}`);
+      } finally {
+        setBusy(previewButton, false);
+      }
+    })();
+  });
+
+  sealButton.addEventListener("click", () => {
+    void (async () => {
+      if (confirm.value.trim() !== "SEAL") {
+        setOutput("Verification seal blocked. Type SEAL in the confirmation field.");
+        return;
+      }
+
+      setBusy(sealButton, true);
+      try {
+        const seal = await buildSeal();
+        const written = await writeSeal(seal);
+
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, ...written, seal }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_VERIFICATION_SEAL_RECORDED", JSON.stringify({
+          source: "adjutorix-ai-runway-verification-seal",
+          workspace: seal.workspace,
+          path: written.path,
+          bytes: written.bytes,
+          seals: "adjutorix.ai_runway_lock_verification_report.v1",
+        }));
+      } catch (error) {
+        setOutput(`VERIFICATION SEAL FAILED\n${String(error)}`);
+      } finally {
+        setBusy(sealButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(note);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_VERIFICATION_SEAL_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-verification-seal",
+    writes: ".adjutorix-ai-runway",
+    requires: "manual-seal-confirmation",
+    seals: "adjutorix.ai_runway_lock_verification_report.v1",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayVerificationSeal, { once: true });
+} else {
+  installAdjutorixAiRunwayVerificationSeal();
+}
