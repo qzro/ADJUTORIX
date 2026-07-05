@@ -2746,3 +2746,351 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayMissionLock();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_LOCK_VERIFIER_V1
+ *
+ * Mission lock verifier:
+ * - scans workspace for .adjutorix-ai-runway/*mission-lock*.json
+ * - reads selected lock JSON through workspace OS
+ * - validates schema/source/workspace/required evidence fields
+ * - computes SHA-256 content hash
+ * - emits a local verification report
+ */
+
+interface AdjutorixLockVerifierWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<unknown>;
+}
+
+interface AdjutorixLockVerifierRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixLockVerifierWorkspaceBridge;
+}
+
+interface AdjutorixLockVerifierValidation {
+  ok: boolean;
+  failures: string[];
+}
+
+function adjutorixLockVerifierWindow(): AdjutorixLockVerifierRuntimeWindow {
+  return window as unknown as AdjutorixLockVerifierRuntimeWindow;
+}
+
+function adjutorixLockVerifierRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixLockVerifierArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixLockVerifierString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixLockVerifierPath(value: unknown): string {
+  const record = adjutorixLockVerifierRecord(value);
+  return adjutorixLockVerifierString(
+    record.path || record.relativePath || record.file || record.name,
+  );
+}
+
+async function adjutorixLockVerifierWorkspace(): Promise<string> {
+  const bridge = adjutorixLockVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixLockVerifierRecord(defaults);
+    const workspace = adjutorixLockVerifierString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixLockVerifierFilesFromScan(scanResult: unknown): string[] {
+  const record = adjutorixLockVerifierRecord(scanResult);
+  const files = adjutorixLockVerifierArray(record.files || record.entries || record.items);
+
+  return files
+    .map(adjutorixLockVerifierPath)
+    .filter((path) => path.includes(".adjutorix-ai-runway/"))
+    .filter((path) => path.includes("mission-lock"))
+    .filter((path) => path.endsWith(".json"))
+    .sort();
+}
+
+async function adjutorixLockVerifierSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixLockVerifierValidate(lock: Record<string, unknown>): AdjutorixLockVerifierValidation {
+  const failures: string[] = [];
+
+  if (lock.schema !== "adjutorix.ai_runway_mission_lock.v1") {
+    failures.push("schema_mismatch");
+  }
+
+  if (lock.source !== "adjutorix-ai-runway-mission-lock") {
+    failures.push("source_mismatch");
+  }
+
+  if (!adjutorixLockVerifierString(lock.locked_at)) {
+    failures.push("locked_at_missing");
+  }
+
+  if (!adjutorixLockVerifierString(lock.workspace)) {
+    failures.push("workspace_missing");
+  }
+
+  if (!adjutorixLockVerifierString(lock.mission_control_snapshot_text)) {
+    failures.push("mission_control_snapshot_text_missing");
+  }
+
+  if (!adjutorixLockVerifierString(lock.git_diff_snapshot)) {
+    failures.push("git_diff_snapshot_missing");
+  }
+
+  if (!Array.isArray(lock.planned_commands)) {
+    failures.push("planned_commands_not_array");
+  }
+
+  if (!Array.isArray(lock.command_results)) {
+    failures.push("command_results_not_array");
+  }
+
+  if (typeof lock.ran_checks !== "boolean") {
+    failures.push("ran_checks_not_boolean");
+  }
+
+  return {
+    ok: failures.length === 0,
+    failures,
+  };
+}
+
+function installAdjutorixAiRunwayLockVerifier(): void {
+  if (document.getElementById("adjutorix-ai-runway-lock-verifier")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-lock-verifier";
+  panel.className = "adjutorix-ai-runway-lock-verifier";
+  panel.setAttribute("aria-label", "Adjutorix AI runway lock verifier");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-lock-verifier-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Lock Verifier";
+
+  const state = document.createElement("span");
+  state.className = "adjutorix-ai-lock-verifier-state";
+  state.textContent = "idle";
+
+  header.appendChild(title);
+  header.appendChild(state);
+
+  const select = document.createElement("select");
+  select.className = "adjutorix-ai-lock-verifier-select";
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-lock-verifier-actions";
+
+  const scanButton = document.createElement("button");
+  scanButton.type = "button";
+  scanButton.textContent = "Scan Locks";
+
+  const verifyButton = document.createElement("button");
+  verifyButton.type = "button";
+  verifyButton.textContent = "Verify Selected";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Report";
+
+  actions.appendChild(scanButton);
+  actions.appendChild(verifyButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-lock-verifier-output";
+  output.textContent = "Lock verifier mounted. Scan for mission locks.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  function setState(value: string): void {
+    state.textContent = value;
+  }
+
+  scanButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixLockVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.scan) {
+        setOutput("Workspace OS scan bridge unavailable.");
+        return;
+      }
+
+      setBusy(scanButton, true);
+      setState("scanning");
+
+      try {
+        const workspace = await adjutorixLockVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const scanResult = await bridge.scan(workspace);
+        const locks = adjutorixLockVerifierFilesFromScan(scanResult);
+
+        select.replaceChildren();
+
+        for (const lockPath of locks) {
+          const option = document.createElement("option");
+          option.value = lockPath;
+          option.textContent = lockPath;
+          select.appendChild(option);
+        }
+
+        setState(locks.length ? "locks found" : "no locks");
+        setOutput(JSON.stringify({
+          ok: true,
+          workspace,
+          lock_count: locks.length,
+          locks,
+        }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_LOCK_VERIFIER_SCAN_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-lock-verifier",
+          workspace,
+          lock_count: locks.length,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`LOCK SCAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(scanButton, false);
+      }
+    })();
+  });
+
+  verifyButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixLockVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.readText) {
+        setOutput("Workspace OS read bridge unavailable.");
+        return;
+      }
+
+      if (!select.value) {
+        setOutput("No lock selected.");
+        return;
+      }
+
+      setBusy(verifyButton, true);
+      setState("verifying");
+
+      try {
+        const workspace = await adjutorixLockVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const readResult = await bridge.readText({ workspace, path: select.value });
+        const readRecord = adjutorixLockVerifierRecord(readResult);
+        const content = adjutorixLockVerifierString(readRecord.content || readResult);
+        const parsed = adjutorixLockVerifierRecord(JSON.parse(content));
+        const validation = adjutorixLockVerifierValidate(parsed);
+        const sha256 = await adjutorixLockVerifierSha256(content);
+
+        const report = {
+          schema: "adjutorix.ai_runway_lock_verification_report.v1",
+          source: "adjutorix-ai-runway-lock-verifier",
+          verified_at: new Date().toISOString(),
+          workspace,
+          path: select.value,
+          sha256,
+          validation,
+          lock: parsed,
+        };
+
+        setState(validation.ok ? "valid" : "invalid");
+        setOutput(JSON.stringify(report, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_LOCK_VERIFIED", JSON.stringify({
+          source: "adjutorix-ai-runway-lock-verifier",
+          workspace,
+          path: select.value,
+          sha256,
+          ok: validation.ok,
+          failures: validation.failures,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`LOCK VERIFY FAILED\n${String(error)}`);
+      } finally {
+        setBusy(verifyButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(select);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_LOCK_VERIFIER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-lock-verifier",
+    reads: ".adjutorix-ai-runway",
+    verifies: "adjutorix.ai_runway_mission_lock.v1",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayLockVerifier, { once: true });
+} else {
+  installAdjutorixAiRunwayLockVerifier();
+}
