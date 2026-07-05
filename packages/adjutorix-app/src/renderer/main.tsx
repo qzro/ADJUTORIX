@@ -3756,3 +3756,312 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwaySealVerifier();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_ARTIFACT_INDEX_V1
+ *
+ * AI runway artifact index:
+ * - scans .adjutorix-ai-runway JSON artifacts
+ * - reads each artifact through workspace OS
+ * - extracts schema/source/path/size/hash/status
+ * - groups artifacts by schema
+ * - manually writes a durable index JSON after INDEX confirmation
+ */
+
+interface AdjutorixArtifactIndexWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<unknown>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+}
+
+interface AdjutorixArtifactIndexRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixArtifactIndexWorkspaceBridge;
+}
+
+function adjutorixArtifactIndexWindow(): AdjutorixArtifactIndexRuntimeWindow {
+  return window as unknown as AdjutorixArtifactIndexRuntimeWindow;
+}
+
+function adjutorixArtifactIndexRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixArtifactIndexArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixArtifactIndexString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixArtifactIndexPath(value: unknown): string {
+  const record = adjutorixArtifactIndexRecord(value);
+  return adjutorixArtifactIndexString(record.path || record.relativePath || record.file || record.name);
+}
+
+function adjutorixArtifactIndexTimestamp(): string {
+  return new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function adjutorixArtifactIndexWorkspace(): Promise<string> {
+  const bridge = adjutorixArtifactIndexWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixArtifactIndexRecord(defaults);
+    const workspace = adjutorixArtifactIndexString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixArtifactIndexFilesFromScan(scanResult: unknown): string[] {
+  const record = adjutorixArtifactIndexRecord(scanResult);
+  const files = adjutorixArtifactIndexArray(record.files || record.entries || record.items);
+
+  return files
+    .map(adjutorixArtifactIndexPath)
+    .filter((path) => path.includes(".adjutorix-ai-runway/"))
+    .filter((path) => path.endsWith(".json"))
+    .sort();
+}
+
+async function adjutorixArtifactIndexSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function adjutorixArtifactIndexBuild(): Promise<Record<string, unknown>> {
+  const bridge = adjutorixArtifactIndexWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.scan || !bridge.readText) {
+    throw new Error("workspace_scan_or_read_bridge_unavailable");
+  }
+
+  const workspace = await adjutorixArtifactIndexWorkspace();
+
+  if (!workspace) {
+    throw new Error("workspace_not_resolved");
+  }
+
+  const scanResult = await bridge.scan(workspace);
+  const paths = adjutorixArtifactIndexFilesFromScan(scanResult);
+  const artifacts: Array<Record<string, unknown>> = [];
+  const countsBySchema: Record<string, number> = {};
+
+  for (const path of paths) {
+    const readResult = await bridge.readText({ workspace, path });
+    const readRecord = adjutorixArtifactIndexRecord(readResult);
+    const content = adjutorixArtifactIndexString(readRecord.content || readResult);
+    const sha256 = await adjutorixArtifactIndexSha256(content);
+
+    let parsed: Record<string, unknown> = {};
+    let parseOk = false;
+    let parseError = "";
+
+    try {
+      parsed = adjutorixArtifactIndexRecord(JSON.parse(content));
+      parseOk = true;
+    } catch (error) {
+      parseError = String(error);
+    }
+
+    const schema = adjutorixArtifactIndexString(parsed.schema || "unknown");
+    const source = adjutorixArtifactIndexString(parsed.source || "unknown");
+
+    countsBySchema[schema] = (countsBySchema[schema] || 0) + 1;
+
+    artifacts.push({
+      path,
+      bytes: content.length,
+      sha256,
+      parse_ok: parseOk,
+      parse_error: parseError,
+      schema,
+      source,
+      workspace: adjutorixArtifactIndexString(parsed.workspace),
+      created_at: adjutorixArtifactIndexString(
+        parsed.created_at || parsed.recorded_at || parsed.locked_at || parsed.sealed_at || parsed.verified_at,
+      ),
+    });
+  }
+
+  return {
+    schema: "adjutorix.ai_runway_artifact_index.v1",
+    source: "adjutorix-ai-runway-artifact-index",
+    indexed_at: new Date().toISOString(),
+    workspace,
+    artifact_count: artifacts.length,
+    counts_by_schema: countsBySchema,
+    artifacts,
+  };
+}
+
+function installAdjutorixAiRunwayArtifactIndex(): void {
+  if (document.getElementById("adjutorix-ai-runway-artifact-index")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-artifact-index";
+  panel.className = "adjutorix-ai-runway-artifact-index";
+  panel.setAttribute("aria-label", "Adjutorix AI runway artifact index");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-artifact-index-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Artifact Index";
+
+  const confirm = document.createElement("input");
+  confirm.className = "adjutorix-ai-artifact-index-confirm";
+  confirm.placeholder = "Type INDEX";
+  confirm.spellcheck = false;
+
+  header.appendChild(title);
+  header.appendChild(confirm);
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-artifact-index-actions";
+
+  const buildButton = document.createElement("button");
+  buildButton.type = "button";
+  buildButton.textContent = "Build Index";
+
+  const writeButton = document.createElement("button");
+  writeButton.type = "button";
+  writeButton.textContent = "Write Index";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Index";
+
+  actions.appendChild(buildButton);
+  actions.appendChild(writeButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-artifact-index-output";
+  output.textContent = "Artifact index mounted. Build index before writing.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  async function writeIndex(index: Record<string, unknown>): Promise<{ path: string; bytes: number }> {
+    const bridge = adjutorixArtifactIndexWindow().adjutorixWorkspaceOS;
+
+    if (!bridge?.writeText) {
+      throw new Error("workspace_write_bridge_unavailable");
+    }
+
+    const workspace = adjutorixArtifactIndexString(index.workspace);
+    const path = `.adjutorix-ai-runway/${adjutorixArtifactIndexTimestamp()}-artifact-index.json`;
+    const content = JSON.stringify(index, null, 2) + "\n";
+
+    await bridge.writeText({ workspace, path, content });
+
+    return { path, bytes: content.length };
+  }
+
+  buildButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(buildButton, true);
+      try {
+        const index = await adjutorixArtifactIndexBuild();
+        setOutput(JSON.stringify(index, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_ARTIFACT_INDEX_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-artifact-index",
+          workspace: index.workspace,
+          artifact_count: index.artifact_count,
+        }));
+      } catch (error) {
+        setOutput(`ARTIFACT INDEX BUILD FAILED\n${String(error)}`);
+      } finally {
+        setBusy(buildButton, false);
+      }
+    })();
+  });
+
+  writeButton.addEventListener("click", () => {
+    void (async () => {
+      if (confirm.value.trim() !== "INDEX") {
+        setOutput("Artifact index write blocked. Type INDEX in the confirmation field.");
+        return;
+      }
+
+      setBusy(writeButton, true);
+      try {
+        const index = await adjutorixArtifactIndexBuild();
+        const written = await writeIndex(index);
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, ...written, index }, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_ARTIFACT_INDEX_RECORDED", JSON.stringify({
+          source: "adjutorix-ai-runway-artifact-index",
+          workspace: index.workspace,
+          path: written.path,
+          bytes: written.bytes,
+          artifact_count: index.artifact_count,
+        }));
+      } catch (error) {
+        setOutput(`ARTIFACT INDEX WRITE FAILED\n${String(error)}`);
+      } finally {
+        setBusy(writeButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_ARTIFACT_INDEX_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-artifact-index",
+    reads: ".adjutorix-ai-runway",
+    writes: ".adjutorix-ai-runway",
+    requires: "manual-index-confirmation",
+    indexes: "json-artifacts",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayArtifactIndex, { once: true });
+} else {
+  installAdjutorixAiRunwayArtifactIndex();
+}
