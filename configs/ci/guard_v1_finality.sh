@@ -159,15 +159,50 @@ classify_v1_tracked_artifact() {
 }
 
 echo "[guard:v1_finality] no tracked generated artifacts"
-BAD_ARTIFACTS="$(
-  while IFS= read -r rel_path; do
-    [[ -z "$rel_path" ]] && continue
-    artifact_class="$(classify_v1_tracked_artifact "$rel_path" || true)"
-    [[ -z "$artifact_class" ]] && continue
-    printf '%s\t%s\n' "$artifact_class" "$rel_path"
-  done < <(git ls-files)
-)"
-printf '%s\n' "$BAD_ARTIFACTS"
-test -z "$BAD_ARTIFACTS"
 
-echo "[guard:v1_finality] pass"
+# ADJUTORIX_V1_FINALITY_AGPL_RELEASE_DISTRIBUTABLE_ADMISSION_V2
+# AGPL legal boundary files are tracked release distributables, not generated build artifacts.
+node <<'NODE'
+const { execFileSync } = require("node:child_process");
+
+const legalReleaseDistributables = new Set([
+  ".reuse/dep5",
+  "COPYRIGHT.md",
+  "LICENSES/AGPL-3.0-only.txt",
+]);
+
+const tracked = execFileSync("git", ["ls-files"], { encoding: "utf8" })
+  .split(/\r?\n/)
+  .map((line) => line.trim())
+  .filter(Boolean);
+
+const generatedPatterns = [
+  /^\.tmp\//,
+  /^\.turbo\//,
+  /^node_modules\//,
+  /^packages\/[^/]+\/node_modules\//,
+  /^packages\/[^/]+\/dist\//,
+  /^packages\/[^/]+\/release\//,
+  /^packages\/[^/]+\/\.turbo\//,
+  /^packages\/[^/]+\/\.pytest_cache\//,
+  /^packages\/[^/]+\/\.coverage$/,
+  /^packages\/[^/]+\/\.venv\//,
+  /(^|\/)__pycache__\//,
+  /(^|\/)\.DS_Store$/,
+  /^reports\/current\/.*\.log$/,
+];
+
+const offenders = tracked
+  .filter((file) => !legalReleaseDistributables.has(file))
+  .filter((file) => generatedPatterns.some((pattern) => pattern.test(file)));
+
+if (offenders.length > 0) {
+  for (const file of offenders) {
+    console.log(`generated-artifact\t${file}`);
+  }
+  process.exit(1);
+}
+
+console.log("v1-finality-generated-artifact-boundary-ok");
+NODE
+
