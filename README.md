@@ -47,6 +47,13 @@ pnpm run verify
 bash ./scripts/package-macos.sh
 ```
 
+
 ## License
 
-Licensed under the Apache License, Version 2.0.
+This repository is licensed under the GNU Affero General Public License v3.0 only.
+
+SPDX-License-Identifier: AGPL-3.0-only
+
+Copyright (C) 2026 qzro / Midia Kiasat.
+
+See [LICENSE](LICENSE), [COPYRIGHT.md](COPYRIGHT.md), and [.reuse/dep5](.reuse/dep5).\n\n## Copyright and License Boundary\n\nCopyright (C) 2026 qzro / Midia Kiasat.\n\nThis repository is licensed under the GNU Affero General Public License v3.0 only.\n\nSPDX-License-Identifier: AGPL-3.0-only\n\nAll copyright notices, attribution records, provenance records, repository-level legal notices, and authorship markers must be preserved. No repository surface may imply that the work is licensed under any license other than AGPL-3.0-only unless a later explicit governance act changes the license boundary.\n\n

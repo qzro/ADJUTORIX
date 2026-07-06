@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Adjutorix Desktop Application — Deterministic Patch-Oriented Workspace",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "author": "Adjutorix",
   "engines": {
     "node": ">=20.0.0",

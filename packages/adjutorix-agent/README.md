@@ -49,4 +49,4 @@ bash ./scripts/package-macos.sh
 
 ## License
 
-Licensed under the Apache License, Version 2.0.
+Licensed under the GNU Affero General Public License v3.0 only.

@@ -1,0 +1,7 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: ADJUTORIX
+Source: https://github.com/qzro/ADJUTORIX
+
+Files: *
+Copyright: 2026 qzro / Midia Kiasat
+License: AGPL-3.0-only

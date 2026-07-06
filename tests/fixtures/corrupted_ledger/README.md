@@ -11,4 +11,4 @@ This directory intentionally contains malformed and contradictory ledger artifac
 
 ## License
 
-Licensed under the Apache License, Version 2.0.
+Licensed under the GNU Affero General Public License v3.0 only.
