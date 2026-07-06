@@ -6193,3 +6193,409 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalAttestation();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_ATTESTATION_VERIFIER_V1
+ *
+ * Terminal attestation verifier:
+ * - scans .adjutorix-ai-runway for terminal-attestation JSON files
+ * - reads selected terminal attestation through workspace OS
+ * - validates schema/source/workspace/report fields
+ * - recomputes SHA-256 over attestation content
+ * - recomputes embedded verifier report hash from canonical JSON
+ * - recomputes embedded mission snapshot hash
+ * - emits terminal attestation verification report
+ */
+
+interface AdjutorixTerminalAttestationVerifierWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<unknown>;
+}
+
+interface AdjutorixTerminalAttestationVerifierRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalAttestationVerifierWorkspaceBridge;
+}
+
+interface AdjutorixTerminalAttestationVerifierValidation {
+  ok: boolean;
+  failures: string[];
+}
+
+function adjutorixTerminalAttestationVerifierWindow(): AdjutorixTerminalAttestationVerifierRuntimeWindow {
+  return window as unknown as AdjutorixTerminalAttestationVerifierRuntimeWindow;
+}
+
+function adjutorixTerminalAttestationVerifierRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalAttestationVerifierArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixTerminalAttestationVerifierString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalAttestationVerifierPath(value: unknown): string {
+  const record = adjutorixTerminalAttestationVerifierRecord(value);
+  return adjutorixTerminalAttestationVerifierString(
+    record.path || record.relativePath || record.file || record.name,
+  );
+}
+
+async function adjutorixTerminalAttestationVerifierWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalAttestationVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalAttestationVerifierRecord(defaults);
+    const workspace = adjutorixTerminalAttestationVerifierString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixTerminalAttestationVerifierFilesFromScan(scanResult: unknown): string[] {
+  const record = adjutorixTerminalAttestationVerifierRecord(scanResult);
+  const files = adjutorixTerminalAttestationVerifierArray(record.files || record.entries || record.items);
+
+  return files
+    .map(adjutorixTerminalAttestationVerifierPath)
+    .filter((path) => path.includes(".adjutorix-ai-runway/"))
+    .filter((path) => path.includes("terminal-attestation"))
+    .filter((path) => path.endsWith(".json"))
+    .sort();
+}
+
+async function adjutorixTerminalAttestationVerifierSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixTerminalAttestationVerifierValidate(
+  attestation: Record<string, unknown>,
+  actualReportSha256: string,
+  actualMissionSnapshotSha256: string,
+): AdjutorixTerminalAttestationVerifierValidation {
+  const failures: string[] = [];
+  const report = adjutorixTerminalAttestationVerifierRecord(
+    attestation.finality_certificate_verification_report,
+  );
+
+  if (attestation.schema !== "adjutorix.ai_runway_terminal_attestation.v1") {
+    failures.push("schema_mismatch");
+  }
+
+  if (attestation.source !== "adjutorix-ai-runway-terminal-attestation") {
+    failures.push("source_mismatch");
+  }
+
+  if (!adjutorixTerminalAttestationVerifierString(attestation.attested_at)) {
+    failures.push("attested_at_missing");
+  }
+
+  if (!adjutorixTerminalAttestationVerifierString(attestation.workspace)) {
+    failures.push("workspace_missing");
+  }
+
+  if (!adjutorixTerminalAttestationVerifierString(attestation.finality_certificate_verification_report_sha256)) {
+    failures.push("finality_certificate_verification_report_sha256_missing");
+  }
+
+  if (!adjutorixTerminalAttestationVerifierString(attestation.mission_snapshot_sha256)) {
+    failures.push("mission_snapshot_sha256_missing");
+  }
+
+  if (!adjutorixTerminalAttestationVerifierString(attestation.mission_control_snapshot_text)) {
+    failures.push("mission_control_snapshot_text_missing");
+  }
+
+  if (attestation.finality_certificate_verification_report_sha256 !== actualReportSha256) {
+    failures.push("finality_certificate_verification_report_sha256_mismatch");
+  }
+
+  if (attestation.mission_snapshot_sha256 !== actualMissionSnapshotSha256) {
+    failures.push("mission_snapshot_sha256_mismatch");
+  }
+
+  if (report.schema !== "adjutorix.ai_runway_finality_certificate_verification_report.v1") {
+    failures.push("finality_certificate_verification_report_schema_mismatch");
+  }
+
+  if (report.source !== "adjutorix-ai-runway-finality-certificate-verifier") {
+    failures.push("finality_certificate_verification_report_source_mismatch");
+  }
+
+  if (report.ok !== true) {
+    failures.push("finality_certificate_verification_report_not_ok");
+  }
+
+  if (!adjutorixTerminalAttestationVerifierString(report.workspace)) {
+    failures.push("finality_certificate_verification_report_workspace_missing");
+  }
+
+  if (!adjutorixTerminalAttestationVerifierString(report.path)) {
+    failures.push("finality_certificate_verification_report_path_missing");
+  }
+
+  if (!adjutorixTerminalAttestationVerifierString(report.certificate_sha256)) {
+    failures.push("finality_certificate_verification_report_certificate_sha256_missing");
+  }
+
+  return { ok: failures.length === 0, failures };
+}
+
+function installAdjutorixAiRunwayTerminalAttestationVerifier(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-attestation-verifier")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-attestation-verifier";
+  panel.className = "adjutorix-ai-runway-terminal-attestation-verifier";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal attestation verifier");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-attestation-verifier-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Attestation Verifier";
+
+  const state = document.createElement("span");
+  state.className = "adjutorix-ai-terminal-attestation-verifier-state";
+  state.textContent = "idle";
+
+  header.appendChild(title);
+  header.appendChild(state);
+
+  const select = document.createElement("select");
+  select.className = "adjutorix-ai-terminal-attestation-verifier-select";
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-attestation-verifier-actions";
+
+  const scanButton = document.createElement("button");
+  scanButton.type = "button";
+  scanButton.textContent = "Scan Attestations";
+
+  const verifyButton = document.createElement("button");
+  verifyButton.type = "button";
+  verifyButton.textContent = "Verify Attestation";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Report";
+
+  actions.appendChild(scanButton);
+  actions.appendChild(verifyButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-attestation-verifier-output";
+  output.textContent = "Terminal attestation verifier mounted. Scan for attestations.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setState(value: string): void {
+    state.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  scanButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixTerminalAttestationVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.scan) {
+        setOutput("Workspace OS scan bridge unavailable.");
+        return;
+      }
+
+      setBusy(scanButton, true);
+      setState("scanning");
+
+      try {
+        const workspace = await adjutorixTerminalAttestationVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const scanResult = await bridge.scan(workspace);
+        const attestations = adjutorixTerminalAttestationVerifierFilesFromScan(scanResult);
+
+        select.replaceChildren();
+
+        for (const attestationPath of attestations) {
+          const option = document.createElement("option");
+          option.value = attestationPath;
+          option.textContent = attestationPath;
+          select.appendChild(option);
+        }
+
+        setState(attestations.length ? "attestations found" : "no attestations");
+        setOutput(JSON.stringify({
+          ok: true,
+          workspace,
+          attestation_count: attestations.length,
+          attestations,
+        }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_ATTESTATION_VERIFIER_SCAN_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-attestation-verifier",
+          workspace,
+          attestation_count: attestations.length,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL ATTESTATION SCAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(scanButton, false);
+      }
+    })();
+  });
+
+  verifyButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixTerminalAttestationVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.readText) {
+        setOutput("Workspace OS read bridge unavailable.");
+        return;
+      }
+
+      if (!select.value) {
+        setOutput("No terminal attestation selected.");
+        return;
+      }
+
+      setBusy(verifyButton, true);
+      setState("verifying");
+
+      try {
+        const workspace = await adjutorixTerminalAttestationVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const readResult = await bridge.readText({ workspace, path: select.value });
+        const readRecord = adjutorixTerminalAttestationVerifierRecord(readResult);
+        const content = adjutorixTerminalAttestationVerifierString(readRecord.content || readResult);
+        const parsed = adjutorixTerminalAttestationVerifierRecord(JSON.parse(content));
+        const attestationSha256 = await adjutorixTerminalAttestationVerifierSha256(content);
+
+        const report = adjutorixTerminalAttestationVerifierRecord(
+          parsed.finality_certificate_verification_report,
+        );
+        const canonicalReportText = JSON.stringify(report, null, 2);
+        const actualReportSha256 = await adjutorixTerminalAttestationVerifierSha256(canonicalReportText);
+
+        const missionSnapshotText = adjutorixTerminalAttestationVerifierString(parsed.mission_control_snapshot_text);
+        const missionSnapshotSha256 = await adjutorixTerminalAttestationVerifierSha256(missionSnapshotText);
+
+        const validation = adjutorixTerminalAttestationVerifierValidate(
+          parsed,
+          actualReportSha256,
+          missionSnapshotSha256,
+        );
+
+        const verificationReport = {
+          schema: "adjutorix.ai_runway_terminal_attestation_verification_report.v1",
+          source: "adjutorix-ai-runway-terminal-attestation-verifier",
+          verified_at: new Date().toISOString(),
+          workspace,
+          path: select.value,
+          attestation_sha256: attestationSha256,
+          ok: validation.ok,
+          validation,
+          hashes: {
+            finality_certificate_verification_report: {
+              ok: parsed.finality_certificate_verification_report_sha256 === actualReportSha256,
+              expected_sha256: parsed.finality_certificate_verification_report_sha256,
+              actual_sha256: actualReportSha256,
+            },
+            mission_snapshot: {
+              ok: parsed.mission_snapshot_sha256 === missionSnapshotSha256,
+              expected_sha256: parsed.mission_snapshot_sha256,
+              actual_sha256: missionSnapshotSha256,
+            },
+          },
+          attestation: parsed,
+        };
+
+        setState(validation.ok ? "valid" : "invalid");
+        setOutput(JSON.stringify(verificationReport, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_ATTESTATION_VERIFIED", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-attestation-verifier",
+          workspace,
+          path: select.value,
+          attestation_sha256: attestationSha256,
+          ok: validation.ok,
+          failures: validation.failures,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL ATTESTATION VERIFY FAILED\n${String(error)}`);
+      } finally {
+        setBusy(verifyButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(select);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_ATTESTATION_VERIFIER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-attestation-verifier",
+    reads: ".adjutorix-ai-runway",
+    verifies: "adjutorix.ai_runway_terminal_attestation.v1",
+    recomputes: "sha256",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalAttestationVerifier, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalAttestationVerifier();
+}
