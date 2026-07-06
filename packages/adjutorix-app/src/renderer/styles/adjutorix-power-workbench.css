@@ -2086,3 +2086,73 @@ textarea {
   white-space: pre-wrap;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
+
+
+/* ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_CERTIFICATE_CSS_V1 */
+
+.adjutorix-ai-runway-terminal-release-certificate {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 96;
+  display: grid;
+  grid-template-rows: auto minmax(44px, 76px) auto minmax(120px, 280px);
+  gap: 10px;
+  width: min(520px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(251, 146, 60, 0.34);
+  border-radius: 18px;
+  background: rgba(43, 22, 8, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  transform: translateX(-50%);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-terminal-release-certificate-header,
+.adjutorix-ai-terminal-release-certificate-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-terminal-release-certificate-confirm,
+.adjutorix-ai-terminal-release-certificate-note,
+.adjutorix-ai-terminal-release-certificate-output,
+.adjutorix-ai-terminal-release-certificate-actions button {
+  border: 1px solid rgba(251, 146, 60, 0.3);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(255, 237, 213);
+}
+
+.adjutorix-ai-terminal-release-certificate-confirm,
+.adjutorix-ai-terminal-release-certificate-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-terminal-release-certificate-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-terminal-release-certificate-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-terminal-release-certificate-note,
+.adjutorix-ai-terminal-release-certificate-output {
+  width: 100%;
+  padding: 10px;
+  resize: vertical;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.adjutorix-ai-terminal-release-certificate-output {
+  min-height: 120px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+}
