@@ -7879,3 +7879,417 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalReleaseCapsule();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_CAPSULE_VERIFIER_V1
+ *
+ * Terminal release capsule verifier:
+ * - scans .adjutorix-ai-runway for terminal-release-capsule JSON files
+ * - reads selected capsule through Workspace OS
+ * - validates capsule schema/source/workspace/report fields
+ * - recomputes SHA-256 over capsule content
+ * - recomputes embedded snapshot-verification report hash from canonical JSON
+ * - recomputes embedded mission snapshot hash
+ * - emits terminal release capsule verification report
+ */
+
+interface AdjutorixTerminalReleaseCapsuleVerifierWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<unknown>;
+}
+
+interface AdjutorixTerminalReleaseCapsuleVerifierRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalReleaseCapsuleVerifierWorkspaceBridge;
+}
+
+interface AdjutorixTerminalReleaseCapsuleVerifierValidation {
+  ok: boolean;
+  failures: string[];
+}
+
+function adjutorixTerminalReleaseCapsuleVerifierWindow(): AdjutorixTerminalReleaseCapsuleVerifierRuntimeWindow {
+  return window as unknown as AdjutorixTerminalReleaseCapsuleVerifierRuntimeWindow;
+}
+
+function adjutorixTerminalReleaseCapsuleVerifierRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalReleaseCapsuleVerifierArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixTerminalReleaseCapsuleVerifierString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalReleaseCapsuleVerifierPath(value: unknown): string {
+  const record = adjutorixTerminalReleaseCapsuleVerifierRecord(value);
+  return adjutorixTerminalReleaseCapsuleVerifierString(
+    record.path || record.relativePath || record.file || record.name,
+  );
+}
+
+async function adjutorixTerminalReleaseCapsuleVerifierWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalReleaseCapsuleVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalReleaseCapsuleVerifierRecord(defaults);
+    const workspace = adjutorixTerminalReleaseCapsuleVerifierString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixTerminalReleaseCapsuleVerifierFilesFromScan(scanResult: unknown): string[] {
+  const record = adjutorixTerminalReleaseCapsuleVerifierRecord(scanResult);
+  const files = adjutorixTerminalReleaseCapsuleVerifierArray(record.files || record.entries || record.items);
+
+  return files
+    .map(adjutorixTerminalReleaseCapsuleVerifierPath)
+    .filter((path) => path.includes(".adjutorix-ai-runway/"))
+    .filter((path) => path.includes("terminal-release-capsule"))
+    .filter((path) => path.endsWith(".json"))
+    .sort();
+}
+
+async function adjutorixTerminalReleaseCapsuleVerifierSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixTerminalReleaseCapsuleVerifierValidate(
+  capsule: Record<string, unknown>,
+  actualVerificationReportSha256: string,
+  actualMissionSnapshotSha256: string,
+): AdjutorixTerminalReleaseCapsuleVerifierValidation {
+  const failures: string[] = [];
+  const verificationReport = adjutorixTerminalReleaseCapsuleVerifierRecord(
+    capsule.terminal_control_board_snapshot_verification_report,
+  );
+
+  if (capsule.schema !== "adjutorix.ai_runway_terminal_release_capsule.v1") {
+    failures.push("schema_mismatch");
+  }
+
+  if (capsule.source !== "adjutorix-ai-runway-terminal-release-capsule") {
+    failures.push("source_mismatch");
+  }
+
+  if (!adjutorixTerminalReleaseCapsuleVerifierString(capsule.capsulated_at)) {
+    failures.push("capsulated_at_missing");
+  }
+
+  if (!adjutorixTerminalReleaseCapsuleVerifierString(capsule.workspace)) {
+    failures.push("workspace_missing");
+  }
+
+  if (!adjutorixTerminalReleaseCapsuleVerifierString(capsule.terminal_control_board_snapshot_verification_report_sha256)) {
+    failures.push("terminal_control_board_snapshot_verification_report_sha256_missing");
+  }
+
+  if (!adjutorixTerminalReleaseCapsuleVerifierString(capsule.mission_snapshot_sha256)) {
+    failures.push("mission_snapshot_sha256_missing");
+  }
+
+  if (!adjutorixTerminalReleaseCapsuleVerifierString(capsule.mission_control_snapshot_text)) {
+    failures.push("mission_control_snapshot_text_missing");
+  }
+
+  if (capsule.terminal_control_board_snapshot_verification_report_sha256 !== actualVerificationReportSha256) {
+    failures.push("terminal_control_board_snapshot_verification_report_sha256_mismatch");
+  }
+
+  if (capsule.mission_snapshot_sha256 !== actualMissionSnapshotSha256) {
+    failures.push("mission_snapshot_sha256_mismatch");
+  }
+
+  if (verificationReport.schema !== "adjutorix.ai_runway_terminal_control_board_snapshot_verification_report.v1") {
+    failures.push("terminal_control_board_snapshot_verification_report_schema_mismatch");
+  }
+
+  if (verificationReport.source !== "adjutorix-ai-runway-terminal-control-board-snapshot-verifier") {
+    failures.push("terminal_control_board_snapshot_verification_report_source_mismatch");
+  }
+
+  if (verificationReport.ok !== true) {
+    failures.push("terminal_control_board_snapshot_verification_report_not_ok");
+  }
+
+  if (!adjutorixTerminalReleaseCapsuleVerifierString(verificationReport.workspace)) {
+    failures.push("terminal_control_board_snapshot_verification_report_workspace_missing");
+  }
+
+  if (!adjutorixTerminalReleaseCapsuleVerifierString(verificationReport.path)) {
+    failures.push("terminal_control_board_snapshot_verification_report_path_missing");
+  }
+
+  if (!adjutorixTerminalReleaseCapsuleVerifierString(verificationReport.snapshot_sha256)) {
+    failures.push("terminal_control_board_snapshot_verification_report_snapshot_sha256_missing");
+  }
+
+  return { ok: failures.length === 0, failures };
+}
+
+function installAdjutorixAiRunwayTerminalReleaseCapsuleVerifier(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-release-capsule-verifier")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-release-capsule-verifier";
+  panel.className = "adjutorix-ai-runway-terminal-release-capsule-verifier";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal release capsule verifier");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-release-capsule-verifier-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Capsule Verifier";
+
+  const state = document.createElement("span");
+  state.className = "adjutorix-ai-terminal-release-capsule-verifier-state";
+  state.textContent = "idle";
+
+  header.appendChild(title);
+  header.appendChild(state);
+
+  const select = document.createElement("select");
+  select.className = "adjutorix-ai-terminal-release-capsule-verifier-select";
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-release-capsule-verifier-actions";
+
+  const scanButton = document.createElement("button");
+  scanButton.type = "button";
+  scanButton.textContent = "Scan Capsules";
+
+  const verifyButton = document.createElement("button");
+  verifyButton.type = "button";
+  verifyButton.textContent = "Verify Capsule";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Report";
+
+  actions.appendChild(scanButton);
+  actions.appendChild(verifyButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-release-capsule-verifier-output";
+  output.textContent = "Terminal release capsule verifier mounted. Scan for capsules.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setState(value: string): void {
+    state.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  scanButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixTerminalReleaseCapsuleVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.scan) {
+        setOutput("Workspace OS scan bridge unavailable.");
+        return;
+      }
+
+      setBusy(scanButton, true);
+      setState("scanning");
+
+      try {
+        const workspace = await adjutorixTerminalReleaseCapsuleVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const scanResult = await bridge.scan(workspace);
+        const capsules = adjutorixTerminalReleaseCapsuleVerifierFilesFromScan(scanResult);
+
+        select.replaceChildren();
+
+        for (const capsulePath of capsules) {
+          const option = document.createElement("option");
+          option.value = capsulePath;
+          option.textContent = capsulePath;
+          select.appendChild(option);
+        }
+
+        setState(capsules.length ? "capsules found" : "no capsules");
+        setOutput(JSON.stringify({
+          ok: true,
+          workspace,
+          capsule_count: capsules.length,
+          capsules,
+        }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_CAPSULE_VERIFIER_SCAN_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-capsule-verifier",
+          workspace,
+          capsule_count: capsules.length,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL RELEASE CAPSULE SCAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(scanButton, false);
+      }
+    })();
+  });
+
+  verifyButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixTerminalReleaseCapsuleVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.readText) {
+        setOutput("Workspace OS read bridge unavailable.");
+        return;
+      }
+
+      if (!select.value) {
+        setOutput("No terminal release capsule selected.");
+        return;
+      }
+
+      setBusy(verifyButton, true);
+      setState("verifying");
+
+      try {
+        const workspace = await adjutorixTerminalReleaseCapsuleVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const readResult = await bridge.readText({ workspace, path: select.value });
+        const readRecord = adjutorixTerminalReleaseCapsuleVerifierRecord(readResult);
+        const content = adjutorixTerminalReleaseCapsuleVerifierString(
+          readRecord.content || readRecord.text || readRecord.value || readResult,
+        );
+        const parsed = adjutorixTerminalReleaseCapsuleVerifierRecord(JSON.parse(content));
+        const capsuleSha256 = await adjutorixTerminalReleaseCapsuleVerifierSha256(content);
+
+        const verificationReport = adjutorixTerminalReleaseCapsuleVerifierRecord(
+          parsed.terminal_control_board_snapshot_verification_report,
+        );
+        const canonicalVerificationReportText = JSON.stringify(verificationReport, null, 2);
+        const actualVerificationReportSha256 = await adjutorixTerminalReleaseCapsuleVerifierSha256(
+          canonicalVerificationReportText,
+        );
+
+        const missionSnapshotText = adjutorixTerminalReleaseCapsuleVerifierString(
+          parsed.mission_control_snapshot_text,
+        );
+        const missionSnapshotSha256 = await adjutorixTerminalReleaseCapsuleVerifierSha256(
+          missionSnapshotText,
+        );
+
+        const validation = adjutorixTerminalReleaseCapsuleVerifierValidate(
+          parsed,
+          actualVerificationReportSha256,
+          missionSnapshotSha256,
+        );
+
+        const report = {
+          schema: "adjutorix.ai_runway_terminal_release_capsule_verification_report.v1",
+          source: "adjutorix-ai-runway-terminal-release-capsule-verifier",
+          verified_at: new Date().toISOString(),
+          workspace,
+          path: select.value,
+          capsule_sha256: capsuleSha256,
+          ok: validation.ok,
+          validation,
+          hashes: {
+            terminal_control_board_snapshot_verification_report: {
+              ok: parsed.terminal_control_board_snapshot_verification_report_sha256 === actualVerificationReportSha256,
+              expected_sha256: parsed.terminal_control_board_snapshot_verification_report_sha256,
+              actual_sha256: actualVerificationReportSha256,
+            },
+            mission_snapshot: {
+              ok: parsed.mission_snapshot_sha256 === missionSnapshotSha256,
+              expected_sha256: parsed.mission_snapshot_sha256,
+              actual_sha256: missionSnapshotSha256,
+            },
+          },
+          capsule: parsed,
+        };
+
+        setState(validation.ok ? "valid" : "invalid");
+        setOutput(JSON.stringify(report, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_CAPSULE_VERIFIED", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-capsule-verifier",
+          workspace,
+          path: select.value,
+          capsule_sha256: capsuleSha256,
+          ok: validation.ok,
+          failures: validation.failures,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL RELEASE CAPSULE VERIFY FAILED\n${String(error)}`);
+      } finally {
+        setBusy(verifyButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(select);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_CAPSULE_VERIFIER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-release-capsule-verifier",
+    reads: ".adjutorix-ai-runway",
+    verifies: "adjutorix.ai_runway_terminal_release_capsule.v1",
+    recomputes: "sha256",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalReleaseCapsuleVerifier, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalReleaseCapsuleVerifier();
+}
