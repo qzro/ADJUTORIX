@@ -8293,3 +8293,306 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalReleaseCapsuleVerifier();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_CERTIFICATE_V1
+ *
+ * Terminal release certificate recorder:
+ * - consumes terminal-release-capsule verification report output
+ * - validates report schema/source/workspace/path/hash/ok fields
+ * - computes SHA-256 over verification report text and mission snapshot text
+ * - writes durable terminal release certificate JSON into .adjutorix-ai-runway/
+ * - requires manual RELEASE confirmation
+ */
+
+interface AdjutorixTerminalReleaseCertificateWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+}
+
+interface AdjutorixTerminalReleaseCertificateRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalReleaseCertificateWorkspaceBridge;
+}
+
+function adjutorixTerminalReleaseCertificateWindow(): AdjutorixTerminalReleaseCertificateRuntimeWindow {
+  return window as unknown as AdjutorixTerminalReleaseCertificateRuntimeWindow;
+}
+
+function adjutorixTerminalReleaseCertificateRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalReleaseCertificateString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalReleaseCertificateText(selector: string): string {
+  const element = document.querySelector(selector);
+
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.textContent || "";
+  }
+
+  return "";
+}
+
+function adjutorixTerminalReleaseCertificateTimestamp(): string {
+  return new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function adjutorixTerminalReleaseCertificateWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalReleaseCertificateWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalReleaseCertificateRecord(defaults);
+    const workspace = adjutorixTerminalReleaseCertificateString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+async function adjutorixTerminalReleaseCertificateSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixTerminalReleaseCertificateParseReport(text: string): Record<string, unknown> {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    throw new Error("terminal_release_capsule_verification_report_empty");
+  }
+
+  const parsed = adjutorixTerminalReleaseCertificateRecord(JSON.parse(trimmed));
+
+  if (parsed.schema !== "adjutorix.ai_runway_terminal_release_capsule_verification_report.v1") {
+    throw new Error("terminal_release_capsule_verification_report_schema_mismatch");
+  }
+
+  if (parsed.source !== "adjutorix-ai-runway-terminal-release-capsule-verifier") {
+    throw new Error("terminal_release_capsule_verification_report_source_mismatch");
+  }
+
+  if (parsed.ok !== true) {
+    throw new Error("terminal_release_capsule_verification_report_not_ok");
+  }
+
+  if (!adjutorixTerminalReleaseCertificateString(parsed.workspace)) {
+    throw new Error("terminal_release_capsule_verification_report_workspace_missing");
+  }
+
+  if (!adjutorixTerminalReleaseCertificateString(parsed.path)) {
+    throw new Error("terminal_release_capsule_verification_report_path_missing");
+  }
+
+  if (!adjutorixTerminalReleaseCertificateString(parsed.capsule_sha256)) {
+    throw new Error("terminal_release_capsule_verification_report_capsule_sha256_missing");
+  }
+
+  return parsed;
+}
+
+function installAdjutorixAiRunwayTerminalReleaseCertificate(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-release-certificate")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-release-certificate";
+  panel.className = "adjutorix-ai-runway-terminal-release-certificate";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal release certificate");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-release-certificate-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Release Certificate";
+
+  const confirm = document.createElement("input");
+  confirm.className = "adjutorix-ai-terminal-release-certificate-confirm";
+  confirm.placeholder = "Type RELEASE";
+  confirm.spellcheck = false;
+
+  header.appendChild(title);
+  header.appendChild(confirm);
+
+  const note = document.createElement("textarea");
+  note.className = "adjutorix-ai-terminal-release-certificate-note";
+  note.placeholder = "Operator terminal release certificate note...";
+  note.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-release-certificate-actions";
+
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.textContent = "Preview Certificate";
+
+  const writeButton = document.createElement("button");
+  writeButton.type = "button";
+  writeButton.textContent = "Write Certificate";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Certificate";
+
+  actions.appendChild(previewButton);
+  actions.appendChild(writeButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-release-certificate-output";
+  output.textContent = "Terminal release certificate mounted. Verify release capsule first, then type RELEASE.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  async function buildCertificate(): Promise<Record<string, unknown>> {
+    const workspace = await adjutorixTerminalReleaseCertificateWorkspace();
+
+    if (!workspace) {
+      throw new Error("workspace_not_resolved");
+    }
+
+    const verificationText = adjutorixTerminalReleaseCertificateText(
+      ".adjutorix-ai-terminal-release-capsule-verifier-output",
+    );
+    const verificationReport = adjutorixTerminalReleaseCertificateParseReport(verificationText);
+    const verificationReportSha256 = await adjutorixTerminalReleaseCertificateSha256(verificationText);
+    const missionSnapshotText = adjutorixTerminalReleaseCertificateText(".adjutorix-ai-mission-output");
+    const missionSnapshotSha256 = await adjutorixTerminalReleaseCertificateSha256(missionSnapshotText);
+
+    return {
+      schema: "adjutorix.ai_runway_terminal_release_certificate.v1",
+      source: "adjutorix-ai-runway-terminal-release-certificate",
+      certified_at: new Date().toISOString(),
+      workspace,
+      operator_note: note.value,
+      terminal_release_capsule_verification_report_sha256: verificationReportSha256,
+      mission_snapshot_sha256: missionSnapshotSha256,
+      terminal_release_capsule_verification_report: verificationReport,
+      mission_control_snapshot_text: missionSnapshotText,
+    };
+  }
+
+  async function writeCertificate(certificate: Record<string, unknown>): Promise<{ path: string; bytes: number }> {
+    const bridge = adjutorixTerminalReleaseCertificateWindow().adjutorixWorkspaceOS;
+
+    if (!bridge?.writeText) {
+      throw new Error("workspace_write_bridge_unavailable");
+    }
+
+    const workspace = adjutorixTerminalReleaseCertificateString(certificate.workspace);
+    const path = `.adjutorix-ai-runway/${adjutorixTerminalReleaseCertificateTimestamp()}-terminal-release-certificate.json`;
+    const content = JSON.stringify(certificate, null, 2) + "\n";
+
+    await bridge.writeText({ workspace, path, content });
+
+    return { path, bytes: content.length };
+  }
+
+  previewButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(previewButton, true);
+      try {
+        const certificate = await buildCertificate();
+        setOutput(JSON.stringify(certificate, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_CERTIFICATE_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-certificate",
+          workspace: certificate.workspace,
+        }));
+      } catch (error) {
+        setOutput(`TERMINAL RELEASE CERTIFICATE PREVIEW FAILED\n${String(error)}`);
+      } finally {
+        setBusy(previewButton, false);
+      }
+    })();
+  });
+
+  writeButton.addEventListener("click", () => {
+    void (async () => {
+      if (confirm.value.trim() !== "RELEASE") {
+        setOutput("Terminal release certificate blocked. Type RELEASE in the confirmation field.");
+        return;
+      }
+
+      setBusy(writeButton, true);
+      try {
+        const certificate = await buildCertificate();
+        const written = await writeCertificate(certificate);
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, ...written, certificate }, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_CERTIFICATE_RECORDED", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-certificate",
+          workspace: certificate.workspace,
+          path: written.path,
+          bytes: written.bytes,
+          certifies: "adjutorix.ai_runway_terminal_release_capsule_verification_report.v1",
+        }));
+      } catch (error) {
+        setOutput(`TERMINAL RELEASE CERTIFICATE FAILED\n${String(error)}`);
+      } finally {
+        setBusy(writeButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(note);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_CERTIFICATE_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-release-certificate",
+    writes: ".adjutorix-ai-runway",
+    requires: "manual-release-confirmation",
+    certifies: "adjutorix.ai_runway_terminal_release_capsule_verification_report.v1",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalReleaseCertificate, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalReleaseCertificate();
+}
