@@ -6599,3 +6599,275 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalAttestationVerifier();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_CONTROL_BOARD_V1
+ *
+ * Terminal control board:
+ * - summarizes all mounted AI runway surfaces
+ * - resolves workspace through Workspace OS defaults
+ * - hashes live output payloads with SHA-256
+ * - emits a terminal chain readiness report
+ * - does not mutate workspace state
+ */
+
+interface AdjutorixTerminalControlBoardWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+}
+
+interface AdjutorixTerminalControlBoardRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalControlBoardWorkspaceBridge;
+}
+
+function adjutorixTerminalControlBoardWindow(): AdjutorixTerminalControlBoardRuntimeWindow {
+  return window as unknown as AdjutorixTerminalControlBoardRuntimeWindow;
+}
+
+function adjutorixTerminalControlBoardRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalControlBoardString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalControlBoardText(selector: string): string {
+  const element = document.querySelector(selector);
+
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.textContent || "";
+  }
+
+  return "";
+}
+
+function adjutorixTerminalControlBoardMounted(selector: string): boolean {
+  return Boolean(document.querySelector(selector));
+}
+
+async function adjutorixTerminalControlBoardWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalControlBoardWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalControlBoardRecord(defaults);
+    const workspace = adjutorixTerminalControlBoardString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+async function adjutorixTerminalControlBoardSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function adjutorixTerminalControlBoardPayload(
+  name: string,
+  selector: string,
+): Promise<Record<string, unknown>> {
+  const text = adjutorixTerminalControlBoardText(selector);
+
+  return {
+    name,
+    selector,
+    present: text.length > 0,
+    chars: text.length,
+    sha256: await adjutorixTerminalControlBoardSha256(text),
+  };
+}
+
+async function adjutorixTerminalControlBoardBuildReport(): Promise<Record<string, unknown>> {
+  const workspace = await adjutorixTerminalControlBoardWorkspace();
+
+  const surfaces = {
+    ai_assistant: adjutorixTerminalControlBoardMounted("#adjutorix-ai-assistant"),
+    patch_runway: adjutorixTerminalControlBoardMounted("#adjutorix-ai-patch-runway"),
+    patch_verify_runway: adjutorixTerminalControlBoardMounted("#adjutorix-ai-patch-verify-runway"),
+    evidence_recorder: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-evidence-recorder"),
+    context_pack: adjutorixTerminalControlBoardMounted("#adjutorix-ai-workspace-context-pack"),
+    mission_control: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-mission-control"),
+    mission_lock: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-mission-lock"),
+    lock_verifier: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-lock-verifier"),
+    verification_seal: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-verification-seal"),
+    seal_verifier: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-seal-verifier"),
+    artifact_index: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-artifact-index"),
+    artifact_index_verifier: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-artifact-index-verifier"),
+    finality_manifest: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-finality-manifest"),
+    finality_manifest_verifier: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-finality-manifest-verifier"),
+    finality_certificate: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-finality-certificate"),
+    finality_certificate_verifier: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-finality-certificate-verifier"),
+    terminal_attestation: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-terminal-attestation"),
+    terminal_attestation_verifier: adjutorixTerminalControlBoardMounted("#adjutorix-ai-runway-terminal-attestation-verifier"),
+  };
+
+  const payloads = [
+    await adjutorixTerminalControlBoardPayload("ai_provider_output", ".adjutorix-ai-output"),
+    await adjutorixTerminalControlBoardPayload("context_pack", ".adjutorix-ai-context-output"),
+    await adjutorixTerminalControlBoardPayload("patch_plan", ".adjutorix-ai-patch-output"),
+    await adjutorixTerminalControlBoardPayload("verify_output", ".adjutorix-ai-patch-verify-output"),
+    await adjutorixTerminalControlBoardPayload("evidence_recorder", ".adjutorix-ai-evidence-output"),
+    await adjutorixTerminalControlBoardPayload("mission_control", ".adjutorix-ai-mission-output"),
+    await adjutorixTerminalControlBoardPayload("mission_lock", ".adjutorix-ai-mission-lock-output"),
+    await adjutorixTerminalControlBoardPayload("lock_verifier", ".adjutorix-ai-lock-verifier-output"),
+    await adjutorixTerminalControlBoardPayload("verification_seal", ".adjutorix-ai-verification-seal-output"),
+    await adjutorixTerminalControlBoardPayload("seal_verifier", ".adjutorix-ai-seal-verifier-output"),
+    await adjutorixTerminalControlBoardPayload("artifact_index", ".adjutorix-ai-artifact-index-output"),
+    await adjutorixTerminalControlBoardPayload("artifact_index_verifier", ".adjutorix-ai-artifact-index-verifier-output"),
+    await adjutorixTerminalControlBoardPayload("finality_manifest", ".adjutorix-ai-finality-manifest-output"),
+    await adjutorixTerminalControlBoardPayload("finality_manifest_verifier", ".adjutorix-ai-finality-manifest-verifier-output"),
+    await adjutorixTerminalControlBoardPayload("finality_certificate", ".adjutorix-ai-finality-certificate-output"),
+    await adjutorixTerminalControlBoardPayload("finality_certificate_verifier", ".adjutorix-ai-finality-certificate-verifier-output"),
+    await adjutorixTerminalControlBoardPayload("terminal_attestation", ".adjutorix-ai-terminal-attestation-output"),
+    await adjutorixTerminalControlBoardPayload("terminal_attestation_verifier", ".adjutorix-ai-terminal-attestation-verifier-output"),
+  ];
+
+  const surfaceEntries = Object.entries(surfaces);
+  const missingSurfaces = surfaceEntries
+    .filter(([, mounted]) => mounted !== true)
+    .map(([name]) => name);
+
+  return {
+    schema: "adjutorix.ai_runway_terminal_control_board_report.v1",
+    source: "adjutorix-ai-runway-terminal-control-board",
+    reported_at: new Date().toISOString(),
+    workspace,
+    ready: Boolean(workspace) && missingSurfaces.length === 0,
+    surface_count: surfaceEntries.length,
+    missing_surface_count: missingSurfaces.length,
+    missing_surfaces: missingSurfaces,
+    surfaces,
+    payloads,
+  };
+}
+
+function installAdjutorixAiRunwayTerminalControlBoard(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-control-board")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-control-board";
+  panel.className = "adjutorix-ai-runway-terminal-control-board";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal control board");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-control-board-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Terminal Control Board";
+
+  const state = document.createElement("span");
+  state.className = "adjutorix-ai-terminal-control-board-state";
+  state.textContent = "mounted";
+
+  header.appendChild(title);
+  header.appendChild(state);
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-control-board-actions";
+
+  const refreshButton = document.createElement("button");
+  refreshButton.type = "button";
+  refreshButton.textContent = "Refresh Board";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Report";
+
+  actions.appendChild(refreshButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-control-board-output";
+  output.textContent = "Terminal control board mounted. Refresh for chain readiness.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setState(value: string): void {
+    state.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  refreshButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(refreshButton, true);
+      setState("refreshing");
+
+      try {
+        const report = await adjutorixTerminalControlBoardBuildReport();
+        setState(report.ready === true ? "ready" : "incomplete");
+        setOutput(JSON.stringify(report, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_CONTROL_BOARD_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-control-board",
+          workspace: report.workspace,
+          ready: report.ready,
+          surface_count: report.surface_count,
+          missing_surface_count: report.missing_surface_count,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL CONTROL BOARD FAILED\n${String(error)}`);
+      } finally {
+        setBusy(refreshButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_CONTROL_BOARD_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-control-board",
+    reads: "mounted-surfaces",
+    summarizes: "ai-runway-terminal-chain",
+    recomputes: "sha256",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalControlBoard, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalControlBoard();
+}
