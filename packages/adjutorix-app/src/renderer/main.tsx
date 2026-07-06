@@ -6871,3 +6871,300 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalControlBoard();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_CONTROL_BOARD_SNAPSHOT_V1
+ *
+ * Terminal control board snapshot recorder:
+ * - consumes terminal-control-board report output
+ * - validates board report schema/source/readiness fields
+ * - computes SHA-256 over board report text and mission snapshot text
+ * - writes durable terminal board snapshot JSON into .adjutorix-ai-runway/
+ * - requires manual SNAPSHOT confirmation
+ */
+
+interface AdjutorixTerminalControlBoardSnapshotWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+}
+
+interface AdjutorixTerminalControlBoardSnapshotRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalControlBoardSnapshotWorkspaceBridge;
+}
+
+function adjutorixTerminalControlBoardSnapshotWindow(): AdjutorixTerminalControlBoardSnapshotRuntimeWindow {
+  return window as unknown as AdjutorixTerminalControlBoardSnapshotRuntimeWindow;
+}
+
+function adjutorixTerminalControlBoardSnapshotRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalControlBoardSnapshotString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalControlBoardSnapshotText(selector: string): string {
+  const element = document.querySelector(selector);
+
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.textContent || "";
+  }
+
+  return "";
+}
+
+function adjutorixTerminalControlBoardSnapshotTimestamp(): string {
+  return new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function adjutorixTerminalControlBoardSnapshotWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalControlBoardSnapshotWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalControlBoardSnapshotRecord(defaults);
+    const workspace = adjutorixTerminalControlBoardSnapshotString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+async function adjutorixTerminalControlBoardSnapshotSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixTerminalControlBoardSnapshotParseBoard(text: string): Record<string, unknown> {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    throw new Error("terminal_control_board_report_empty");
+  }
+
+  const parsed = adjutorixTerminalControlBoardSnapshotRecord(JSON.parse(trimmed));
+
+  if (parsed.schema !== "adjutorix.ai_runway_terminal_control_board_report.v1") {
+    throw new Error("terminal_control_board_report_schema_mismatch");
+  }
+
+  if (parsed.source !== "adjutorix-ai-runway-terminal-control-board") {
+    throw new Error("terminal_control_board_report_source_mismatch");
+  }
+
+  if (!adjutorixTerminalControlBoardSnapshotString(parsed.workspace)) {
+    throw new Error("terminal_control_board_report_workspace_missing");
+  }
+
+  if (typeof parsed.surface_count !== "number") {
+    throw new Error("terminal_control_board_report_surface_count_missing");
+  }
+
+  if (typeof parsed.missing_surface_count !== "number") {
+    throw new Error("terminal_control_board_report_missing_surface_count_missing");
+  }
+
+  return parsed;
+}
+
+function installAdjutorixAiRunwayTerminalControlBoardSnapshot(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-control-board-snapshot")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-control-board-snapshot";
+  panel.className = "adjutorix-ai-runway-terminal-control-board-snapshot";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal control board snapshot");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-control-board-snapshot-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Board Snapshot";
+
+  const confirm = document.createElement("input");
+  confirm.className = "adjutorix-ai-terminal-control-board-snapshot-confirm";
+  confirm.placeholder = "Type SNAPSHOT";
+  confirm.spellcheck = false;
+
+  header.appendChild(title);
+  header.appendChild(confirm);
+
+  const note = document.createElement("textarea");
+  note.className = "adjutorix-ai-terminal-control-board-snapshot-note";
+  note.placeholder = "Operator terminal board snapshot note...";
+  note.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-control-board-snapshot-actions";
+
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.textContent = "Preview Snapshot";
+
+  const writeButton = document.createElement("button");
+  writeButton.type = "button";
+  writeButton.textContent = "Write Snapshot";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Snapshot";
+
+  actions.appendChild(previewButton);
+  actions.appendChild(writeButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-control-board-snapshot-output";
+  output.textContent = "Terminal control board snapshot mounted. Refresh board first, then type SNAPSHOT.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  async function buildSnapshot(): Promise<Record<string, unknown>> {
+    const workspace = await adjutorixTerminalControlBoardSnapshotWorkspace();
+
+    if (!workspace) {
+      throw new Error("workspace_not_resolved");
+    }
+
+    const boardText = adjutorixTerminalControlBoardSnapshotText(".adjutorix-ai-terminal-control-board-output");
+    const boardReport = adjutorixTerminalControlBoardSnapshotParseBoard(boardText);
+    const boardReportSha256 = await adjutorixTerminalControlBoardSnapshotSha256(boardText);
+    const missionSnapshotText = adjutorixTerminalControlBoardSnapshotText(".adjutorix-ai-mission-output");
+    const missionSnapshotSha256 = await adjutorixTerminalControlBoardSnapshotSha256(missionSnapshotText);
+
+    return {
+      schema: "adjutorix.ai_runway_terminal_control_board_snapshot.v1",
+      source: "adjutorix-ai-runway-terminal-control-board-snapshot",
+      snapshotted_at: new Date().toISOString(),
+      workspace,
+      operator_note: note.value,
+      terminal_control_board_report_sha256: boardReportSha256,
+      mission_snapshot_sha256: missionSnapshotSha256,
+      terminal_control_board_report: boardReport,
+      mission_control_snapshot_text: missionSnapshotText,
+    };
+  }
+
+  async function writeSnapshot(snapshot: Record<string, unknown>): Promise<{ path: string; bytes: number }> {
+    const bridge = adjutorixTerminalControlBoardSnapshotWindow().adjutorixWorkspaceOS;
+
+    if (!bridge?.writeText) {
+      throw new Error("workspace_write_bridge_unavailable");
+    }
+
+    const workspace = adjutorixTerminalControlBoardSnapshotString(snapshot.workspace);
+    const path = `.adjutorix-ai-runway/${adjutorixTerminalControlBoardSnapshotTimestamp()}-terminal-control-board-snapshot.json`;
+    const content = JSON.stringify(snapshot, null, 2) + "\n";
+
+    await bridge.writeText({ workspace, path, content });
+
+    return { path, bytes: content.length };
+  }
+
+  previewButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(previewButton, true);
+      try {
+        const snapshot = await buildSnapshot();
+        setOutput(JSON.stringify(snapshot, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_CONTROL_BOARD_SNAPSHOT_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-control-board-snapshot",
+          workspace: snapshot.workspace,
+        }));
+      } catch (error) {
+        setOutput(`TERMINAL CONTROL BOARD SNAPSHOT PREVIEW FAILED\n${String(error)}`);
+      } finally {
+        setBusy(previewButton, false);
+      }
+    })();
+  });
+
+  writeButton.addEventListener("click", () => {
+    void (async () => {
+      if (confirm.value.trim() !== "SNAPSHOT") {
+        setOutput("Terminal control board snapshot blocked. Type SNAPSHOT in the confirmation field.");
+        return;
+      }
+
+      setBusy(writeButton, true);
+      try {
+        const snapshot = await buildSnapshot();
+        const written = await writeSnapshot(snapshot);
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, ...written, snapshot }, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_CONTROL_BOARD_SNAPSHOT_RECORDED", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-control-board-snapshot",
+          workspace: snapshot.workspace,
+          path: written.path,
+          bytes: written.bytes,
+          snapshots: "adjutorix.ai_runway_terminal_control_board_report.v1",
+        }));
+      } catch (error) {
+        setOutput(`TERMINAL CONTROL BOARD SNAPSHOT FAILED\n${String(error)}`);
+      } finally {
+        setBusy(writeButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(note);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_CONTROL_BOARD_SNAPSHOT_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-control-board-snapshot",
+    writes: ".adjutorix-ai-runway",
+    requires: "manual-snapshot-confirmation",
+    snapshots: "adjutorix.ai_runway_terminal_control_board_report.v1",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalControlBoardSnapshot, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalControlBoardSnapshot();
+}
