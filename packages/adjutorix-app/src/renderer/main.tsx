@@ -13007,3 +13007,317 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalReleasePublicationFinalityRecordVerifier();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_AUTHORITY_LEDGER_V1
+ *
+ * Terminal release publication authority ledger:
+ * - consumes the publication finality record verifier report already rendered on the terminal surface
+ * - validates the report schema/source/ok/path/finality hash boundary
+ * - binds the report to the current mission-control snapshot
+ * - writes a manual authority ledger artifact into .adjutorix-ai-runway
+ */
+
+interface AdjutorixTerminalReleasePublicationAuthorityLedgerWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+}
+
+interface AdjutorixTerminalReleasePublicationAuthorityLedgerRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalReleasePublicationAuthorityLedgerWorkspaceBridge;
+}
+
+function adjutorixTerminalReleasePublicationAuthorityLedgerWindow(): AdjutorixTerminalReleasePublicationAuthorityLedgerRuntimeWindow {
+  return window as unknown as AdjutorixTerminalReleasePublicationAuthorityLedgerRuntimeWindow;
+}
+
+function adjutorixTerminalReleasePublicationAuthorityLedgerRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalReleasePublicationAuthorityLedgerString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalReleasePublicationAuthorityLedgerBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+function adjutorixTerminalReleasePublicationAuthorityLedgerHex64(value: unknown): boolean {
+  return typeof value === "string" && /^[a-f0-9]{64}$/iu.test(value);
+}
+
+async function adjutorixTerminalReleasePublicationAuthorityLedgerSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function adjutorixTerminalReleasePublicationAuthorityLedgerWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalReleasePublicationAuthorityLedgerWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalReleasePublicationAuthorityLedgerRecord(defaults);
+    const workspace = adjutorixTerminalReleasePublicationAuthorityLedgerString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixTerminalReleasePublicationAuthorityLedgerTimestamp(): string {
+  return new Date().toISOString().replace(/[:.]/gu, "-");
+}
+
+function adjutorixTerminalReleasePublicationAuthorityLedgerVerifierText(): string {
+  const output = document.querySelector(".adjutorix-ai-terminal-release-publication-finality-record-verifier-output");
+  return output?.textContent?.trim() || "";
+}
+
+function adjutorixTerminalReleasePublicationAuthorityLedgerMissionSnapshotText(): string {
+  const output = document.querySelector(".adjutorix-ai-mission-output");
+  return output?.textContent?.trim() || "";
+}
+
+function adjutorixTerminalReleasePublicationAuthorityLedgerParseVerifierReport(text: string): Record<string, unknown> {
+  if (!text) {
+    throw new Error("publication_finality_record_verification_report_missing");
+  }
+
+  if (text.startsWith("TERMINAL RELEASE PUBLICATION FINALITY RECORD VERIFY FAILED")) {
+    throw new Error("publication_finality_record_verification_report_failed");
+  }
+
+  return adjutorixTerminalReleasePublicationAuthorityLedgerRecord(JSON.parse(text));
+}
+
+async function adjutorixTerminalReleasePublicationAuthorityLedgerBuild(
+  workspace: string,
+  operatorNote: string,
+): Promise<Record<string, unknown>> {
+  const verifierText = adjutorixTerminalReleasePublicationAuthorityLedgerVerifierText();
+  const verifierReport = adjutorixTerminalReleasePublicationAuthorityLedgerParseVerifierReport(verifierText);
+  const missionSnapshotText = adjutorixTerminalReleasePublicationAuthorityLedgerMissionSnapshotText();
+
+  const findings: string[] = [];
+
+  if (verifierReport.schema !== "adjutorix.ai_runway_terminal_release_publication_finality_record_verification_report.v1") {
+    findings.push("publication_finality_record_verification_report_schema_mismatch");
+  }
+
+  if (verifierReport.source !== "adjutorix-ai-runway-terminal-release-publication-finality-record-verifier") {
+    findings.push("publication_finality_record_verification_report_source_mismatch");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthorityLedgerBoolean(verifierReport.ok)) {
+    findings.push("publication_finality_record_verification_report_not_ok");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthorityLedgerString(verifierReport.path)) {
+    findings.push("publication_finality_record_verification_report_path_missing");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthorityLedgerHex64(verifierReport.publication_finality_record_sha256)) {
+    findings.push("publication_finality_record_sha256_missing_or_invalid");
+  }
+
+  if (!missionSnapshotText) {
+    findings.push("mission_control_snapshot_missing");
+  }
+
+  const verifierReportSha256 = await adjutorixTerminalReleasePublicationAuthorityLedgerSha256(verifierText);
+  const missionSnapshotSha256 = await adjutorixTerminalReleasePublicationAuthorityLedgerSha256(missionSnapshotText);
+
+  return {
+    schema: "adjutorix.ai_runway_terminal_release_publication_authority_ledger.v1",
+    source: "adjutorix-ai-runway-terminal-release-publication-authority-ledger",
+    created_at: new Date().toISOString(),
+    ok: findings.length === 0,
+    workspace,
+    operator_note: operatorNote,
+    authority_statement:
+      "Terminal release publication authority ledger binds a verified publication finality record to the current mission-control snapshot under manual operator authority.",
+    terminal_release_publication_finality_record_verification_report_sha256: verifierReportSha256,
+    terminal_release_publication_finality_record_sha256: verifierReport.publication_finality_record_sha256 || "",
+    mission_snapshot_sha256: missionSnapshotSha256,
+    terminal_release_publication_finality_record_verification_report: verifierReport,
+    mission_control_snapshot_text: missionSnapshotText,
+    findings,
+  };
+}
+
+function installAdjutorixAiRunwayTerminalReleasePublicationAuthorityLedger(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-release-publication-authority-ledger")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-release-publication-authority-ledger";
+  panel.className = "adjutorix-ai-runway-terminal-release-publication-authority-ledger";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal release publication authority ledger");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-release-publication-authority-ledger-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Publication Authority Ledger";
+
+  const confirmation = document.createElement("input");
+  confirmation.className = "adjutorix-ai-terminal-release-publication-authority-ledger-confirmation";
+  confirmation.placeholder = "Type AUTHORITY";
+  confirmation.setAttribute("aria-label", "Publication authority ledger confirmation");
+
+  header.appendChild(title);
+  header.appendChild(confirmation);
+
+  const note = document.createElement("textarea");
+  note.className = "adjutorix-ai-terminal-release-publication-authority-ledger-note";
+  note.placeholder = "Optional operator authority note";
+  note.setAttribute("aria-label", "Publication authority ledger operator note");
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-release-publication-authority-ledger-actions";
+
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.textContent = "Preview Ledger";
+
+  const writeButton = document.createElement("button");
+  writeButton.type = "button";
+  writeButton.textContent = "Write Ledger";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Ledger";
+
+  actions.appendChild(previewButton);
+  actions.appendChild(writeButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-release-publication-authority-ledger-output";
+  output.textContent =
+    "Publication authority ledger mounted. Verify a publication finality record, type AUTHORITY, then write the ledger.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  previewButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(previewButton, true);
+      try {
+        const workspace = await adjutorixTerminalReleasePublicationAuthorityLedgerWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const ledger = await adjutorixTerminalReleasePublicationAuthorityLedgerBuild(workspace, note.value.trim());
+        setOutput(JSON.stringify(ledger, null, 2));
+      } catch (error) {
+        setOutput(`TERMINAL RELEASE PUBLICATION AUTHORITY LEDGER PREVIEW FAILED\n${String(error)}`);
+      } finally {
+        setBusy(previewButton, false);
+      }
+    })();
+  });
+
+  writeButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(writeButton, true);
+      try {
+        if (confirmation.value.trim() !== "AUTHORITY") {
+          throw new Error("manual_authority_confirmation_required");
+        }
+
+        const workspace = await adjutorixTerminalReleasePublicationAuthorityLedgerWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        const ledger = await adjutorixTerminalReleasePublicationAuthorityLedgerBuild(workspace, note.value.trim());
+        const ledgerText = JSON.stringify(ledger, null, 2);
+        const path =
+          `.adjutorix-ai-runway/${adjutorixTerminalReleasePublicationAuthorityLedgerTimestamp()}-terminal-release-publication-authority-ledger.json`;
+
+        const bridge = adjutorixTerminalReleasePublicationAuthorityLedgerWindow().adjutorixWorkspaceOS;
+
+        if (!bridge?.writeText) {
+          throw new Error("workspace_write_bridge_unavailable");
+        }
+
+        await bridge.writeText({ workspace, path, content: ledgerText });
+
+        setOutput(JSON.stringify({
+          recorded: true,
+          path,
+          sha256: await adjutorixTerminalReleasePublicationAuthorityLedgerSha256(ledgerText),
+          ledger,
+        }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_AUTHORITY_LEDGER_RECORDED", JSON.stringify({
+          path,
+          schema: "adjutorix.ai_runway_terminal_release_publication_authority_ledger.v1",
+        }));
+      } catch (error) {
+        setOutput(`TERMINAL RELEASE PUBLICATION AUTHORITY LEDGER WRITE FAILED\n${String(error)}`);
+      } finally {
+        setBusy(writeButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(note);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_AUTHORITY_LEDGER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-release-publication-authority-ledger",
+    writes: ".adjutorix-ai-runway",
+    requires: "manual-publication-authority-confirmation",
+    records: "adjutorix.ai_runway_terminal_release_publication_finality_record_verification_report.v1",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalReleasePublicationAuthorityLedger, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalReleasePublicationAuthorityLedger();
+}
