@@ -2378,3 +2378,72 @@ textarea {
   white-space: pre-wrap;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
+
+
+/* ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_ARCHIVE_SEAL_CSS_V1 */
+
+.adjutorix-ai-runway-terminal-release-archive-seal {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 100;
+  display: grid;
+  grid-template-rows: auto minmax(44px, 76px) auto minmax(120px, 280px);
+  gap: 10px;
+  width: min(520px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(251, 191, 36, 0.34);
+  border-radius: 18px;
+  background: rgba(55, 35, 9, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-terminal-release-archive-seal-header,
+.adjutorix-ai-terminal-release-archive-seal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-terminal-release-archive-seal-confirm,
+.adjutorix-ai-terminal-release-archive-seal-note,
+.adjutorix-ai-terminal-release-archive-seal-output,
+.adjutorix-ai-terminal-release-archive-seal-actions button {
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(254, 243, 199);
+}
+
+.adjutorix-ai-terminal-release-archive-seal-confirm,
+.adjutorix-ai-terminal-release-archive-seal-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-terminal-release-archive-seal-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-terminal-release-archive-seal-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-terminal-release-archive-seal-note,
+.adjutorix-ai-terminal-release-archive-seal-output {
+  width: 100%;
+  padding: 10px;
+  resize: vertical;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.adjutorix-ai-terminal-release-archive-seal-output {
+  min-height: 120px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+}
