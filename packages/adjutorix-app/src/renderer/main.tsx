@@ -9920,3 +9920,359 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalReleaseArchiveSeal();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_ARCHIVE_SEAL_VERIFIER_V1
+ *
+ * Terminal release archive seal verifier:
+ * - scans .adjutorix-ai-runway for terminal-release-archive-seal JSON files
+ * - reads selected archive seal through Workspace OS
+ * - validates archive schema/source/workspace/hash/report fields
+ * - recomputes SHA-256 over archive seal content, embedded finality verification report, and mission snapshot
+ * - emits terminal release archive seal verification report
+ */
+
+interface AdjutorixTerminalReleaseArchiveSealVerifierWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<unknown>;
+}
+
+interface AdjutorixTerminalReleaseArchiveSealVerifierRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalReleaseArchiveSealVerifierWorkspaceBridge;
+}
+
+interface AdjutorixTerminalReleaseArchiveSealVerifierValidation {
+  ok: boolean;
+  failures: string[];
+}
+
+function adjutorixTerminalReleaseArchiveSealVerifierWindow(): AdjutorixTerminalReleaseArchiveSealVerifierRuntimeWindow {
+  return window as unknown as AdjutorixTerminalReleaseArchiveSealVerifierRuntimeWindow;
+}
+
+function adjutorixTerminalReleaseArchiveSealVerifierRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalReleaseArchiveSealVerifierArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixTerminalReleaseArchiveSealVerifierString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalReleaseArchiveSealVerifierPath(value: unknown): string {
+  const record = adjutorixTerminalReleaseArchiveSealVerifierRecord(value);
+  return adjutorixTerminalReleaseArchiveSealVerifierString(
+    record.path || record.relativePath || record.file || record.name,
+  );
+}
+
+async function adjutorixTerminalReleaseArchiveSealVerifierWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalReleaseArchiveSealVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalReleaseArchiveSealVerifierRecord(defaults);
+    const workspace = adjutorixTerminalReleaseArchiveSealVerifierString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixTerminalReleaseArchiveSealVerifierFilesFromScan(scanResult: unknown): string[] {
+  const record = adjutorixTerminalReleaseArchiveSealVerifierRecord(scanResult);
+  const files = adjutorixTerminalReleaseArchiveSealVerifierArray(record.files || record.entries || record.items);
+
+  return files
+    .map(adjutorixTerminalReleaseArchiveSealVerifierPath)
+    .filter((path) => path.includes(".adjutorix-ai-runway/"))
+    .filter((path) => path.includes("terminal-release-archive-seal"))
+    .filter((path) => path.endsWith(".json"))
+    .sort();
+}
+
+async function adjutorixTerminalReleaseArchiveSealVerifierSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixTerminalReleaseArchiveSealVerifierValidate(
+  archiveSeal: Record<string, unknown>,
+  actualFinalityVerificationReportSha256: string,
+  actualMissionSnapshotSha256: string,
+): AdjutorixTerminalReleaseArchiveSealVerifierValidation {
+  const failures: string[] = [];
+  const finalityVerificationReport = adjutorixTerminalReleaseArchiveSealVerifierRecord(
+    archiveSeal.terminal_release_finality_record_verification_report,
+  );
+
+  if (archiveSeal.schema !== "adjutorix.ai_runway_terminal_release_archive_seal.v1") failures.push("schema_mismatch");
+  if (archiveSeal.source !== "adjutorix-ai-runway-terminal-release-archive-seal") failures.push("source_mismatch");
+  if (!adjutorixTerminalReleaseArchiveSealVerifierString(archiveSeal.archived_at)) failures.push("archived_at_missing");
+  if (!adjutorixTerminalReleaseArchiveSealVerifierString(archiveSeal.workspace)) failures.push("workspace_missing");
+  if (!adjutorixTerminalReleaseArchiveSealVerifierString(archiveSeal.terminal_release_finality_record_verification_report_sha256)) failures.push("terminal_release_finality_record_verification_report_sha256_missing");
+  if (!adjutorixTerminalReleaseArchiveSealVerifierString(archiveSeal.mission_snapshot_sha256)) failures.push("mission_snapshot_sha256_missing");
+  if (!adjutorixTerminalReleaseArchiveSealVerifierString(archiveSeal.mission_control_snapshot_text)) failures.push("mission_control_snapshot_text_missing");
+  if (archiveSeal.terminal_release_finality_record_verification_report_sha256 !== actualFinalityVerificationReportSha256) failures.push("terminal_release_finality_record_verification_report_sha256_mismatch");
+  if (archiveSeal.mission_snapshot_sha256 !== actualMissionSnapshotSha256) failures.push("mission_snapshot_sha256_mismatch");
+
+  if (finalityVerificationReport.schema !== "adjutorix.ai_runway_terminal_release_finality_record_verification_report.v1") failures.push("terminal_release_finality_record_verification_report_schema_mismatch");
+  if (finalityVerificationReport.source !== "adjutorix-ai-runway-terminal-release-finality-record-verifier") failures.push("terminal_release_finality_record_verification_report_source_mismatch");
+  if (finalityVerificationReport.ok !== true) failures.push("terminal_release_finality_record_verification_report_not_ok");
+  if (!adjutorixTerminalReleaseArchiveSealVerifierString(finalityVerificationReport.workspace)) failures.push("terminal_release_finality_record_verification_report_workspace_missing");
+  if (!adjutorixTerminalReleaseArchiveSealVerifierString(finalityVerificationReport.path)) failures.push("terminal_release_finality_record_verification_report_path_missing");
+  if (!adjutorixTerminalReleaseArchiveSealVerifierString(finalityVerificationReport.finality_record_sha256)) failures.push("terminal_release_finality_record_verification_report_finality_record_sha256_missing");
+
+  return { ok: failures.length === 0, failures };
+}
+
+function installAdjutorixAiRunwayTerminalReleaseArchiveSealVerifier(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-release-archive-seal-verifier")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-release-archive-seal-verifier";
+  panel.className = "adjutorix-ai-runway-terminal-release-archive-seal-verifier";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal release archive seal verifier");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-release-archive-seal-verifier-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Archive Verifier";
+
+  const state = document.createElement("span");
+  state.className = "adjutorix-ai-terminal-release-archive-seal-verifier-state";
+  state.textContent = "idle";
+
+  header.appendChild(title);
+  header.appendChild(state);
+
+  const select = document.createElement("select");
+  select.className = "adjutorix-ai-terminal-release-archive-seal-verifier-select";
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-release-archive-seal-verifier-actions";
+
+  const scanButton = document.createElement("button");
+  scanButton.type = "button";
+  scanButton.textContent = "Scan Archives";
+
+  const verifyButton = document.createElement("button");
+  verifyButton.type = "button";
+  verifyButton.textContent = "Verify Archive";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Report";
+
+  actions.appendChild(scanButton);
+  actions.appendChild(verifyButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-release-archive-seal-verifier-output";
+  output.textContent = "Terminal release archive seal verifier mounted. Scan for archive seals.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setState(value: string): void {
+    state.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  scanButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixTerminalReleaseArchiveSealVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.scan) {
+        setOutput("Workspace OS scan bridge unavailable.");
+        return;
+      }
+
+      setBusy(scanButton, true);
+      setState("scanning");
+
+      try {
+        const workspace = await adjutorixTerminalReleaseArchiveSealVerifierWorkspace();
+
+        if (!workspace) throw new Error("workspace_not_resolved");
+
+        const scanResult = await bridge.scan(workspace);
+        const archiveSeals = adjutorixTerminalReleaseArchiveSealVerifierFilesFromScan(scanResult);
+
+        select.replaceChildren();
+
+        for (const archivePath of archiveSeals) {
+          const option = document.createElement("option");
+          option.value = archivePath;
+          option.textContent = archivePath;
+          select.appendChild(option);
+        }
+
+        setState(archiveSeals.length ? "seals found" : "no seals");
+        setOutput(JSON.stringify({ ok: true, workspace, archive_seal_count: archiveSeals.length, archive_seals: archiveSeals }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_ARCHIVE_SEAL_VERIFIER_SCAN_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-archive-seal-verifier",
+          workspace,
+          archive_seal_count: archiveSeals.length,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL RELEASE ARCHIVE SEAL SCAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(scanButton, false);
+      }
+    })();
+  });
+
+  verifyButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixTerminalReleaseArchiveSealVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.readText) {
+        setOutput("Workspace OS read bridge unavailable.");
+        return;
+      }
+
+      if (!select.value) {
+        setOutput("No terminal release archive seal selected.");
+        return;
+      }
+
+      setBusy(verifyButton, true);
+      setState("verifying");
+
+      try {
+        const workspace = await adjutorixTerminalReleaseArchiveSealVerifierWorkspace();
+
+        if (!workspace) throw new Error("workspace_not_resolved");
+
+        const readResult = await bridge.readText({ workspace, path: select.value });
+        const readRecord = adjutorixTerminalReleaseArchiveSealVerifierRecord(readResult);
+        const content = adjutorixTerminalReleaseArchiveSealVerifierString(
+          readRecord.content || readRecord.text || readRecord.value || readResult,
+        );
+        const parsed = adjutorixTerminalReleaseArchiveSealVerifierRecord(JSON.parse(content));
+        const archiveSealSha256 = await adjutorixTerminalReleaseArchiveSealVerifierSha256(content);
+
+        const finalityVerificationReport = adjutorixTerminalReleaseArchiveSealVerifierRecord(
+          parsed.terminal_release_finality_record_verification_report,
+        );
+        const canonicalFinalityVerificationReportText = JSON.stringify(finalityVerificationReport, null, 2);
+        const actualFinalityVerificationReportSha256 = await adjutorixTerminalReleaseArchiveSealVerifierSha256(
+          canonicalFinalityVerificationReportText,
+        );
+
+        const missionSnapshotText = adjutorixTerminalReleaseArchiveSealVerifierString(parsed.mission_control_snapshot_text);
+        const missionSnapshotSha256 = await adjutorixTerminalReleaseArchiveSealVerifierSha256(missionSnapshotText);
+
+        const validation = adjutorixTerminalReleaseArchiveSealVerifierValidate(
+          parsed,
+          actualFinalityVerificationReportSha256,
+          missionSnapshotSha256,
+        );
+
+        const report = {
+          schema: "adjutorix.ai_runway_terminal_release_archive_seal_verification_report.v1",
+          source: "adjutorix-ai-runway-terminal-release-archive-seal-verifier",
+          verified_at: new Date().toISOString(),
+          workspace,
+          path: select.value,
+          archive_seal_sha256: archiveSealSha256,
+          ok: validation.ok,
+          validation,
+          hashes: {
+            terminal_release_finality_record_verification_report: {
+              ok: parsed.terminal_release_finality_record_verification_report_sha256 === actualFinalityVerificationReportSha256,
+              expected_sha256: parsed.terminal_release_finality_record_verification_report_sha256,
+              actual_sha256: actualFinalityVerificationReportSha256,
+            },
+            mission_snapshot: {
+              ok: parsed.mission_snapshot_sha256 === missionSnapshotSha256,
+              expected_sha256: parsed.mission_snapshot_sha256,
+              actual_sha256: missionSnapshotSha256,
+            },
+          },
+          archive_seal: parsed,
+        };
+
+        setState(validation.ok ? "valid" : "invalid");
+        setOutput(JSON.stringify(report, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_ARCHIVE_SEAL_VERIFIED", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-archive-seal-verifier",
+          workspace,
+          path: select.value,
+          archive_seal_sha256: archiveSealSha256,
+          ok: validation.ok,
+          failures: validation.failures,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL RELEASE ARCHIVE SEAL VERIFY FAILED\n${String(error)}`);
+      } finally {
+        setBusy(verifyButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(select);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_ARCHIVE_SEAL_VERIFIER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-release-archive-seal-verifier",
+    reads: ".adjutorix-ai-runway",
+    verifies: "adjutorix.ai_runway_terminal_release_archive_seal.v1",
+    recomputes: "sha256",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalReleaseArchiveSealVerifier, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalReleaseArchiveSealVerifier();
+}
