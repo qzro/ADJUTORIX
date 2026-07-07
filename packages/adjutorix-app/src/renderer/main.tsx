@@ -9261,3 +9261,359 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalReleaseFinalityRecord();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_FINALITY_RECORD_VERIFIER_V1
+ *
+ * Terminal release finality record verifier:
+ * - scans .adjutorix-ai-runway for terminal-release-finality-record JSON files
+ * - reads selected finality record through Workspace OS
+ * - validates finality schema/source/workspace/hash/report fields
+ * - recomputes SHA-256 over finality record content, embedded certificate verification report, and mission snapshot
+ * - emits terminal release finality verification report
+ */
+
+interface AdjutorixTerminalReleaseFinalityRecordVerifierWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<unknown>;
+}
+
+interface AdjutorixTerminalReleaseFinalityRecordVerifierRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalReleaseFinalityRecordVerifierWorkspaceBridge;
+}
+
+interface AdjutorixTerminalReleaseFinalityRecordVerifierValidation {
+  ok: boolean;
+  failures: string[];
+}
+
+function adjutorixTerminalReleaseFinalityRecordVerifierWindow(): AdjutorixTerminalReleaseFinalityRecordVerifierRuntimeWindow {
+  return window as unknown as AdjutorixTerminalReleaseFinalityRecordVerifierRuntimeWindow;
+}
+
+function adjutorixTerminalReleaseFinalityRecordVerifierRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalReleaseFinalityRecordVerifierArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixTerminalReleaseFinalityRecordVerifierString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalReleaseFinalityRecordVerifierPath(value: unknown): string {
+  const record = adjutorixTerminalReleaseFinalityRecordVerifierRecord(value);
+  return adjutorixTerminalReleaseFinalityRecordVerifierString(
+    record.path || record.relativePath || record.file || record.name,
+  );
+}
+
+async function adjutorixTerminalReleaseFinalityRecordVerifierWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalReleaseFinalityRecordVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalReleaseFinalityRecordVerifierRecord(defaults);
+    const workspace = adjutorixTerminalReleaseFinalityRecordVerifierString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixTerminalReleaseFinalityRecordVerifierFilesFromScan(scanResult: unknown): string[] {
+  const record = adjutorixTerminalReleaseFinalityRecordVerifierRecord(scanResult);
+  const files = adjutorixTerminalReleaseFinalityRecordVerifierArray(record.files || record.entries || record.items);
+
+  return files
+    .map(adjutorixTerminalReleaseFinalityRecordVerifierPath)
+    .filter((path) => path.includes(".adjutorix-ai-runway/"))
+    .filter((path) => path.includes("terminal-release-finality-record"))
+    .filter((path) => path.endsWith(".json"))
+    .sort();
+}
+
+async function adjutorixTerminalReleaseFinalityRecordVerifierSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixTerminalReleaseFinalityRecordVerifierValidate(
+  finalityRecord: Record<string, unknown>,
+  actualCertificateVerificationReportSha256: string,
+  actualMissionSnapshotSha256: string,
+): AdjutorixTerminalReleaseFinalityRecordVerifierValidation {
+  const failures: string[] = [];
+  const certificateVerificationReport = adjutorixTerminalReleaseFinalityRecordVerifierRecord(
+    finalityRecord.terminal_release_certificate_verification_report,
+  );
+
+  if (finalityRecord.schema !== "adjutorix.ai_runway_terminal_release_finality_record.v1") failures.push("schema_mismatch");
+  if (finalityRecord.source !== "adjutorix-ai-runway-terminal-release-finality-record") failures.push("source_mismatch");
+  if (!adjutorixTerminalReleaseFinalityRecordVerifierString(finalityRecord.finalized_at)) failures.push("finalized_at_missing");
+  if (!adjutorixTerminalReleaseFinalityRecordVerifierString(finalityRecord.workspace)) failures.push("workspace_missing");
+  if (!adjutorixTerminalReleaseFinalityRecordVerifierString(finalityRecord.terminal_release_certificate_verification_report_sha256)) failures.push("terminal_release_certificate_verification_report_sha256_missing");
+  if (!adjutorixTerminalReleaseFinalityRecordVerifierString(finalityRecord.mission_snapshot_sha256)) failures.push("mission_snapshot_sha256_missing");
+  if (!adjutorixTerminalReleaseFinalityRecordVerifierString(finalityRecord.mission_control_snapshot_text)) failures.push("mission_control_snapshot_text_missing");
+  if (finalityRecord.terminal_release_certificate_verification_report_sha256 !== actualCertificateVerificationReportSha256) failures.push("terminal_release_certificate_verification_report_sha256_mismatch");
+  if (finalityRecord.mission_snapshot_sha256 !== actualMissionSnapshotSha256) failures.push("mission_snapshot_sha256_mismatch");
+
+  if (certificateVerificationReport.schema !== "adjutorix.ai_runway_terminal_release_certificate_verification_report.v1") failures.push("terminal_release_certificate_verification_report_schema_mismatch");
+  if (certificateVerificationReport.source !== "adjutorix-ai-runway-terminal-release-certificate-verifier") failures.push("terminal_release_certificate_verification_report_source_mismatch");
+  if (certificateVerificationReport.ok !== true) failures.push("terminal_release_certificate_verification_report_not_ok");
+  if (!adjutorixTerminalReleaseFinalityRecordVerifierString(certificateVerificationReport.workspace)) failures.push("terminal_release_certificate_verification_report_workspace_missing");
+  if (!adjutorixTerminalReleaseFinalityRecordVerifierString(certificateVerificationReport.path)) failures.push("terminal_release_certificate_verification_report_path_missing");
+  if (!adjutorixTerminalReleaseFinalityRecordVerifierString(certificateVerificationReport.certificate_sha256)) failures.push("terminal_release_certificate_verification_report_certificate_sha256_missing");
+
+  return { ok: failures.length === 0, failures };
+}
+
+function installAdjutorixAiRunwayTerminalReleaseFinalityRecordVerifier(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-release-finality-record-verifier")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-release-finality-record-verifier";
+  panel.className = "adjutorix-ai-runway-terminal-release-finality-record-verifier";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal release finality record verifier");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-release-finality-record-verifier-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Finality Verifier";
+
+  const state = document.createElement("span");
+  state.className = "adjutorix-ai-terminal-release-finality-record-verifier-state";
+  state.textContent = "idle";
+
+  header.appendChild(title);
+  header.appendChild(state);
+
+  const select = document.createElement("select");
+  select.className = "adjutorix-ai-terminal-release-finality-record-verifier-select";
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-release-finality-record-verifier-actions";
+
+  const scanButton = document.createElement("button");
+  scanButton.type = "button";
+  scanButton.textContent = "Scan Finality";
+
+  const verifyButton = document.createElement("button");
+  verifyButton.type = "button";
+  verifyButton.textContent = "Verify Finality";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Report";
+
+  actions.appendChild(scanButton);
+  actions.appendChild(verifyButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-release-finality-record-verifier-output";
+  output.textContent = "Terminal release finality record verifier mounted. Scan for finality records.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setState(value: string): void {
+    state.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  scanButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixTerminalReleaseFinalityRecordVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.scan) {
+        setOutput("Workspace OS scan bridge unavailable.");
+        return;
+      }
+
+      setBusy(scanButton, true);
+      setState("scanning");
+
+      try {
+        const workspace = await adjutorixTerminalReleaseFinalityRecordVerifierWorkspace();
+
+        if (!workspace) throw new Error("workspace_not_resolved");
+
+        const scanResult = await bridge.scan(workspace);
+        const finalityRecords = adjutorixTerminalReleaseFinalityRecordVerifierFilesFromScan(scanResult);
+
+        select.replaceChildren();
+
+        for (const finalityPath of finalityRecords) {
+          const option = document.createElement("option");
+          option.value = finalityPath;
+          option.textContent = finalityPath;
+          select.appendChild(option);
+        }
+
+        setState(finalityRecords.length ? "records found" : "no records");
+        setOutput(JSON.stringify({ ok: true, workspace, finality_record_count: finalityRecords.length, finality_records: finalityRecords }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_FINALITY_RECORD_VERIFIER_SCAN_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-finality-record-verifier",
+          workspace,
+          finality_record_count: finalityRecords.length,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL RELEASE FINALITY RECORD SCAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(scanButton, false);
+      }
+    })();
+  });
+
+  verifyButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixTerminalReleaseFinalityRecordVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.readText) {
+        setOutput("Workspace OS read bridge unavailable.");
+        return;
+      }
+
+      if (!select.value) {
+        setOutput("No terminal release finality record selected.");
+        return;
+      }
+
+      setBusy(verifyButton, true);
+      setState("verifying");
+
+      try {
+        const workspace = await adjutorixTerminalReleaseFinalityRecordVerifierWorkspace();
+
+        if (!workspace) throw new Error("workspace_not_resolved");
+
+        const readResult = await bridge.readText({ workspace, path: select.value });
+        const readRecord = adjutorixTerminalReleaseFinalityRecordVerifierRecord(readResult);
+        const content = adjutorixTerminalReleaseFinalityRecordVerifierString(
+          readRecord.content || readRecord.text || readRecord.value || readResult,
+        );
+        const parsed = adjutorixTerminalReleaseFinalityRecordVerifierRecord(JSON.parse(content));
+        const finalityRecordSha256 = await adjutorixTerminalReleaseFinalityRecordVerifierSha256(content);
+
+        const certificateVerificationReport = adjutorixTerminalReleaseFinalityRecordVerifierRecord(
+          parsed.terminal_release_certificate_verification_report,
+        );
+        const canonicalCertificateVerificationReportText = JSON.stringify(certificateVerificationReport, null, 2);
+        const actualCertificateVerificationReportSha256 = await adjutorixTerminalReleaseFinalityRecordVerifierSha256(
+          canonicalCertificateVerificationReportText,
+        );
+
+        const missionSnapshotText = adjutorixTerminalReleaseFinalityRecordVerifierString(parsed.mission_control_snapshot_text);
+        const missionSnapshotSha256 = await adjutorixTerminalReleaseFinalityRecordVerifierSha256(missionSnapshotText);
+
+        const validation = adjutorixTerminalReleaseFinalityRecordVerifierValidate(
+          parsed,
+          actualCertificateVerificationReportSha256,
+          missionSnapshotSha256,
+        );
+
+        const report = {
+          schema: "adjutorix.ai_runway_terminal_release_finality_record_verification_report.v1",
+          source: "adjutorix-ai-runway-terminal-release-finality-record-verifier",
+          verified_at: new Date().toISOString(),
+          workspace,
+          path: select.value,
+          finality_record_sha256: finalityRecordSha256,
+          ok: validation.ok,
+          validation,
+          hashes: {
+            terminal_release_certificate_verification_report: {
+              ok: parsed.terminal_release_certificate_verification_report_sha256 === actualCertificateVerificationReportSha256,
+              expected_sha256: parsed.terminal_release_certificate_verification_report_sha256,
+              actual_sha256: actualCertificateVerificationReportSha256,
+            },
+            mission_snapshot: {
+              ok: parsed.mission_snapshot_sha256 === missionSnapshotSha256,
+              expected_sha256: parsed.mission_snapshot_sha256,
+              actual_sha256: missionSnapshotSha256,
+            },
+          },
+          finality_record: parsed,
+        };
+
+        setState(validation.ok ? "valid" : "invalid");
+        setOutput(JSON.stringify(report, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_FINALITY_RECORD_VERIFIED", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-finality-record-verifier",
+          workspace,
+          path: select.value,
+          finality_record_sha256: finalityRecordSha256,
+          ok: validation.ok,
+          failures: validation.failures,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL RELEASE FINALITY RECORD VERIFY FAILED\n${String(error)}`);
+      } finally {
+        setBusy(verifyButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(select);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_FINALITY_RECORD_VERIFIER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-release-finality-record-verifier",
+    reads: ".adjutorix-ai-runway",
+    verifies: "adjutorix.ai_runway_terminal_release_finality_record.v1",
+    recomputes: "sha256",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalReleaseFinalityRecordVerifier, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalReleaseFinalityRecordVerifier();
+}
