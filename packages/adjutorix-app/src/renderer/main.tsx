@@ -10276,3 +10276,308 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalReleaseArchiveSealVerifier();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_ARCHIVE_BUNDLE_V1
+ *
+ * Terminal release archive bundle:
+ * - consumes terminal-release-archive-seal verification report output
+ * - validates report schema/source/workspace/path/archive hash/ok fields
+ * - computes SHA-256 over archive seal verification report text and mission snapshot text
+ * - writes durable terminal release archive bundle JSON into .adjutorix-ai-runway/
+ * - requires manual BUNDLE confirmation
+ */
+
+interface AdjutorixTerminalReleaseArchiveBundleWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  writeText?: (request: { workspace?: string; path: string; content: string }) => Promise<unknown>;
+}
+
+interface AdjutorixTerminalReleaseArchiveBundleRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalReleaseArchiveBundleWorkspaceBridge;
+}
+
+function adjutorixTerminalReleaseArchiveBundleWindow(): AdjutorixTerminalReleaseArchiveBundleRuntimeWindow {
+  return window as unknown as AdjutorixTerminalReleaseArchiveBundleRuntimeWindow;
+}
+
+function adjutorixTerminalReleaseArchiveBundleRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalReleaseArchiveBundleString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalReleaseArchiveBundleText(selector: string): string {
+  const element = document.querySelector(selector);
+
+  if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) {
+    return element.value;
+  }
+
+  if (element instanceof HTMLElement) {
+    return element.textContent || "";
+  }
+
+  return "";
+}
+
+function adjutorixTerminalReleaseArchiveBundleTimestamp(): string {
+  return new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
+}
+
+async function adjutorixTerminalReleaseArchiveBundleWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalReleaseArchiveBundleWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalReleaseArchiveBundleRecord(defaults);
+    const workspace = adjutorixTerminalReleaseArchiveBundleString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+async function adjutorixTerminalReleaseArchiveBundleSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixTerminalReleaseArchiveBundleParseReport(text: string): Record<string, unknown> {
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    throw new Error("terminal_release_archive_seal_verification_report_empty");
+  }
+
+  const parsed = adjutorixTerminalReleaseArchiveBundleRecord(JSON.parse(trimmed));
+
+  if (parsed.schema !== "adjutorix.ai_runway_terminal_release_archive_seal_verification_report.v1") {
+    throw new Error("terminal_release_archive_seal_verification_report_schema_mismatch");
+  }
+
+  if (parsed.source !== "adjutorix-ai-runway-terminal-release-archive-seal-verifier") {
+    throw new Error("terminal_release_archive_seal_verification_report_source_mismatch");
+  }
+
+  if (parsed.ok !== true) {
+    throw new Error("terminal_release_archive_seal_verification_report_not_ok");
+  }
+
+  if (!adjutorixTerminalReleaseArchiveBundleString(parsed.workspace)) {
+    throw new Error("terminal_release_archive_seal_verification_report_workspace_missing");
+  }
+
+  if (!adjutorixTerminalReleaseArchiveBundleString(parsed.path)) {
+    throw new Error("terminal_release_archive_seal_verification_report_path_missing");
+  }
+
+  if (!adjutorixTerminalReleaseArchiveBundleString(parsed.archive_seal_sha256)) {
+    throw new Error("terminal_release_archive_seal_verification_report_archive_seal_sha256_missing");
+  }
+
+  return parsed;
+}
+
+function installAdjutorixAiRunwayTerminalReleaseArchiveBundle(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-release-archive-bundle")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-release-archive-bundle";
+  panel.className = "adjutorix-ai-runway-terminal-release-archive-bundle";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal release archive bundle");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-release-archive-bundle-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Archive Bundle";
+
+  const confirm = document.createElement("input");
+  confirm.className = "adjutorix-ai-terminal-release-archive-bundle-confirm";
+  confirm.placeholder = "Type BUNDLE";
+  confirm.spellcheck = false;
+
+  header.appendChild(title);
+  header.appendChild(confirm);
+
+  const note = document.createElement("textarea");
+  note.className = "adjutorix-ai-terminal-release-archive-bundle-note";
+  note.placeholder = "Operator terminal release archive bundle note...";
+  note.spellcheck = false;
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-release-archive-bundle-actions";
+
+  const previewButton = document.createElement("button");
+  previewButton.type = "button";
+  previewButton.textContent = "Preview Bundle";
+
+  const writeButton = document.createElement("button");
+  writeButton.type = "button";
+  writeButton.textContent = "Write Bundle";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Bundle";
+
+  actions.appendChild(previewButton);
+  actions.appendChild(writeButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-release-archive-bundle-output";
+  output.textContent = "Terminal release archive bundle mounted. Verify archive seal first, then type BUNDLE.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  async function buildArchiveBundle(): Promise<Record<string, unknown>> {
+    const workspace = await adjutorixTerminalReleaseArchiveBundleWorkspace();
+
+    if (!workspace) {
+      throw new Error("workspace_not_resolved");
+    }
+
+    const archiveSealVerificationText = adjutorixTerminalReleaseArchiveBundleText(
+      ".adjutorix-ai-terminal-release-archive-seal-verifier-output",
+    );
+    const archiveSealVerificationReport = adjutorixTerminalReleaseArchiveBundleParseReport(archiveSealVerificationText);
+    const archiveSealVerificationReportSha256 = await adjutorixTerminalReleaseArchiveBundleSha256(
+      archiveSealVerificationText,
+    );
+    const missionSnapshotText = adjutorixTerminalReleaseArchiveBundleText(".adjutorix-ai-mission-output");
+    const missionSnapshotSha256 = await adjutorixTerminalReleaseArchiveBundleSha256(missionSnapshotText);
+
+    return {
+      schema: "adjutorix.ai_runway_terminal_release_archive_bundle.v1",
+      source: "adjutorix-ai-runway-terminal-release-archive-bundle",
+      bundled_at: new Date().toISOString(),
+      workspace,
+      operator_note: note.value,
+      terminal_release_archive_seal_verification_report_sha256: archiveSealVerificationReportSha256,
+      mission_snapshot_sha256: missionSnapshotSha256,
+      terminal_release_archive_seal_verification_report: archiveSealVerificationReport,
+      mission_control_snapshot_text: missionSnapshotText,
+    };
+  }
+
+  async function writeArchiveBundle(record: Record<string, unknown>): Promise<{ path: string; bytes: number }> {
+    const bridge = adjutorixTerminalReleaseArchiveBundleWindow().adjutorixWorkspaceOS;
+
+    if (!bridge?.writeText) {
+      throw new Error("workspace_write_bridge_unavailable");
+    }
+
+    const workspace = adjutorixTerminalReleaseArchiveBundleString(record.workspace);
+    const path = `.adjutorix-ai-runway/${adjutorixTerminalReleaseArchiveBundleTimestamp()}-terminal-release-archive-bundle.json`;
+    const content = JSON.stringify(record, null, 2) + "\n";
+
+    await bridge.writeText({ workspace, path, content });
+
+    return { path, bytes: content.length };
+  }
+
+  previewButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(previewButton, true);
+      try {
+        const record = await buildArchiveBundle();
+        setOutput(JSON.stringify(record, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_ARCHIVE_BUNDLE_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-archive-bundle",
+          workspace: record.workspace,
+        }));
+      } catch (error) {
+        setOutput(`TERMINAL RELEASE ARCHIVE BUNDLE PREVIEW FAILED\n${String(error)}`);
+      } finally {
+        setBusy(previewButton, false);
+      }
+    })();
+  });
+
+  writeButton.addEventListener("click", () => {
+    void (async () => {
+      if (confirm.value.trim() !== "BUNDLE") {
+        setOutput("Terminal release archive bundle blocked. Type BUNDLE in the confirmation field.");
+        return;
+      }
+
+      setBusy(writeButton, true);
+      try {
+        const record = await buildArchiveBundle();
+        const written = await writeArchiveBundle(record);
+        confirm.value = "";
+        setOutput(JSON.stringify({ ok: true, ...written, archive_bundle: record }, null, 2));
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_ARCHIVE_BUNDLE_RECORDED", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-archive-bundle",
+          workspace: record.workspace,
+          path: written.path,
+          bytes: written.bytes,
+          bundles: "adjutorix.ai_runway_terminal_release_archive_seal_verification_report.v1",
+        }));
+      } catch (error) {
+        setOutput(`TERMINAL RELEASE ARCHIVE BUNDLE FAILED\n${String(error)}`);
+      } finally {
+        setBusy(writeButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(note);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_ARCHIVE_BUNDLE_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-release-archive-bundle",
+    writes: ".adjutorix-ai-runway",
+    requires: "manual-bundle-confirmation",
+    bundles: "adjutorix.ai_runway_terminal_release_archive_seal_verification_report.v1",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalReleaseArchiveBundle, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalReleaseArchiveBundle();
+}
