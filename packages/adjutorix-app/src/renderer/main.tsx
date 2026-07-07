@@ -11250,3 +11250,365 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalReleasePublicationManifest();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_MANIFEST_VERIFIER_V1
+ *
+ * Terminal release publication manifest verifier:
+ * - scans .adjutorix-ai-runway for terminal-release-publication-manifest JSON files
+ * - reads selected publication manifest through Workspace OS
+ * - validates publication schema/source/workspace/hash/report fields
+ * - recomputes SHA-256 over publication manifest content, embedded archive bundle verification report, and mission snapshot
+ * - emits terminal release publication manifest verification report
+ */
+
+interface AdjutorixTerminalReleasePublicationManifestVerifierWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<unknown>;
+}
+
+interface AdjutorixTerminalReleasePublicationManifestVerifierRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalReleasePublicationManifestVerifierWorkspaceBridge;
+}
+
+interface AdjutorixTerminalReleasePublicationManifestVerifierValidation {
+  ok: boolean;
+  failures: string[];
+}
+
+function adjutorixTerminalReleasePublicationManifestVerifierWindow(): AdjutorixTerminalReleasePublicationManifestVerifierRuntimeWindow {
+  return window as unknown as AdjutorixTerminalReleasePublicationManifestVerifierRuntimeWindow;
+}
+
+function adjutorixTerminalReleasePublicationManifestVerifierRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalReleasePublicationManifestVerifierArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixTerminalReleasePublicationManifestVerifierString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalReleasePublicationManifestVerifierPath(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  const record = adjutorixTerminalReleasePublicationManifestVerifierRecord(value);
+  return adjutorixTerminalReleasePublicationManifestVerifierString(
+    record.path || record.relativePath || record.file || record.name,
+  );
+}
+
+async function adjutorixTerminalReleasePublicationManifestVerifierWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalReleasePublicationManifestVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalReleasePublicationManifestVerifierRecord(defaults);
+    const workspace = adjutorixTerminalReleasePublicationManifestVerifierString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixTerminalReleasePublicationManifestVerifierFilesFromScan(scanResult: unknown): string[] {
+  const record = adjutorixTerminalReleasePublicationManifestVerifierRecord(scanResult);
+  const files = Array.isArray(scanResult)
+    ? scanResult
+    : adjutorixTerminalReleasePublicationManifestVerifierArray(record.files || record.entries || record.items || record.paths);
+
+  return files
+    .map(adjutorixTerminalReleasePublicationManifestVerifierPath)
+    .filter((path) => path.includes(".adjutorix-ai-runway/"))
+    .filter((path) => path.includes("terminal-release-publication-manifest"))
+    .filter((path) => path.endsWith(".json"))
+    .sort();
+}
+
+async function adjutorixTerminalReleasePublicationManifestVerifierSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function adjutorixTerminalReleasePublicationManifestVerifierValidate(
+  publicationManifest: Record<string, unknown>,
+  actualArchiveBundleVerificationReportSha256: string,
+  actualMissionSnapshotSha256: string,
+): AdjutorixTerminalReleasePublicationManifestVerifierValidation {
+  const failures: string[] = [];
+  const archiveBundleVerificationReport = adjutorixTerminalReleasePublicationManifestVerifierRecord(
+    publicationManifest.terminal_release_archive_bundle_verification_report,
+  );
+
+  if (publicationManifest.schema !== "adjutorix.ai_runway_terminal_release_publication_manifest.v1") failures.push("schema_mismatch");
+  if (publicationManifest.source !== "adjutorix-ai-runway-terminal-release-publication-manifest") failures.push("source_mismatch");
+  if (!adjutorixTerminalReleasePublicationManifestVerifierString(publicationManifest.published_at)) failures.push("published_at_missing");
+  if (!adjutorixTerminalReleasePublicationManifestVerifierString(publicationManifest.workspace)) failures.push("workspace_missing");
+  if (!adjutorixTerminalReleasePublicationManifestVerifierString(publicationManifest.terminal_release_archive_bundle_verification_report_sha256)) failures.push("terminal_release_archive_bundle_verification_report_sha256_missing");
+  if (!adjutorixTerminalReleasePublicationManifestVerifierString(publicationManifest.mission_snapshot_sha256)) failures.push("mission_snapshot_sha256_missing");
+  if (!adjutorixTerminalReleasePublicationManifestVerifierString(publicationManifest.mission_control_snapshot_text)) failures.push("mission_control_snapshot_text_missing");
+  if (publicationManifest.terminal_release_archive_bundle_verification_report_sha256 !== actualArchiveBundleVerificationReportSha256) failures.push("terminal_release_archive_bundle_verification_report_sha256_mismatch");
+  if (publicationManifest.mission_snapshot_sha256 !== actualMissionSnapshotSha256) failures.push("mission_snapshot_sha256_mismatch");
+
+  if (archiveBundleVerificationReport.schema !== "adjutorix.ai_runway_terminal_release_archive_bundle_verification_report.v1") failures.push("terminal_release_archive_bundle_verification_report_schema_mismatch");
+  if (archiveBundleVerificationReport.source !== "adjutorix-ai-runway-terminal-release-archive-bundle-verifier") failures.push("terminal_release_archive_bundle_verification_report_source_mismatch");
+  if (archiveBundleVerificationReport.ok !== true) failures.push("terminal_release_archive_bundle_verification_report_not_ok");
+  if (!adjutorixTerminalReleasePublicationManifestVerifierString(archiveBundleVerificationReport.workspace)) failures.push("terminal_release_archive_bundle_verification_report_workspace_missing");
+  if (!adjutorixTerminalReleasePublicationManifestVerifierString(archiveBundleVerificationReport.path)) failures.push("terminal_release_archive_bundle_verification_report_path_missing");
+  if (!adjutorixTerminalReleasePublicationManifestVerifierString(archiveBundleVerificationReport.archive_bundle_sha256)) failures.push("terminal_release_archive_bundle_verification_report_archive_bundle_sha256_missing");
+
+  return { ok: failures.length === 0, failures };
+}
+
+function installAdjutorixAiRunwayTerminalReleasePublicationManifestVerifier(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-release-publication-manifest-verifier")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-release-publication-manifest-verifier";
+  panel.className = "adjutorix-ai-runway-terminal-release-publication-manifest-verifier";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal release publication manifest verifier");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-release-publication-manifest-verifier-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Publication Verifier";
+
+  const state = document.createElement("span");
+  state.className = "adjutorix-ai-terminal-release-publication-manifest-verifier-state";
+  state.textContent = "idle";
+
+  header.appendChild(title);
+  header.appendChild(state);
+
+  const select = document.createElement("select");
+  select.className = "adjutorix-ai-terminal-release-publication-manifest-verifier-select";
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-release-publication-manifest-verifier-actions";
+
+  const scanButton = document.createElement("button");
+  scanButton.type = "button";
+  scanButton.textContent = "Scan Publications";
+
+  const verifyButton = document.createElement("button");
+  verifyButton.type = "button";
+  verifyButton.textContent = "Verify Publication";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Report";
+
+  actions.appendChild(scanButton);
+  actions.appendChild(verifyButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-release-publication-manifest-verifier-output";
+  output.textContent = "Terminal release publication manifest verifier mounted. Scan for publication manifests.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setState(value: string): void {
+    state.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  scanButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixTerminalReleasePublicationManifestVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.scan) {
+        setOutput("Workspace OS scan bridge unavailable.");
+        return;
+      }
+
+      setBusy(scanButton, true);
+      setState("scanning");
+
+      try {
+        const workspace = await adjutorixTerminalReleasePublicationManifestVerifierWorkspace();
+
+        if (!workspace) throw new Error("workspace_not_resolved");
+
+        const scanResult = await bridge.scan(workspace);
+        const publicationManifests = adjutorixTerminalReleasePublicationManifestVerifierFilesFromScan(scanResult);
+
+        select.replaceChildren();
+
+        for (const publicationPath of publicationManifests) {
+          const option = document.createElement("option");
+          option.value = publicationPath;
+          option.textContent = publicationPath;
+          select.appendChild(option);
+        }
+
+        setState(publicationManifests.length ? "manifests found" : "no manifests");
+        setOutput(JSON.stringify({ ok: true, workspace, publication_manifest_count: publicationManifests.length, publication_manifests: publicationManifests }, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_MANIFEST_VERIFIER_SCAN_READY", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-publication-manifest-verifier",
+          workspace,
+          publication_manifest_count: publicationManifests.length,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL RELEASE PUBLICATION MANIFEST SCAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(scanButton, false);
+      }
+    })();
+  });
+
+  verifyButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge = adjutorixTerminalReleasePublicationManifestVerifierWindow().adjutorixWorkspaceOS;
+
+      if (!bridge?.readText) {
+        setOutput("Workspace OS read bridge unavailable.");
+        return;
+      }
+
+      if (!select.value) {
+        setOutput("No terminal release publication manifest selected.");
+        return;
+      }
+
+      setBusy(verifyButton, true);
+      setState("verifying");
+
+      try {
+        const workspace = await adjutorixTerminalReleasePublicationManifestVerifierWorkspace();
+
+        if (!workspace) throw new Error("workspace_not_resolved");
+
+        const readResult = await bridge.readText({ workspace, path: select.value });
+        const readRecord = adjutorixTerminalReleasePublicationManifestVerifierRecord(readResult);
+        const content = adjutorixTerminalReleasePublicationManifestVerifierString(
+          readRecord.content || readRecord.text || readRecord.value || readResult,
+        );
+        const parsed = adjutorixTerminalReleasePublicationManifestVerifierRecord(JSON.parse(content));
+        const publicationManifestSha256 = await adjutorixTerminalReleasePublicationManifestVerifierSha256(content);
+
+        const archiveBundleVerificationReport = adjutorixTerminalReleasePublicationManifestVerifierRecord(
+          parsed.terminal_release_archive_bundle_verification_report,
+        );
+        const canonicalArchiveBundleVerificationReportText = JSON.stringify(archiveBundleVerificationReport, null, 2);
+        const actualArchiveBundleVerificationReportSha256 = await adjutorixTerminalReleasePublicationManifestVerifierSha256(
+          canonicalArchiveBundleVerificationReportText,
+        );
+
+        const missionSnapshotText = adjutorixTerminalReleasePublicationManifestVerifierString(parsed.mission_control_snapshot_text);
+        const missionSnapshotSha256 = await adjutorixTerminalReleasePublicationManifestVerifierSha256(missionSnapshotText);
+
+        const validation = adjutorixTerminalReleasePublicationManifestVerifierValidate(
+          parsed,
+          actualArchiveBundleVerificationReportSha256,
+          missionSnapshotSha256,
+        );
+
+        const report = {
+          schema: "adjutorix.ai_runway_terminal_release_publication_manifest_verification_report.v1",
+          source: "adjutorix-ai-runway-terminal-release-publication-manifest-verifier",
+          verified_at: new Date().toISOString(),
+          workspace,
+          path: select.value,
+          publication_manifest_sha256: publicationManifestSha256,
+          ok: validation.ok,
+          validation,
+          hashes: {
+            terminal_release_archive_bundle_verification_report: {
+              ok: parsed.terminal_release_archive_bundle_verification_report_sha256 === actualArchiveBundleVerificationReportSha256,
+              expected_sha256: parsed.terminal_release_archive_bundle_verification_report_sha256,
+              actual_sha256: actualArchiveBundleVerificationReportSha256,
+            },
+            mission_snapshot: {
+              ok: parsed.mission_snapshot_sha256 === missionSnapshotSha256,
+              expected_sha256: parsed.mission_snapshot_sha256,
+              actual_sha256: missionSnapshotSha256,
+            },
+          },
+          publication_manifest: parsed,
+        };
+
+        setState(validation.ok ? "valid" : "invalid");
+        setOutput(JSON.stringify(report, null, 2));
+
+        console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_MANIFEST_VERIFIED", JSON.stringify({
+          source: "adjutorix-ai-runway-terminal-release-publication-manifest-verifier",
+          workspace,
+          path: select.value,
+          publication_manifest_sha256: publicationManifestSha256,
+          ok: validation.ok,
+          failures: validation.failures,
+        }));
+      } catch (error) {
+        setState("error");
+        setOutput(`TERMINAL RELEASE PUBLICATION MANIFEST VERIFY FAILED\n${String(error)}`);
+      } finally {
+        setBusy(verifyButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(select);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_MANIFEST_VERIFIER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-release-publication-manifest-verifier",
+    reads: ".adjutorix-ai-runway",
+    verifies: "adjutorix.ai_runway_terminal_release_publication_manifest.v1",
+    recomputes: "sha256",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalReleasePublicationManifestVerifier, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalReleasePublicationManifestVerifier();
+}
