@@ -2886,3 +2886,79 @@ textarea {
   overflow: auto;
   white-space: pre-wrap;
 }
+
+
+/* ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_CERTIFICATE_VERIFIER_CSS_V1 */
+
+.adjutorix-ai-runway-terminal-release-publication-certificate-verifier {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 107;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(120px, 280px);
+  gap: 10px;
+  width: min(540px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: 18px;
+  background: rgba(69, 26, 3, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-terminal-release-publication-certificate-verifier-header,
+.adjutorix-ai-terminal-release-publication-certificate-verifier-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-terminal-release-publication-certificate-verifier-state {
+  padding: 5px 9px;
+  border: 1px solid rgba(245, 158, 11, 0.32);
+  border-radius: 999px;
+  color: rgb(254, 243, 199);
+  background: rgba(146, 64, 14, 0.22);
+  font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  text-transform: uppercase;
+}
+
+.adjutorix-ai-terminal-release-publication-certificate-verifier-select,
+.adjutorix-ai-terminal-release-publication-certificate-verifier-output,
+.adjutorix-ai-terminal-release-publication-certificate-verifier-actions button {
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(254, 243, 199);
+}
+
+.adjutorix-ai-terminal-release-publication-certificate-verifier-select,
+.adjutorix-ai-terminal-release-publication-certificate-verifier-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-terminal-release-publication-certificate-verifier-select {
+  width: 100%;
+}
+
+.adjutorix-ai-terminal-release-publication-certificate-verifier-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-terminal-release-publication-certificate-verifier-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-terminal-release-publication-certificate-verifier-output {
+  min-height: 120px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
