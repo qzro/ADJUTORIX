@@ -3171,3 +3171,69 @@ textarea {
   white-space: pre-wrap;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
+
+
+/* ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_AUTHORITY_LEDGER_VERIFIER_CSS_V1 */
+
+.adjutorix-ai-runway-terminal-release-publication-authority-ledger-verifier {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 111;
+  display: grid;
+  grid-template-rows: auto auto minmax(130px, 300px);
+  gap: 10px;
+  width: min(560px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(251, 191, 36, 0.34);
+  border-radius: 18px;
+  background: rgba(41, 37, 36, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-header,
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-select,
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-output,
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-actions button {
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.88);
+  color: rgb(254, 243, 199);
+}
+
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-select,
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-actions button {
+  padding: 8px 10px;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-select {
+  width: min(330px, 50vw);
+}
+
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-actions button {
+  cursor: pointer;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-ledger-verifier-output {
+  min-height: 130px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
