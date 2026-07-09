@@ -14076,3 +14076,426 @@ if (document.readyState === "loading") {
 } else {
   installAdjutorixAiRunwayTerminalReleasePublicationAuthoritySeal();
 }
+
+
+/**
+ * ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_AUTHORITY_SEAL_VERIFIER_V1
+ *
+ * Terminal release publication authority seal verifier:
+ * - scans .adjutorix-ai-runway for terminal release publication authority seal artifacts
+ * - verifies adjutorix.ai_runway_terminal_release_publication_authority_seal.v1
+ * - recomputes sha256 over the raw seal, embedded verifier report, and mission snapshot
+ */
+
+interface AdjutorixTerminalReleasePublicationAuthoritySealVerifierWorkspaceBridge {
+  defaults?: () => Promise<Record<string, unknown>>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace?: string; path: string }) => Promise<unknown>;
+}
+
+interface AdjutorixTerminalReleasePublicationAuthoritySealVerifierRuntimeWindow {
+  adjutorixWorkspaceOS?: AdjutorixTerminalReleasePublicationAuthoritySealVerifierWorkspaceBridge;
+}
+
+function adjutorixTerminalReleasePublicationAuthoritySealVerifierWindow(): AdjutorixTerminalReleasePublicationAuthoritySealVerifierRuntimeWindow {
+  return window as unknown as AdjutorixTerminalReleasePublicationAuthoritySealVerifierRuntimeWindow;
+}
+
+function adjutorixTerminalReleasePublicationAuthoritySealVerifierRecord(value: unknown): Record<string, unknown> {
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return {};
+}
+
+function adjutorixTerminalReleasePublicationAuthoritySealVerifierArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function adjutorixTerminalReleasePublicationAuthoritySealVerifierString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function adjutorixTerminalReleasePublicationAuthoritySealVerifierBoolean(value: unknown): boolean {
+  return value === true;
+}
+
+function adjutorixTerminalReleasePublicationAuthoritySealVerifierHex64(value: unknown): boolean {
+  return typeof value === "string" && /^[a-f0-9]{64}$/iu.test(value);
+}
+
+async function adjutorixTerminalReleasePublicationAuthoritySealVerifierSha256(text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function adjutorixTerminalReleasePublicationAuthoritySealVerifierWorkspace(): Promise<string> {
+  const bridge = adjutorixTerminalReleasePublicationAuthoritySealVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.defaults) {
+    return "";
+  }
+
+  for (let round = 0; round < 48; round += 1) {
+    const defaults = await bridge.defaults();
+    const record = adjutorixTerminalReleasePublicationAuthoritySealVerifierRecord(defaults);
+    const workspace = adjutorixTerminalReleasePublicationAuthoritySealVerifierString(
+      record.workspace || record.root || record.cwd || record.path || record.workspacePath,
+    );
+
+    if (workspace) {
+      return workspace;
+    }
+
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+  }
+
+  return "";
+}
+
+function adjutorixTerminalReleasePublicationAuthoritySealVerifierScanEntries(scanResult: unknown): Record<string, unknown>[] {
+  const record = adjutorixTerminalReleasePublicationAuthoritySealVerifierRecord(scanResult);
+  const direct = adjutorixTerminalReleasePublicationAuthoritySealVerifierArray(scanResult);
+  const files = adjutorixTerminalReleasePublicationAuthoritySealVerifierArray(record.files);
+  const entries = direct.length > 0 ? direct : files;
+
+  return entries
+    .map((entry) => adjutorixTerminalReleasePublicationAuthoritySealVerifierRecord(entry))
+    .filter((entry) => {
+      const path = adjutorixTerminalReleasePublicationAuthoritySealVerifierString(entry.path || entry.relativePath || entry.file);
+      return path.includes(".adjutorix-ai-runway/")
+        && path.includes("terminal-release-publication-authority-seal")
+        && path.endsWith(".json");
+    })
+    .sort((left, right) => {
+      const leftPath = adjutorixTerminalReleasePublicationAuthoritySealVerifierString(left.path || left.relativePath || left.file);
+      const rightPath = adjutorixTerminalReleasePublicationAuthoritySealVerifierString(right.path || right.relativePath || right.file);
+      return rightPath.localeCompare(leftPath);
+    });
+}
+
+async function adjutorixTerminalReleasePublicationAuthoritySealVerifierRead(
+  workspace: string,
+  path: string,
+): Promise<string> {
+  const bridge = adjutorixTerminalReleasePublicationAuthoritySealVerifierWindow().adjutorixWorkspaceOS;
+
+  if (!bridge?.readText) {
+    throw new Error("workspace_read_bridge_unavailable");
+  }
+
+  const readResult = await bridge.readText({ workspace, path });
+  const readRecord = adjutorixTerminalReleasePublicationAuthoritySealVerifierRecord(readResult);
+  const content = readRecord.content || readRecord.text || readRecord.value || readResult;
+
+  if (typeof content !== "string") {
+    throw new Error("seal_content_not_string");
+  }
+
+  return content;
+}
+
+async function adjutorixTerminalReleasePublicationAuthoritySealVerifierBuildReport(
+  workspace: string,
+  path: string,
+  rawSealText: string,
+): Promise<Record<string, unknown>> {
+  const errors: string[] = [];
+  let seal: Record<string, unknown> = {};
+
+  try {
+    seal = adjutorixTerminalReleasePublicationAuthoritySealVerifierRecord(JSON.parse(rawSealText));
+  } catch {
+    errors.push("seal_json_parse_failed");
+  }
+
+  const embeddedReport = adjutorixTerminalReleasePublicationAuthoritySealVerifierRecord(
+    seal.terminal_release_publication_authority_ledger_verification_report,
+  );
+  const missionSnapshot = adjutorixTerminalReleasePublicationAuthoritySealVerifierRecord(seal.mission_snapshot);
+
+  if (seal.schema !== "adjutorix.ai_runway_terminal_release_publication_authority_seal.v1") {
+    errors.push("seal_schema_mismatch");
+  }
+
+  if (seal.source !== "adjutorix-ai-runway-terminal-release-publication-authority-seal") {
+    errors.push("seal_source_mismatch");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthoritySealVerifierBoolean(seal.ok)) {
+    errors.push("seal_not_ok");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthoritySealVerifierString(seal.workspace)) {
+    errors.push("seal_workspace_missing");
+  }
+
+  if (seal.requires !== "manual-publication-authority-seal-confirmation") {
+    errors.push("seal_requires_mismatch");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthoritySealVerifierHex64(
+    seal.terminal_release_publication_authority_ledger_verification_report_sha256,
+  )) {
+    errors.push("embedded_authority_ledger_verifier_report_sha256_missing_or_invalid");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthoritySealVerifierHex64(
+    seal.terminal_release_publication_authority_ledger_sha256,
+  )) {
+    errors.push("terminal_release_publication_authority_ledger_sha256_missing_or_invalid");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthoritySealVerifierHex64(
+    seal.terminal_release_publication_finality_record_sha256,
+  )) {
+    errors.push("terminal_release_publication_finality_record_sha256_missing_or_invalid");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthoritySealVerifierHex64(seal.mission_snapshot_sha256)) {
+    errors.push("mission_snapshot_sha256_missing_or_invalid");
+  }
+
+  if (embeddedReport.schema !== "adjutorix.ai_runway_terminal_release_publication_authority_ledger_verification_report.v1") {
+    errors.push("embedded_authority_ledger_verifier_schema_mismatch");
+  }
+
+  if (embeddedReport.source !== "adjutorix-ai-runway-terminal-release-publication-authority-ledger-verifier") {
+    errors.push("embedded_authority_ledger_verifier_source_mismatch");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthoritySealVerifierBoolean(embeddedReport.ok)) {
+    errors.push("embedded_authority_ledger_verifier_not_ok");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthoritySealVerifierHex64(embeddedReport.publication_authority_ledger_sha256)) {
+    errors.push("embedded_publication_authority_ledger_sha256_missing_or_invalid");
+  }
+
+  if (!adjutorixTerminalReleasePublicationAuthoritySealVerifierHex64(
+    embeddedReport.terminal_release_publication_finality_record_sha256,
+  )) {
+    errors.push("embedded_terminal_release_publication_finality_record_sha256_missing_or_invalid");
+  }
+
+  const embeddedErrors = adjutorixTerminalReleasePublicationAuthoritySealVerifierArray(embeddedReport.errors);
+  if (embeddedErrors.length > 0) {
+    errors.push("embedded_authority_ledger_verifier_errors_not_empty");
+  }
+
+  const sealSha256 = await adjutorixTerminalReleasePublicationAuthoritySealVerifierSha256(rawSealText);
+  const embeddedReportText = JSON.stringify(embeddedReport, null, 2);
+  const embeddedReportSha256 = await adjutorixTerminalReleasePublicationAuthoritySealVerifierSha256(embeddedReportText);
+  const missionSnapshotText = JSON.stringify(missionSnapshot, null, 2);
+  const missionSnapshotSha256 = await adjutorixTerminalReleasePublicationAuthoritySealVerifierSha256(missionSnapshotText);
+
+  if (
+    adjutorixTerminalReleasePublicationAuthoritySealVerifierHex64(
+      seal.terminal_release_publication_authority_ledger_verification_report_sha256,
+    )
+    && embeddedReportSha256 !== seal.terminal_release_publication_authority_ledger_verification_report_sha256
+  ) {
+    errors.push("embedded_authority_ledger_verifier_report_sha256_mismatch");
+  }
+
+  if (
+    adjutorixTerminalReleasePublicationAuthoritySealVerifierHex64(seal.mission_snapshot_sha256)
+    && missionSnapshotSha256 !== seal.mission_snapshot_sha256
+  ) {
+    errors.push("mission_snapshot_sha256_mismatch");
+  }
+
+  return {
+    schema: "adjutorix.ai_runway_terminal_release_publication_authority_seal_verification_report.v1",
+    source: "adjutorix-ai-runway-terminal-release-publication-authority-seal-verifier",
+    created_at: new Date().toISOString(),
+    ok: errors.length === 0,
+    workspace,
+    path,
+    authority_seal_sha256: sealSha256,
+    terminal_release_publication_authority_seal_sha256: sealSha256,
+    terminal_release_publication_authority_ledger_sha256:
+      seal.terminal_release_publication_authority_ledger_sha256 || embeddedReport.publication_authority_ledger_sha256 || "",
+    terminal_release_publication_finality_record_sha256:
+      seal.terminal_release_publication_finality_record_sha256
+      || embeddedReport.terminal_release_publication_finality_record_sha256
+      || "",
+    terminal_release_publication_authority_ledger_verification_report_sha256: embeddedReportSha256,
+    mission_snapshot_sha256: missionSnapshotSha256,
+    verifies: "adjutorix.ai_runway_terminal_release_publication_authority_seal.v1",
+    recomputes: "sha256",
+    seal,
+    errors,
+  };
+}
+
+function installAdjutorixAiRunwayTerminalReleasePublicationAuthoritySealVerifier(): void {
+  if (document.getElementById("adjutorix-ai-runway-terminal-release-publication-authority-seal-verifier")) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "adjutorix-ai-runway-terminal-release-publication-authority-seal-verifier";
+  panel.className = "adjutorix-ai-runway-terminal-release-publication-authority-seal-verifier";
+  panel.setAttribute("aria-label", "Adjutorix AI runway terminal release publication authority seal verifier");
+
+  const header = document.createElement("div");
+  header.className = "adjutorix-ai-terminal-release-publication-authority-seal-verifier-header";
+
+  const title = document.createElement("strong");
+  title.textContent = "Authority Seal Verifier";
+
+  const select = document.createElement("select");
+  select.className = "adjutorix-ai-terminal-release-publication-authority-seal-verifier-select";
+  select.setAttribute("aria-label", "Authority seal artifact selector");
+
+  header.appendChild(title);
+  header.appendChild(select);
+
+  const actions = document.createElement("div");
+  actions.className = "adjutorix-ai-terminal-release-publication-authority-seal-verifier-actions";
+
+  const scanButton = document.createElement("button");
+  scanButton.type = "button";
+  scanButton.textContent = "Scan Seals";
+
+  const verifyButton = document.createElement("button");
+  verifyButton.type = "button";
+  verifyButton.textContent = "Verify Seal";
+
+  const copyButton = document.createElement("button");
+  copyButton.type = "button";
+  copyButton.textContent = "Copy Report";
+
+  actions.appendChild(scanButton);
+  actions.appendChild(verifyButton);
+  actions.appendChild(copyButton);
+
+  const output = document.createElement("pre");
+  output.className = "adjutorix-ai-terminal-release-publication-authority-seal-verifier-output";
+  output.textContent = "Authority seal verifier mounted. Scan .adjutorix-ai-runway, select an authority seal, then verify.";
+
+  function setOutput(value: string): void {
+    output.textContent = value;
+  }
+
+  function setBusy(button: HTMLButtonElement, busy: boolean): void {
+    if (busy) {
+      button.setAttribute("disabled", "true");
+    } else {
+      button.removeAttribute("disabled");
+    }
+  }
+
+  async function scanSeals(): Promise<void> {
+    const bridge = adjutorixTerminalReleasePublicationAuthoritySealVerifierWindow().adjutorixWorkspaceOS;
+
+    if (!bridge?.scan) {
+      throw new Error("workspace_scan_bridge_unavailable");
+    }
+
+    const workspace = await adjutorixTerminalReleasePublicationAuthoritySealVerifierWorkspace();
+
+    if (!workspace) {
+      throw new Error("workspace_not_resolved");
+    }
+
+    const scanResult = await bridge.scan(workspace);
+    const entries = adjutorixTerminalReleasePublicationAuthoritySealVerifierScanEntries(scanResult);
+
+    select.textContent = "";
+
+    for (const entry of entries) {
+      const path = adjutorixTerminalReleasePublicationAuthoritySealVerifierString(entry.path || entry.relativePath || entry.file);
+      const option = document.createElement("option");
+      option.value = path;
+      option.textContent = path;
+      select.appendChild(option);
+    }
+
+    setOutput(JSON.stringify({
+      schema: "adjutorix.ai_runway_terminal_release_publication_authority_seal_scan.v1",
+      source: "adjutorix-ai-runway-terminal-release-publication-authority-seal-verifier",
+      workspace,
+      count: entries.length,
+      paths: entries.map((entry) => adjutorixTerminalReleasePublicationAuthoritySealVerifierString(
+        entry.path || entry.relativePath || entry.file,
+      )),
+    }, null, 2));
+  }
+
+  scanButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(scanButton, true);
+      try {
+        await scanSeals();
+      } catch (error) {
+        setOutput(`TERMINAL RELEASE PUBLICATION AUTHORITY SEAL SCAN FAILED\n${String(error)}`);
+      } finally {
+        setBusy(scanButton, false);
+      }
+    })();
+  });
+
+  verifyButton.addEventListener("click", () => {
+    void (async () => {
+      setBusy(verifyButton, true);
+      try {
+        const workspace = await adjutorixTerminalReleasePublicationAuthoritySealVerifierWorkspace();
+
+        if (!workspace) {
+          throw new Error("workspace_not_resolved");
+        }
+
+        if (!select.value) {
+          await scanSeals();
+        }
+
+        if (!select.value) {
+          throw new Error("authority_seal_artifact_required");
+        }
+
+        const rawSealText = await adjutorixTerminalReleasePublicationAuthoritySealVerifierRead(workspace, select.value);
+        const report = await adjutorixTerminalReleasePublicationAuthoritySealVerifierBuildReport(
+          workspace,
+          select.value,
+          rawSealText,
+        );
+
+        setOutput(JSON.stringify(report, null, 2));
+      } catch (error) {
+        setOutput(`TERMINAL RELEASE PUBLICATION AUTHORITY SEAL VERIFY FAILED\n${String(error)}`);
+      } finally {
+        setBusy(verifyButton, false);
+      }
+    })();
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard.writeText(output.textContent || "");
+  });
+
+  panel.appendChild(header);
+  panel.appendChild(actions);
+  panel.appendChild(output);
+
+  document.body.appendChild(panel);
+
+  console.log("ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_AUTHORITY_SEAL_VERIFIER_MOUNTED", JSON.stringify({
+    source: "adjutorix-ai-runway-terminal-release-publication-authority-seal-verifier",
+    reads: ".adjutorix-ai-runway",
+    verifies: "adjutorix.ai_runway_terminal_release_publication_authority_seal.v1",
+    recomputes: "sha256",
+  }));
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", installAdjutorixAiRunwayTerminalReleasePublicationAuthoritySealVerifier, { once: true });
+} else {
+  installAdjutorixAiRunwayTerminalReleasePublicationAuthoritySealVerifier();
+}
