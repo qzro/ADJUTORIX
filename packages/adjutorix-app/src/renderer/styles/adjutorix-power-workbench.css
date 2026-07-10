@@ -4910,3 +4910,98 @@ textarea {
   line-height: 1.45;
   white-space: pre-wrap;
 }
+
+/* ADJUTORIX AI RUNWAY TERMINAL RELEASE PUBLICATION AUTHORITY PUBLICATION ARCHIVE BUNDLE */
+#adjutorix-ai-runway-terminal-release-publication-authority-publication-archive-bundle {
+  position: fixed;
+  right: 24px;
+  bottom: 18px;
+  width: 460px;
+  max-height: 72vh;
+  overflow: auto;
+  z-index: 139;
+  pointer-events: auto;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-archive-bundle-card {
+  border: 1px solid rgba(245, 158, 11, 0.38);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(69, 26, 3, 0.95);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.44);
+  color: rgb(255, 251, 235);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-archive-bundle-kicker {
+  margin-bottom: 6px;
+  color: rgb(251, 191, 36);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-archive-bundle h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-archive-bundle p {
+  margin: 0 0 12px;
+  color: rgb(254, 243, 199);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-archive-bundle label {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+  color: rgb(255, 251, 235);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-archive-bundle input {
+  width: 100%;
+  border: 1px solid rgba(245, 158, 11, 0.36);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(2, 6, 23, 0.78);
+  color: rgb(255, 251, 235);
+  font-size: 12px;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-archive-bundle-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-archive-bundle button {
+  border: 1px solid rgba(245, 158, 11, 0.44);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(217, 119, 6, 0.24);
+  color: rgb(255, 251, 235);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-archive-bundle-output {
+  min-height: 130px;
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(2, 6, 23, 0.72);
+  color: rgb(255, 251, 235);
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
