@@ -5195,3 +5195,98 @@ textarea {
   line-height: 1.45;
   white-space: pre-wrap;
 }
+
+/* ADJUTORIX AI RUNWAY TERMINAL RELEASE PUBLICATION AUTHORITY PUBLICATION PUBLICATION MANIFEST VERIFIER */
+#adjutorix-ai-runway-terminal-release-publication-authority-publication-publication-manifest-verifier {
+  position: fixed;
+  left: 24px;
+  bottom: 18px;
+  width: 480px;
+  max-height: 72vh;
+  overflow: auto;
+  z-index: 142;
+  pointer-events: auto;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-manifest-verifier-card {
+  border: 1px solid rgba(52, 211, 153, 0.38);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(6, 78, 59, 0.95);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.46);
+  color: rgb(236, 253, 245);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-manifest-verifier-kicker {
+  margin-bottom: 6px;
+  color: rgb(110, 231, 183);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-manifest-verifier h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-manifest-verifier p {
+  margin: 0 0 12px;
+  color: rgb(209, 250, 229);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-manifest-verifier label {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+  color: rgb(236, 253, 245);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-manifest-verifier input {
+  width: 100%;
+  border: 1px solid rgba(110, 231, 183, 0.36);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(2, 6, 23, 0.78);
+  color: rgb(236, 253, 245);
+  font-size: 12px;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-manifest-verifier-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-manifest-verifier button {
+  border: 1px solid rgba(110, 231, 183, 0.42);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(5, 150, 105, 0.28);
+  color: rgb(236, 253, 245);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-manifest-verifier-output {
+  min-height: 140px;
+  max-height: 310px;
+  overflow: auto;
+  border: 1px solid rgba(110, 231, 183, 0.3);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(2, 6, 23, 0.72);
+  color: rgb(236, 253, 245);
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
