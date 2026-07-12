@@ -6630,3 +6630,98 @@ textarea {
   line-height: 1.45;
   white-space: pre-wrap;
 }
+
+/* ADJUTORIX AI RUNWAY TERMINAL RELEASE PUBLICATION AUTHORITY PUBLICATION PUBLICATION DISTRIBUTION ARCHIVE SEAL */
+#adjutorix-ai-runway-terminal-release-publication-authority-publication-publication-distribution-archive-seal {
+  position: fixed;
+  left: 24px;
+  bottom: 18px;
+  width: 500px;
+  max-height: 72vh;
+  overflow: auto;
+  z-index: 157;
+  pointer-events: auto;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-seal-card {
+  border: 1px solid rgba(16, 185, 129, 0.42);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(6, 78, 59, 0.95);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+  color: rgb(236, 253, 245);
+  backdrop-filter: blur(18px);
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-seal-kicker {
+  margin-bottom: 6px;
+  color: rgb(167, 243, 208);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-seal h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-seal p {
+  margin: 0 0 12px;
+  color: rgb(209, 250, 229);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-seal label {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+  color: rgb(236, 253, 245);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-seal input {
+  width: 100%;
+  border: 1px solid rgba(16, 185, 129, 0.42);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(2, 6, 23, 0.78);
+  color: rgb(236, 253, 245);
+  font-size: 12px;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-seal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-seal button {
+  border: 1px solid rgba(16, 185, 129, 0.46);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(5, 150, 105, 0.38);
+  color: rgb(236, 253, 245);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-seal-output {
+  min-height: 140px;
+  max-height: 310px;
+  overflow: auto;
+  border: 1px solid rgba(16, 185, 129, 0.32);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(2, 6, 23, 0.72);
+  color: rgb(236, 253, 245);
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
