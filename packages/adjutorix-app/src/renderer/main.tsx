@@ -30527,3 +30527,615 @@ if (document.readyState === "loading") {
 } else {
   adjutorixMove189AuthorityPublicationPublicationDistributionArchiveSealVerifierMount();
 }
+
+/* ADJUTORIX AI RUNWAY TERMINAL RELEASE PUBLICATION AUTHORITY PUBLICATION PUBLICATION DISTRIBUTION ARCHIVE BUNDLE */
+type AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRecord = Record<
+  string,
+  unknown
+>;
+
+type AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBridge = {
+  defaults?: () => Promise<unknown>;
+  scan?: (workspace: string) => Promise<unknown>;
+  readText?: (request: { workspace: string; path: string }) => Promise<unknown>;
+  writeText?: (request: { workspace: string; path: string; content: string }) => Promise<unknown>;
+};
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSchema =
+  "adjutorix.ai_runway_terminal_release_publication_authority_publication_publication_distribution_archive_bundle.v1";
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveSealVerificationReportSchema =
+  "adjutorix.ai_runway_terminal_release_publication_authority_publication_publication_distribution_archive_seal_verification_report.v1";
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveSealSchema =
+  "adjutorix.ai_runway_terminal_release_publication_authority_publication_publication_distribution_archive_seal.v1";
+const adjutorixMove190AuthorityPublicationPublicationDistributionFinalityRecordVerificationReportSchema =
+  "adjutorix.ai_runway_terminal_release_publication_authority_publication_publication_distribution_finality_record_verification_report.v1";
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSource =
+  "adjutorix-ai-runway-terminal-release-publication-authority-publication-publication-distribution-archive-bundle";
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRequires =
+  "manual-publication-authority-publication-publication-distribution-bundle-confirmation";
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleConfirmation =
+  "AUTHORITY PUBLICATION PUBLICATION DISTRIBUTION BUNDLE";
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsRecord = (
+  value: unknown,
+): AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRecord | null => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRecord;
+};
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsArray = (
+  value: unknown,
+): unknown[] => (Array.isArray(value) ? value : []);
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsString = (
+  value: unknown,
+): string => (typeof value === "string" ? value : "");
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleCanonicalJson = (
+  value: unknown,
+): string => JSON.stringify(value, null, 2) || "";
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSha256 = async (
+  value: string,
+): Promise<string> => {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+};
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBridge = ():
+  | AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBridge
+  | null => {
+  return ((window as unknown as {
+    adjutorixWorkspaceOS?: AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBridge;
+  }).adjutorixWorkspaceOS || null);
+};
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleWorkspace = async (
+  bridge: AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBridge,
+  input: HTMLInputElement,
+): Promise<string> => {
+  const typed = input.value.trim();
+  if (typed) {
+    return typed;
+  }
+
+  const defaults = bridge.defaults ? await bridge.defaults() : null;
+  const record =
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsRecord(
+      defaults,
+    );
+  const workspace = record
+    ? adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsString(
+        record.workspace,
+      )
+    : "";
+
+  if (workspace) {
+    input.value = workspace;
+  }
+
+  return workspace;
+};
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundlePathCandidates = (
+  value: unknown,
+): string[] => {
+  const out: string[] = [];
+
+  const visit = (item: unknown): void => {
+    if (typeof item === "string") {
+      out.push(item);
+      return;
+    }
+
+    const record =
+      adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsRecord(
+        item,
+      );
+    if (!record) {
+      return;
+    }
+
+    for (const key of ["path", "filePath", "relativePath", "name"]) {
+      const candidate =
+        adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsString(
+          record[key],
+        );
+      if (candidate) {
+        out.push(candidate);
+      }
+    }
+
+    for (const nested of adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsArray(
+      record.paths,
+    )) {
+      visit(nested);
+    }
+  };
+
+  for (const item of adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsArray(
+    value,
+  )) {
+    visit(item);
+  }
+
+  const record =
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsRecord(
+      value,
+    );
+  if (record) {
+    for (const nested of adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsArray(
+      record.paths,
+    )) {
+      visit(nested);
+    }
+    for (const nested of adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsArray(
+      record.files,
+    )) {
+      visit(nested);
+    }
+    for (const nested of adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsArray(
+      record.items,
+    )) {
+      visit(nested);
+    }
+    for (const nested of adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsArray(
+      record.entries,
+    )) {
+      visit(nested);
+    }
+  }
+
+  return Array.from(new Set(out));
+};
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleLocate = async (
+  bridge: AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBridge,
+  workspace: string,
+): Promise<string> => {
+  if (!bridge.scan) {
+    throw new Error("workspace_scan_unavailable");
+  }
+
+  const scanResult = await bridge.scan(workspace);
+  const candidates =
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundlePathCandidates(
+      scanResult,
+    )
+      .filter(
+        (candidate) =>
+          candidate.includes(
+            "terminal-release-publication-authority-publication-publication-distribution-archive-seal-verification-report-",
+          ) &&
+          candidate.endsWith(".json") &&
+          !candidate.includes("archive-bundle"),
+      )
+      .sort();
+
+  const latest = candidates[candidates.length - 1] || "";
+  if (!latest) {
+    throw new Error("distribution_archive_seal_verification_report_artifact_missing");
+  }
+
+  return latest;
+};
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRead = async (
+  bridge: AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBridge,
+  workspace: string,
+  artifactPath: string,
+): Promise<string> => {
+  if (!bridge.readText) {
+    throw new Error("workspace_readText_unavailable");
+  }
+
+  const readResult = await bridge.readText({ workspace, path: artifactPath });
+  const readRecord =
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsRecord(
+      readResult,
+    ) || {};
+  const readContent = readRecord.content || readRecord.text || readRecord.value || readResult;
+  return typeof readContent === "string"
+    ? readContent
+    : adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleCanonicalJson(
+        readContent,
+      );
+};
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBuild = async (
+  workspace: string,
+  inputPath: string,
+  content: string,
+): Promise<AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRecord> => {
+  const errors: string[] = [];
+  let sealVerificationReport: AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRecord | null =
+    null;
+
+  try {
+    sealVerificationReport =
+      adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsRecord(
+        JSON.parse(content) as unknown,
+      );
+  } catch {
+    errors.push("distribution_archive_seal_verification_report_json_invalid");
+  }
+
+  if (!sealVerificationReport) {
+    errors.push("distribution_archive_seal_verification_report_missing");
+  } else {
+    if (
+      sealVerificationReport.schema !==
+      adjutorixMove190AuthorityPublicationPublicationDistributionArchiveSealVerificationReportSchema
+    ) {
+      errors.push("distribution_archive_seal_verification_report_schema_mismatch");
+    }
+
+    if (
+      sealVerificationReport.source !==
+      "adjutorix-ai-runway-terminal-release-publication-authority-publication-publication-distribution-archive-seal-verifier"
+    ) {
+      errors.push("distribution_archive_seal_verification_report_source_mismatch");
+    }
+
+    if (sealVerificationReport.ok !== true) {
+      errors.push("distribution_archive_seal_verification_report_not_ok");
+    }
+
+    if (
+      sealVerificationReport.verifies !==
+      adjutorixMove190AuthorityPublicationPublicationDistributionArchiveSealSchema
+    ) {
+      errors.push("distribution_archive_seal_verification_report_verifies_mismatch");
+    }
+  }
+
+  const archiveSeal =
+    sealVerificationReport &&
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsRecord(
+      sealVerificationReport.archive_seal,
+    );
+
+  if (!archiveSeal) {
+    errors.push("distribution_archive_seal_missing");
+  } else if (
+    archiveSeal.schema !==
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveSealSchema
+  ) {
+    errors.push("distribution_archive_seal_schema_mismatch");
+  }
+
+  const finalityReport =
+    sealVerificationReport &&
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsRecord(
+      sealVerificationReport.terminal_release_publication_authority_publication_publication_distribution_finality_record_verification_report,
+    );
+
+  if (!finalityReport) {
+    errors.push("distribution_finality_record_verification_report_missing");
+  } else if (
+    finalityReport.schema !==
+    adjutorixMove190AuthorityPublicationPublicationDistributionFinalityRecordVerificationReportSchema
+  ) {
+    errors.push("distribution_finality_record_verification_report_schema_mismatch");
+  }
+
+  const sealVerificationReportCanonical = sealVerificationReport
+    ? adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleCanonicalJson(
+        sealVerificationReport,
+      )
+    : content;
+  const sealVerificationReportSha256 =
+    await adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSha256(
+      sealVerificationReportCanonical,
+    );
+
+  const archiveSealCanonical = archiveSeal
+    ? adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleCanonicalJson(
+        archiveSeal,
+      )
+    : "";
+  const archiveSealSha256 = archiveSealCanonical
+    ? await adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSha256(
+        archiveSealCanonical,
+      )
+    : "";
+
+  const finalityReportCanonical = finalityReport
+    ? adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleCanonicalJson(
+        finalityReport,
+      )
+    : "";
+  const finalityReportSha256 = finalityReportCanonical
+    ? await adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSha256(
+        finalityReportCanonical,
+      )
+    : "";
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const outputPath = `.adjutorix-ai-runway/terminal-release-publication-authority-publication-publication-distribution-archive-bundle-${timestamp}.json`;
+
+  return {
+    schema: adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSchema,
+    source: adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSource,
+    created_at: new Date().toISOString(),
+    ok: errors.length === 0,
+    workspace,
+    path: outputPath,
+    requires: adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRequires,
+    confirmation:
+      adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleConfirmation,
+    bundles:
+      adjutorixMove190AuthorityPublicationPublicationDistributionArchiveSealVerificationReportSchema,
+    errors,
+    terminal_release_publication_authority_publication_publication_distribution_archive_seal_verification_report_path:
+      inputPath,
+    terminal_release_publication_authority_publication_publication_distribution_archive_seal_verification_report_sha256:
+      sealVerificationReportSha256,
+    terminal_release_publication_authority_publication_publication_distribution_archive_seal_sha256:
+      archiveSealSha256 ||
+      (sealVerificationReport
+        ? adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsString(
+            sealVerificationReport.terminal_release_publication_authority_publication_publication_distribution_archive_seal_sha256,
+          )
+        : ""),
+    terminal_release_publication_authority_publication_publication_distribution_finality_record_verification_report_sha256:
+      finalityReportSha256 ||
+      (sealVerificationReport
+        ? adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsString(
+            sealVerificationReport.terminal_release_publication_authority_publication_publication_distribution_finality_record_verification_report_sha256,
+          )
+        : ""),
+    terminal_release_publication_authority_publication_publication_distribution_finality_record_sha256:
+      sealVerificationReport
+        ? adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsString(
+            sealVerificationReport.terminal_release_publication_authority_publication_publication_distribution_finality_record_sha256,
+          )
+        : "",
+    terminal_release_publication_authority_publication_publication_distribution_archive_seal_verification_report:
+      sealVerificationReport,
+    terminal_release_publication_authority_publication_publication_distribution_archive_seal:
+      archiveSeal,
+    terminal_release_publication_authority_publication_publication_distribution_finality_record_verification_report:
+      finalityReport,
+  };
+};
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleWrite = async (
+  bridge: AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBridge,
+  workspace: string,
+  bundle: AdjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRecord,
+): Promise<void> => {
+  if (!bridge.writeText) {
+    throw new Error("workspace_writeText_unavailable");
+  }
+
+  const outputPath =
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleAsString(
+      bundle.path,
+    );
+  if (!outputPath) {
+    throw new Error("distribution_archive_bundle_path_missing");
+  }
+
+  const content =
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleCanonicalJson(
+      bundle,
+    );
+  await bridge.writeText({ workspace, path: outputPath, content });
+};
+
+const adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleMount = (): void => {
+  if (
+    document.getElementById(
+      "adjutorix-ai-runway-terminal-release-publication-authority-publication-publication-distribution-archive-bundle",
+    )
+  ) {
+    return;
+  }
+
+  const panel = document.createElement("section");
+  panel.id =
+    "adjutorix-ai-runway-terminal-release-publication-authority-publication-publication-distribution-archive-bundle";
+  panel.className =
+    "adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle";
+  panel.innerHTML = `
+    <div class="adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-card">
+      <div class="adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-kicker">AI Runway Terminal Release</div>
+      <h2>Authority Publication Publication Distribution Archive Bundle</h2>
+      <p>Locates the latest distribution archive seal verification report, validates continuity, and writes the terminal distribution archive bundle.</p>
+      <label>
+        Workspace
+        <input class="adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-workspace" placeholder="Workspace path" />
+      </label>
+      <label>
+        Verification Report Path
+        <input class="adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-path" placeholder=".adjutorix-ai-runway/terminal-release-publication-authority-publication-publication-distribution-archive-seal-verification-report-*.json" />
+      </label>
+      <label>
+        Manual Confirmation
+        <input class="adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-confirmation" placeholder="AUTHORITY PUBLICATION PUBLICATION DISTRIBUTION BUNDLE" />
+      </label>
+      <div class="adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-actions">
+        <button type="button" class="adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-locate">Locate Latest</button>
+        <button type="button" class="adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-write">Write Bundle</button>
+        <button type="button" class="adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-copy">Copy Bundle</button>
+      </div>
+      <pre class="adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-output" aria-live="polite"></pre>
+    </div>
+  `;
+
+  document.body.appendChild(panel);
+
+  const workspaceInput = panel.querySelector<HTMLInputElement>(
+    ".adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-workspace",
+  );
+  const pathInput = panel.querySelector<HTMLInputElement>(
+    ".adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-path",
+  );
+  const confirmationInput = panel.querySelector<HTMLInputElement>(
+    ".adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-confirmation",
+  );
+  const locateButton = panel.querySelector<HTMLButtonElement>(
+    ".adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-locate",
+  );
+  const writeButton = panel.querySelector<HTMLButtonElement>(
+    ".adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-write",
+  );
+  const copyButton = panel.querySelector<HTMLButtonElement>(
+    ".adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-copy",
+  );
+  const output = panel.querySelector<HTMLPreElement>(
+    ".adjutorix-ai-terminal-release-publication-authority-publication-publication-distribution-archive-bundle-output",
+  );
+
+  if (
+    !workspaceInput ||
+    !pathInput ||
+    !confirmationInput ||
+    !locateButton ||
+    !writeButton ||
+    !copyButton ||
+    !output
+  ) {
+    throw new Error("distribution_archive_bundle_controls_missing");
+  }
+
+  confirmationInput.value =
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleConfirmation;
+
+  const writeOutput = (value: unknown): void => {
+    output.textContent =
+      typeof value === "string"
+        ? value
+        : adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleCanonicalJson(
+            value,
+          );
+  };
+
+  locateButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge =
+        adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBridge();
+      if (!bridge) {
+        throw new Error("workspace_bridge_unavailable");
+      }
+
+      const workspace =
+        await adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleWorkspace(
+          bridge,
+          workspaceInput,
+        );
+      if (!workspace) {
+        throw new Error("workspace_path_required");
+      }
+
+      const artifactPath =
+        await adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleLocate(
+          bridge,
+          workspace,
+        );
+      pathInput.value = artifactPath;
+      writeOutput({ ok: true, workspace, path: artifactPath });
+    })().catch((error: unknown) => {
+      writeOutput({
+        schema: adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSchema,
+        source: adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSource,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  });
+
+  writeButton.addEventListener("click", () => {
+    void (async () => {
+      const bridge =
+        adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBridge();
+      if (!bridge) {
+        throw new Error("workspace_bridge_unavailable");
+      }
+
+      const workspace =
+        await adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleWorkspace(
+          bridge,
+          workspaceInput,
+        );
+      if (!workspace) {
+        throw new Error("workspace_path_required");
+      }
+
+      const confirmation = confirmationInput.value.trim();
+      if (
+        confirmation !==
+        adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleConfirmation
+      ) {
+        throw new Error("manual_distribution_archive_bundle_confirmation_required");
+      }
+
+      const artifactPath =
+        pathInput.value.trim() ||
+        (await adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleLocate(
+          bridge,
+          workspace,
+        ));
+      pathInput.value = artifactPath;
+
+      const content =
+        await adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRead(
+          bridge,
+          workspace,
+          artifactPath,
+        );
+      const bundle =
+        await adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleBuild(
+          workspace,
+          artifactPath,
+          content,
+        );
+
+      await adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleWrite(
+        bridge,
+        workspace,
+        bundle,
+      );
+
+      writeOutput(bundle);
+    })().catch((error: unknown) => {
+      writeOutput({
+        schema: adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSchema,
+        source: adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSource,
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  });
+
+  copyButton.addEventListener("click", () => {
+    void navigator.clipboard?.writeText(output.textContent || "");
+  });
+
+  console.info(
+    "ADJUTORIX_AI_RUNWAY_TERMINAL_RELEASE_PUBLICATION_AUTHORITY_PUBLICATION_PUBLICATION_DISTRIBUTION_ARCHIVE_BUNDLE_MOUNTED",
+    JSON.stringify({
+      source: adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleSource,
+      writes: ".adjutorix-ai-runway",
+      requires:
+        adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleRequires,
+      bundles:
+        adjutorixMove190AuthorityPublicationPublicationDistributionArchiveSealVerificationReportSchema,
+    }),
+  );
+};
+
+if (document.readyState === "loading") {
+  document.addEventListener(
+    "DOMContentLoaded",
+    adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleMount,
+  );
+} else {
+  adjutorixMove190AuthorityPublicationPublicationDistributionArchiveBundleMount();
+}
