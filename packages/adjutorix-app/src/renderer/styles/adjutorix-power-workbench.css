@@ -8150,3 +8150,28 @@ textarea {
   line-height: 1.45;
   white-space: pre-wrap;
 }
+
+/* Distribution Publication Publication Certificate */
+/* ADJUTORIX AI RUNWAY TERMINAL RELEASE PUBLICATION AUTHORITY PUBLICATION PUBLICATION DISTRIBUTION PUBLICATION CERTIFICATE */
+#adjutorix-ai-runway-terminal-release-publication-authority-publication-publication-distribution-publication-publication-certificate {
+  position: fixed;
+  right: 24px;
+  bottom: 18px;
+  width: 520px;
+  max-height: 72vh;
+  overflow: auto;
+  z-index: 173;
+  pointer-events: auto;
+}
+
+/* ADJUTORIX AI RUNWAY TERMINAL RELEASE PUBLICATION AUTHORITY PUBLICATION PUBLICATION DISTRIBUTION PUBLICATION CERTIFICATE VERIFIER */
+#adjutorix-ai-runway-terminal-release-publication-authority-publication-publication-distribution-publication-publication-certificate-verifier {
+  position: fixed;
+  left: 24px;
+  bottom: 18px;
+  width: 520px;
+  max-height: 72vh;
+  overflow: auto;
+  z-index: 173;
+  pointer-events: auto;
+}
