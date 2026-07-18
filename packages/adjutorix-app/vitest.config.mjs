@@ -7,6 +7,7 @@ export default defineConfig({
     restoreMocks: true,
     clearMocks: true,
     include: [
+      "tests/renderer/product_surface_orchestrator.test.tsx",
       "tests/renderer/operator_diagnostics_console_surface_contract.test.ts",
       "tests/renderer/operator_unified_control_spine_contract.test.ts",
       "tests/renderer/operator_evidence_ledger_surface_contract.test.ts",
@@ -53,10 +54,10 @@ export default defineConfig({
       "tests/renderer/use_patch_review.test.ts",
       "tests/renderer/use_workspace.test.ts",
       "tests/renderer/verify_panel.test.tsx",
-      "tests/renderer/welcome_screen.test.tsx"
+      "tests/renderer/welcome_screen.test.tsx",
     ],
     coverage: {
-      enabled: false
-    }
-  }
+      enabled: false,
+    },
+  },
 });
