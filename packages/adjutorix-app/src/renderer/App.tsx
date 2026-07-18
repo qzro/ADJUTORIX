@@ -1,11 +1,13 @@
 import React from "react";
 import { AdjutorixPowerWorkbench } from "./components/AdjutorixPowerWorkbench";
+import { ProductSurfaceOrchestrator } from "./components/ProductSurfaceOrchestrator";
 import { OperatorMissionControlPanel } from "./components/OperatorMissionControlPanel";
 import { OperatorExecutionRunwayPanel } from "./components/OperatorExecutionRunwayPanel";
 import { OperatorSurfaceSpinePanel } from "./components/OperatorSurfaceSpinePanel";
 import { OperatorEvidenceLedgerPanel } from "./components/OperatorEvidenceLedgerPanel";
 import { OperatorDiagnosticsConsolePanel } from "./components/OperatorDiagnosticsConsolePanel";
 import "./styles/adjutorix-power-workbench.css";
+import "./styles/product-command-deck.css";
 
 const operatorKernel = {
   operatorKernel: "ADJUTORIX_OPERATOR_KERNEL_BOUND",
@@ -45,14 +47,17 @@ function OperatorKernelLiveCockpit(): JSX.Element {
     <section
       data-testid="operator-kernel-live-surface"
       data-operator-kernel={liveOperatorKernelReceipt.operatorKernel}
-      data-operator-kernel-receipt-id={liveOperatorKernelReceipt.operatorKernelReceiptId}
+      data-operator-kernel-receipt-id={
+        liveOperatorKernelReceipt.operatorKernelReceiptId
+      }
       data-operator-kernel-hash={liveOperatorKernelReceipt.operatorKernelHash}
       data-previous-kernel-hash={liveOperatorKernelReceipt.previousKernelHash}
       data-receipt-hash={liveOperatorKernelReceipt.receiptHash}
     >
       <h2>Operator Kernel Live Cockpit</h2>
       <p>
-        adjutorixOperatorKernel createOperatorKernelReceipt previousKernelHash receiptHash Kernel-gated apply
+        adjutorixOperatorKernel createOperatorKernelReceipt previousKernelHash
+        receiptHash Kernel-gated apply
       </p>
     </section>
   );
@@ -94,11 +99,14 @@ export default function App(): JSX.Element {
       <main
         className="adjutorix-product-root adjutorix-product-root--cursor-class"
         data-operator-kernel={liveOperatorKernelReceipt.operatorKernel}
-        data-operator-kernel-receipt-id={liveOperatorKernelReceipt.operatorKernelReceiptId}
+        data-operator-kernel-receipt-id={
+          liveOperatorKernelReceipt.operatorKernelReceiptId
+        }
         data-operator-kernel-hash={liveOperatorKernelReceipt.operatorKernelHash}
         data-previous-kernel-hash={liveOperatorKernelReceipt.previousKernelHash}
       >
         <AdjutorixPowerWorkbench />
+        <ProductSurfaceOrchestrator />
 
         <section className="adjutorix-contract-vault" aria-hidden="true">
           <OperatorSurfaceSpinePanel
