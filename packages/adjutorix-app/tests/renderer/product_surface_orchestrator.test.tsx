@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ProductSurfaceOrchestrator } from "../../src/renderer/components/ProductSurfaceOrchestrator";
 
 // MOVE214_PROVIDER_TOPOLOGY_FALLBACK_TEST=true
+// MOVE215_GUIDED_MISSION_COMPOSER_TEST=true
 
 // MOVE214_WORKFLOW_ACCESSIBLE_TEST_FIXED=true
 
@@ -40,6 +41,7 @@ afterEach(() => {
   cleanup();
   document.body.innerHTML = "";
   document.body.className = "";
+  window.localStorage.clear();
 });
 
 describe("ProductSurfaceOrchestrator", () => {
@@ -188,5 +190,98 @@ describe("ProductSurfaceOrchestrator", () => {
         name: "Adjutorix guided product shell",
       }),
     ).toBeTruthy();
+  });
+
+  it("turns one plain-language task into a routed governed mission", async () => {
+    appendSurface(
+      "adjutorix-ai-live-conversation-surface",
+      "Integrated Assistant",
+      "Understand the requested outcome.",
+    );
+
+    appendSurface(
+      "adjutorix-ai-workspace-context-pack",
+      "Workspace Context",
+      "Prepare governed workspace context.",
+    );
+
+    const patch = appendSurface(
+      "adjutorix-ai-patch-runway",
+      "AI Patch Runway",
+      "Build a governed code change.",
+    );
+
+    appendSurface(
+      "adjutorix-ai-patch-verify-runway",
+      "Patch Verify",
+      "Verify the proposed change.",
+    );
+
+    let launchedMission: Record<string, unknown> | null = null;
+
+    const handleMission = (event: Event): void => {
+      launchedMission = (event as CustomEvent<Record<string, unknown>>).detail;
+    };
+
+    window.addEventListener("adjutorix:guided-mission:launch", handleMission);
+
+    render(<ProductSurfaceOrchestrator />);
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open Adjutorix guided workspace",
+      }),
+    );
+
+    fireEvent.change(
+      screen.getByRole("textbox", {
+        name: "Describe the Adjutorix mission",
+      }),
+      {
+        target: {
+          value:
+            "Implement a governed change to the renderer and preserve the evidence trail.",
+        },
+      },
+    );
+
+    const launchButton = await screen.findByRole("button", {
+      name: "Launch Build mission",
+    });
+
+    await waitFor(() => {
+      expect((launchButton as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    fireEvent.click(launchButton);
+
+    await waitFor(() => {
+      expect(patch.dataset.adjutorixSurfaceActive).toBe("true");
+    });
+
+    expect(launchedMission).toMatchObject({
+      schema: "adjutorix.guided_mission.v1",
+      task: "Implement a governed change to the renderer and preserve the evidence trail.",
+      workflow: "Build",
+      targetSurfaceId: "adjutorix-ai-patch-runway",
+      targetSurfaceTitle: "AI Patch Runway",
+      source: "adjutorix-guided-mission-composer",
+      preservesMountedAuthority: true,
+    });
+
+    const persistedMission = JSON.parse(
+      window.localStorage.getItem("adjutorix.guided_mission.v1") || "{}",
+    ) as Record<string, unknown>;
+
+    expect(persistedMission).toMatchObject({
+      workflow: "Build",
+      targetSurfaceId: "adjutorix-ai-patch-runway",
+      preservesMountedAuthority: true,
+    });
+
+    window.removeEventListener(
+      "adjutorix:guided-mission:launch",
+      handleMission,
+    );
   });
 });
