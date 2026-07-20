@@ -11,6 +11,8 @@ const PRODUCT_SURFACE_SELECTOR = '[id^="adjutorix-ai-"]';
 
 const COMMAND_DECK_EVENT = "adjutorix:product-command-deck:toggle";
 const GUIDED_SHELL_EVENT = "adjutorix:guided-product-shell:open";
+const GUIDED_MISSION_EVENT = "adjutorix:guided-mission:launch";
+const GUIDED_MISSION_STORAGE_KEY = "adjutorix.guided_mission.v1";
 
 // MOVE214_WORKFLOW_ACCESSIBILITY_FIXED=true
 
@@ -77,6 +79,18 @@ type WorkflowGuide = {
   eyebrow: string;
   title: string;
   description: string;
+};
+
+type GuidedMission = {
+  schema: "adjutorix.guided_mission.v1";
+  id: string;
+  task: string;
+  workflow: WorkflowMode;
+  targetSurfaceId: string;
+  targetSurfaceTitle: string;
+  source: "adjutorix-guided-mission-composer";
+  createdAt: string;
+  preservesMountedAuthority: true;
 };
 
 const WORKFLOW_GUIDES: Record<WorkflowFilter, WorkflowGuide> = {
@@ -205,6 +219,101 @@ function primarySurfaceRole(element: HTMLElement): PrimarySurfaceRole | null {
   return null;
 }
 
+// MOVE215_GUIDED_MISSION_COMPOSER=true
+function inferMissionWorkflow(value: string): WorkflowMode {
+  const task = compactText(value).toLowerCase();
+
+  if (
+    /\b(verify|test|check|audit|validate|review|diagnose failure|prove)\b/u.test(
+      task,
+    )
+  ) {
+    return "Verify";
+  }
+
+  if (
+    /\b(ship|release|publish|deploy|distribute|archive|finalize|certificate)\b/u.test(
+      task,
+    )
+  ) {
+    return "Ship";
+  }
+
+  if (
+    /\b(build|implement|create|fix|change|modify|refactor|write|add|remove|upgrade)\b/u.test(
+      task,
+    )
+  ) {
+    return "Build";
+  }
+
+  if (
+    /\b(plan|design|architect|strategy|scope|sequence|roadmap|proposal)\b/u.test(
+      task,
+    )
+  ) {
+    return "Plan";
+  }
+
+  return "Understand";
+}
+
+function recommendedSurfaceForWorkflow(
+  surfaces: ProductSurface[],
+  workflow: WorkflowFilter,
+): ProductSurface | null {
+  const candidates =
+    workflow === "All"
+      ? surfaces
+      : surfaces.filter((surface) => surface.workflow === workflow);
+
+  if (workflow === "Understand") {
+    return (
+      candidates.find((surface) => surface.primaryRole === "providerBridge") ||
+      candidates.find((surface) => surface.primaryRole === "contextPack") ||
+      candidates[0] ||
+      null
+    );
+  }
+
+  if (workflow === "Plan") {
+    return (
+      candidates.find((surface) => surface.primaryRole === "contextPack") ||
+      candidates.find((surface) => surface.id.includes("mission-control")) ||
+      candidates[0] ||
+      null
+    );
+  }
+
+  if (workflow === "Build") {
+    return (
+      candidates.find((surface) => surface.primaryRole === "patchRunway") ||
+      candidates[0] ||
+      null
+    );
+  }
+
+  if (workflow === "Verify") {
+    return (
+      candidates.find((surface) => surface.primaryRole === "patchVerify") ||
+      candidates[0] ||
+      null
+    );
+  }
+
+  if (workflow === "Ship") {
+    return (
+      candidates.find((surface) => surface.isCurrent) || candidates[0] || null
+    );
+  }
+
+  return (
+    candidates.find((surface) => surface.primaryRole === "providerBridge") ||
+    candidates.find((surface) => surface.isPrimary) ||
+    candidates[0] ||
+    null
+  );
+}
 function workflowFor(
   identifier: string,
   primaryRole: PrimarySurfaceRole | null,
@@ -444,6 +553,7 @@ export function ProductSurfaceOrchestrator(): JSX.Element {
   const [query, setQuery] = useState("");
   const [workflow, setWorkflow] = useState<WorkflowFilter>("All");
   const [category, setCategory] = useState<CategoryFilter>("Primary");
+  const [missionTask, setMissionTask] = useState("");
 
   const searchRef = useRef<HTMLInputElement | null>(null);
   const signatureRef = useRef("");
@@ -602,6 +712,20 @@ export function ProductSurfaceOrchestrator(): JSX.Element {
         shortcuts: ["Meta+K", "Meta+Shift+P"],
         preservesMountedAuthority: true,
         progressiveDisclosure: true,
+      }),
+    );
+
+    console.info(
+      "ADJUTORIX_GUIDED_MISSION_COMPOSER_MOUNTED",
+      JSON.stringify({
+        source: "adjutorix-guided-mission-composer",
+        launchEvent: GUIDED_MISSION_EVENT,
+        storageKey: GUIDED_MISSION_STORAGE_KEY,
+        workflows: WORKFLOW_MODES,
+        shortcut: "Meta+Enter",
+        inference: "plain-language-keyword-routing",
+        routesToManagedSurface: true,
+        preservesMountedAuthority: true,
       }),
     );
 
@@ -774,61 +898,63 @@ export function ProductSurfaceOrchestrator(): JSX.Element {
     [surfaces],
   );
 
-  const recommendedSurface = useMemo(() => {
-    const candidates =
-      workflow === "All"
-        ? orderedSurfaces
-        : orderedSurfaces.filter((surface) => surface.workflow === workflow);
+  const recommendedSurface = useMemo(
+    () => recommendedSurfaceForWorkflow(orderedSurfaces, workflow),
+    [orderedSurfaces, workflow],
+  );
 
-    if (workflow === "Understand") {
-      return (
-        candidates.find(
-          (surface) => surface.primaryRole === "providerBridge",
-        ) ||
-        candidates.find((surface) => surface.primaryRole === "contextPack") ||
-        candidates[0] ||
-        null
-      );
+  const inferredMissionWorkflow = useMemo(
+    () => inferMissionWorkflow(missionTask),
+    [missionTask],
+  );
+
+  const missionTarget = useMemo(
+    () =>
+      recommendedSurfaceForWorkflow(orderedSurfaces, inferredMissionWorkflow),
+    [inferredMissionWorkflow, orderedSurfaces],
+  );
+
+  const launchMission = useCallback(() => {
+    const task = missionTask.trim();
+
+    if (!task || !missionTarget) {
+      return;
     }
 
-    if (workflow === "Plan") {
-      return (
-        candidates.find((surface) => surface.primaryRole === "contextPack") ||
-        candidates.find((surface) => surface.id.includes("mission-control")) ||
-        candidates[0] ||
-        null
+    const mission: GuidedMission = {
+      schema: "adjutorix.guided_mission.v1",
+      id: `adjutorix-mission-${Date.now()}`,
+      task,
+      workflow: inferredMissionWorkflow,
+      targetSurfaceId: missionTarget.id,
+      targetSurfaceTitle: missionTarget.title,
+      source: "adjutorix-guided-mission-composer",
+      createdAt: new Date().toISOString(),
+      preservesMountedAuthority: true,
+    };
+
+    try {
+      window.localStorage.setItem(
+        GUIDED_MISSION_STORAGE_KEY,
+        JSON.stringify(mission),
       );
+    } catch {
+      // Launch remains available when persistence is blocked.
     }
 
-    if (workflow === "Build") {
-      return (
-        candidates.find((surface) => surface.primaryRole === "patchRunway") ||
-        candidates[0] ||
-        null
-      );
-    }
-
-    if (workflow === "Verify") {
-      return (
-        candidates.find((surface) => surface.primaryRole === "patchVerify") ||
-        candidates[0] ||
-        null
-      );
-    }
-
-    if (workflow === "Ship") {
-      return (
-        candidates.find((surface) => surface.isCurrent) || candidates[0] || null
-      );
-    }
-
-    return (
-      candidates.find((surface) => surface.primaryRole === "providerBridge") ||
-      candidates.find((surface) => surface.isPrimary) ||
-      candidates[0] ||
-      null
+    window.dispatchEvent(
+      new CustomEvent<GuidedMission>(GUIDED_MISSION_EVENT, {
+        detail: mission,
+      }),
     );
-  }, [orderedSurfaces, workflow]);
+
+    console.info("ADJUTORIX_GUIDED_MISSION_LAUNCHED", JSON.stringify(mission));
+
+    setWorkflow(inferredMissionWorkflow);
+    setCategory("All");
+    setQuery("");
+    activateSurface(missionTarget.id);
+  }, [activateSurface, inferredMissionWorkflow, missionTarget, missionTask]);
 
   const guide = WORKFLOW_GUIDES[workflow];
 
@@ -902,6 +1028,56 @@ export function ProductSurfaceOrchestrator(): JSX.Element {
               ×
             </button>
           </header>
+
+          <section
+            className="adjutorix-guided-mission-composer"
+            aria-label="Adjutorix mission composer"
+            data-workflow={inferredMissionWorkflow}
+          >
+            <div className="adjutorix-guided-mission-composer__intro">
+              <span>ONE COMMAND</span>
+              <strong>Describe the outcome</strong>
+              <p>
+                Adjutorix determines the workflow, selects the governed tool,
+                preserves authority, and carries the mission forward.
+              </p>
+            </div>
+
+            <textarea
+              value={missionTask}
+              aria-label="Describe the Adjutorix mission"
+              placeholder="Example: Implement the requested change, verify it, and preserve an evidence trail."
+              onChange={(event) => setMissionTask(event.target.value)}
+              onKeyDown={(event) => {
+                const commandKey = event.metaKey || event.ctrlKey;
+
+                if (commandKey && event.key === "Enter") {
+                  event.preventDefault();
+                  launchMission();
+                }
+              }}
+            />
+
+            <div className="adjutorix-guided-mission-composer__route">
+              <span>Detected route</span>
+              <strong>{inferredMissionWorkflow}</strong>
+              <p>
+                {missionTarget
+                  ? missionTarget.title
+                  : "Waiting for a compatible governed surface"}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              aria-label={`Launch ${inferredMissionWorkflow} mission`}
+              disabled={!missionTask.trim() || !missionTarget}
+              onClick={launchMission}
+            >
+              <span>Launch mission</span>
+              <kbd>⌘↵</kbd>
+            </button>
+          </section>
 
           <section
             className="adjutorix-guided-workflow"
