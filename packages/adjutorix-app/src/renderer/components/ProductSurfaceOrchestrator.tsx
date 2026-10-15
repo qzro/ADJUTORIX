@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import MidiaConnectionPanel from "./MidiaConnectionPanel";
 
 const LEGACY_RUNWAY_SELECTOR = '[id^="adjutorix-ai-runway-"]';
 const PRODUCT_SURFACE_SELECTOR = '[id^="adjutorix-ai-"]';
@@ -1028,6 +1029,8 @@ export function ProductSurfaceOrchestrator(): JSX.Element {
               ×
             </button>
           </header>
+
+          <MidiaConnectionPanel />
 
           <section
             className="adjutorix-guided-mission-composer"

@@ -2294,3 +2294,14 @@ contextBridge.exposeInMainWorld("adjutorixAI", {
   status: adjutorixAiStatus,
   complete: adjutorixAiComplete,
 });
+
+
+// MIDIA-AI 0.5 owner-bound native client. No raw ipcRenderer or shared key exposed.
+contextBridge.exposeInMainWorld("adjutorixMidia", Object.freeze({
+  status: () => ipcRenderer.invoke("adjutorix:midia:status"),
+  presentations: () => ipcRenderer.invoke("adjutorix:midia:presentations"),
+  bind: (session_id: string) => ipcRenderer.invoke("adjutorix:midia:bind", { session_id }),
+  listing: (view_id: string) => ipcRenderer.invoke("adjutorix:midia:listing", { view_id }),
+  read: (view_id: string, path: string) => ipcRenderer.invoke("adjutorix:midia:read", { view_id, path }),
+  workItems: () => ipcRenderer.invoke("adjutorix:midia:workItems"),
+}));

@@ -8,6 +8,7 @@ export default defineConfig({
     clearMocks: true,
     include: [
       "tests/renderer/product_surface_orchestrator.test.tsx",
+    "tests/renderer/midia_native_ui_mounted.test.ts",
       "tests/renderer/operator_diagnostics_console_surface_contract.test.ts",
       "tests/renderer/operator_unified_control_spine_contract.test.ts",
       "tests/renderer/operator_evidence_ledger_surface_contract.test.ts",
