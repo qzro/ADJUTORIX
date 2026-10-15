@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { registerPortfolioWorkspaceV18 } from "./portfolio-workspace-v18.js";
+import { MidiaNativeClient, registerMidiaNativeIpc } from "./midia-native-channel.js";
 import { registerNativeExternalWorkspaceV16 } from "./native-external-workspace-v16.js";
 import { registerNativeControlPlaneV13 } from "./native-control-plane-v13.js";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from "electron";
@@ -1358,6 +1359,21 @@ async function bootstrap(): Promise<void> {
   recordEvent("runtime.configured", { configHash: appDiagnostics.configHash });
 
   registerIpc(config);
+  // Existing Electron main process owns MIDIA-AI local HMAC authentication.
+  registerMidiaNativeIpc(ipcMain);
+  void new MidiaNativeClient().status().then((status) => {
+    if (status.connected !== true) return;
+    // Non-secret attestation of an actual Electron->MIDIA authenticated exchange.
+    const receiptDir = app.getPath("userData");
+    fs.mkdirSync(receiptDir, { recursive: true, mode: 0o700 });
+    const receipt = path.join(receiptDir, "midia-native-handshake.json");
+    const temporary = receipt + "." + process.pid + ".tmp";
+    fs.writeFileSync(temporary, JSON.stringify({ schema: 1, service: "MIDIA-AI",
+      proof: "ELECTRON_MAIN_HMAC_ROUNDTRIP", pid: process.pid,
+      at: new Date().toISOString(), execution_authorized: false }) + "\n",
+      { encoding: "utf8", flag: "wx", mode: 0o600 });
+    fs.renameSync(temporary, receipt);
+  }).catch(() => undefined);
   await ensureAgent(config).catch((error) => {
     recordCrash("agent-bootstrap", error);
   });

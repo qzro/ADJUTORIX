@@ -101,7 +101,53 @@ export default function PortfolioWorkbenchV18() {
   const [paletteQ, setPaletteQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [includeGenerated, setIncludeGenerated] = useState(false);
+  const [midiaStatus, setMidiaStatus] = useState<any>({ok: false, reason: "not_checked"});
+  const [midiaPresentations, setMidiaPresentations] = useState<any[]>([]);
+  const [midiaView, setMidiaView] = useState("");
+  const [midiaFiles, setMidiaFiles] = useState<any[]>([]);
+  const [midiaText, setMidiaText] = useState("");
+  const [midiaWork, setMidiaWork] = useState<any[]>([]);
   const editorRef = useRef<any>(null);
+
+  const refreshMidia = useCallback(async () => {
+    const bridge = (window as any).adjutorixMidia;
+    if (!bridge) { setMidiaStatus({ok:false,reason:"native_client_not_installed"}); return; }
+    const health = await bridge.status();
+    setMidiaStatus(health);
+    if (health?.ok && health?.connected) {
+      const events = await bridge.presentations();
+      setMidiaPresentations(events?.ok ? events.presentations || [] : []);
+      const work = await bridge.workItems();
+      setMidiaWork(work?.ok ? work.items || [] : []);
+    } else { setMidiaPresentations([]); setMidiaWork([]); }
+  }, []);
+
+  useEffect(() => {
+    void refreshMidia();
+    const timer = window.setInterval(() => { void refreshMidia(); }, 15000);
+    return () => window.clearInterval(timer);
+  }, [refreshMidia]);
+
+  const selectMidiaSession = useCallback(async (sessionId: string) => {
+    try {
+      const bridge = (window as any).adjutorixMidia;
+      const bound = await bridge.bind(sessionId);
+      if (!bound?.ok || !bound.view_id) throw new Error(bound?.reason || "bind_denied");
+      const listing = await bridge.listing(bound.view_id);
+      if (!listing?.ok) throw new Error(listing?.reason || "listing_denied");
+      setMidiaView(bound.view_id);
+      const data = listing.result || {};
+      setMidiaFiles(Array.isArray(data.entries) ? data.entries : Array.isArray(data.files) ? data.files : []);
+      setMidiaText(`BOUND ${bound.project || "project"}\n` + JSON.stringify(data, null, 2).slice(0, 16000));
+    } catch (error) { setMidiaText("MIDIA BIND REFUSED: " + String(error)); }
+  }, []);
+
+  const readMidiaFile = useCallback(async (path: string) => {
+    try {
+      const result = await (window as any).adjutorixMidia.read(midiaView, path);
+      setMidiaText(result?.ok ? result.text || "" : "READ REFUSED: " + String(result?.reason));
+    } catch (error) { setMidiaText("READ REFUSED: " + String(error)); }
+  }, [midiaView]);
 
   const log = useCallback((line: string) => {
     const stamped = `${new Date().toLocaleTimeString()}  ${line}`;
@@ -347,6 +393,21 @@ export default function PortfolioWorkbenchV18() {
     </div>;
 
     if (left === "runtime") return <div className="v18-list">
+      <div className="v18-card">
+        <b>MIDIA-AI authenticated desktop</b>
+        <em>{midiaStatus?.connected ? "Verified local HMAC channel" : "Not connected"}</em>
+        <code>{midiaStatus?.connected ? "Authority: source read only / execution not authorized" : String(midiaStatus?.reason || "Not available")}</code>
+        <button onClick={() => { void refreshMidia(); }}>Refresh MIDIA</button>
+        {midiaPresentations.map((item) => <button key={item.event_id} onClick={() => { void selectMidiaSession(item.session_id); }}>
+          Open {item.project} ({item.state})
+        </button>)}
+        {midiaFiles.map((f: any, i: number) => <button key={f.path || f.name || i}
+          onClick={() => { void readMidiaFile(String(f.path || f.name || "")); }}>
+          {String(f.path || f.name || "source")}
+        </button>)}
+        {midiaWork.length ? <p>{midiaWork.length} pending MIDIA work requests — owner approval required. No automatic execution.</p> : null}
+        {midiaText ? <pre className="v18-pre">{midiaText}</pre> : null}
+      </div>
       <button className="v18-card" onClick={discover}><b>Discover portfolio roots</b><code>scan parent folders</code></button>
       <button className="v18-card" onClick={() => refresh({})}><b>Index active root</b><code>{root}</code></button>
       <button className="v18-card" onClick={coreOpen}><b>Open core product surfaces</b><code>README/package/src/config</code></button>
