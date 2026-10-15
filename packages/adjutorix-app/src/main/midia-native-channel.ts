@@ -151,11 +151,18 @@ export class MidiaNativeClient {
     if (result.service !== 'MIDIA-AI' || result.transport !== 'owner-authenticated-local-channel') {
       deny('DESKTOP_HEALTH_IDENTITY_INVALID');
     }
-    const grants = result.source_grants;
+    // The gateway's source_grants is a shaped object with a projects array.
+    // Owner-declared organizations are NOT project grants and must not appear here.
+    const inventory = result.source_grants;
+    if (!isRecord(inventory) || !Array.isArray(inventory.projects))
+      deny('DESKTOP_GRANTS_SHAPE_INVALID');
+    const grants = inventory.projects.slice(0, 32).map((item: unknown) => {
+      if (!isRecord(item) || typeof item.project_id !== 'string' ||
+          typeof item.state !== 'string') deny('DESKTOP_GRANT_ENTRY_INVALID');
+      return {project: item.project_id, state: item.state};
+    });
     return {connected: true, service: 'MIDIA-AI', transport: result.transport,
-      grants: Array.isArray(grants) ? grants.map((g: unknown) => isRecord(g)
-          ? {project: String(g.project_id ?? ''), state: String(g.state ?? '')} : null).filter(Boolean) : [],
-      native_chat_identity_attested: false, execution_authorized: false};
+      grants, native_chat_identity_attested: false, execution_authorized: false};
   }
   async presentations(): Promise<JsonRecord> {
     const result = await this.request('presentations', {});
