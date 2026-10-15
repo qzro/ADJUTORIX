@@ -1373,7 +1373,12 @@ async function bootstrap(): Promise<void> {
       at: new Date().toISOString(), execution_authorized: false }) + "\n",
       { encoding: "utf8", flag: "wx", mode: 0o600 });
     fs.renameSync(temporary, receipt);
-  }).catch(() => undefined);
+  }).catch((error) => {
+    const candidate = error?.reason;
+    const reason = typeof candidate === "string" && /^[A-Z0-9_]{2,100}$/.test(candidate)
+      ? candidate : "DESKTOP_CHANNEL_UNAVAILABLE";
+    recordEvent("midia.native.refused", { reason });
+  });
   await ensureAgent(config).catch((error) => {
     recordCrash("agent-bootstrap", error);
   });
