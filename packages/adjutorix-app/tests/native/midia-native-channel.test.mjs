@@ -35,7 +35,7 @@ const server=createServer(sock=>{
     assert.equal(msg.mac,hmac('request',msg.nonce,msg.issued_at,msg.body));
     const request=JSON.parse(Buffer.from(msg.body,'base64').toString('utf8'));
     requests.push(request.method);
-    const result=request.method==='health'?{service:'MIDIA-AI',transport:'owner-authenticated-local-channel',source_grants:[{project_id:'adjutorix',state:'ACTIVE'}]}:
+    const result=request.method==='health'?{service:'MIDIA-AI',transport:'owner-authenticated-local-channel',source_grants:{projects:[{project_id:'adjutorix',state:'ACTIVE'},{project_id:'kaaffilm',state:'ACTIVE'},{project_id:'midia-ai',state:'ACTIVE'}],owner_organizations:[{login:'NOT_A_PROJECT_GRANT'}]}}:
       request.method==='presentations'?{presentations:[{event_id:'event_'+'b'.repeat(48),state:'PENDING',binding:{session_id:nonceId,project:'adjutorix'}}]}:
       request.method==='bind_view'?{view_id:'view_'+'c'.repeat(48),project:'adjutorix'}:
       request.method==='listing'?{entries:[{path:'README.md'}]}:
@@ -56,6 +56,12 @@ try {
   assert.equal(health.connected,true);
   assert.equal(health.execution_authorized,false);
   assert.equal(health.native_chat_identity_attested,false);
+  assert.deepEqual(health.grants,[
+    {project:'adjutorix',state:'ACTIVE'},
+    {project:'kaaffilm',state:'ACTIVE'},
+    {project:'midia-ai',state:'ACTIVE'},
+  ]);
+  assert.equal(health.grants.some(g=>g.project==='NOT_A_PROJECT_GRANT'),false);
   assert.deepEqual(await link.presentations(),{presentations:[{event_id:'event_'+'b'.repeat(48),state:'PENDING',session_id:nonceId,project:'adjutorix'}]});
   await assert.rejects(link.bind('s_'+'d'.repeat(48)),/DESKTOP_SESSION_NOT_PRESENTED/);
   const bound=await link.bind(nonceId);
