@@ -12,6 +12,11 @@ describe("MIDIA authenticated native UI is actually mounted", () => {
     expect(ui).toContain("MIDIA-AI connected source");
     expect(ui).not.toContain("ipcRenderer");
     expect(ui).not.toContain("key_hex");
+    expect(ui).toContain("Explicit ChatGPT session selection required");
+    expect(ui).not.toContain("const only = presented[0]");
+    expect(ui).toContain("Authorized grants:");
+    expect(ui).toContain("Source SHA-256:");
+    expect(ui).toContain("selectionToken.current");
   });
   it("keeps HMAC credentials confined to the Electron main process", () => {
     expect(source("src/main/index.ts")).toContain("registerMidiaNativeIpc(ipcMain)");
