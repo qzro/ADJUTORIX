@@ -2304,4 +2304,6 @@ contextBridge.exposeInMainWorld("adjutorixMidia", Object.freeze({
   listing: (view_id: string) => ipcRenderer.invoke("adjutorix:midia:listing", { view_id }),
   read: (view_id: string, path: string) => ipcRenderer.invoke("adjutorix:midia:read", { view_id, path }),
   workItems: () => ipcRenderer.invoke("adjutorix:midia:workItems"),
+  portfolio: (offset = 0, limit = 50) => ipcRenderer.invoke("adjutorix:midia:portfolio",
+    { offset, limit }),
 }));
