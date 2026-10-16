@@ -36,6 +36,7 @@ const server=createServer(sock=>{
     const request=JSON.parse(Buffer.from(msg.body,'base64').toString('utf8'));
     requests.push(request.method);
     const result=request.method==='health'?{service:'MIDIA-AI',transport:'owner-authenticated-local-channel',source_grants:{projects:[{project_id:'adjutorix',state:'ACTIVE'},{project_id:'kaaffilm',state:'ACTIVE'},{project_id:'midia-ai',state:'ACTIVE'}],owner_organizations:[{login:'NOT_A_PROJECT_GRANT'}]}}:
+      request.method==='portfolio'?{catalogue_available:true,source_access:'METADATA_ONLY',total_catalogued:3,repositories:[{full_name:'qzro/ADJUTORIX',visibility:'public',archived:false,midia_grant:'SELECTED_SOURCE'}],next_offset:null,organizations:[{owner:'qzro',state:'ENUMERATED',count:1}]}:
       request.method==='presentations'?{presentations:[{event_id:'event_'+'b'.repeat(48),state:'PENDING',binding:{session_id:nonceId,project:'adjutorix'}}]}:
       request.method==='bind_view'?{view_id:'view_'+'c'.repeat(48),project:'adjutorix'}:
       request.method==='listing'?{entries:[{path:'README.md'}]}:
@@ -56,6 +57,11 @@ try {
   assert.equal(health.connected,true);
   assert.equal(health.execution_authorized,false);
   assert.equal(health.native_chat_identity_attested,false);
+  const catalog=await link.portfolio(0,50);
+  assert.equal(catalog.repository_count,3);
+  assert.equal(catalog.repositories[0].full_name,'qzro/ADJUTORIX');
+  assert.equal(catalog.repositories[0].source_read_authorized_by_catalog,false);
+  await assert.rejects(link.portfolio(-1,50),/MIDIA_PORTFOLIO_CURSOR_INVALID/);
   assert.deepEqual(health.grants,[
     {project:'adjutorix',state:'ACTIVE'},
     {project:'kaaffilm',state:'ACTIVE'},
@@ -73,7 +79,8 @@ try {
   registerMidiaNativeIpc({handle:(name,fn)=>handlers.set(name,fn)});
   assert.deepEqual([...handlers.keys()].sort(),[
     'adjutorix:midia:status','adjutorix:midia:presentations','adjutorix:midia:bind',
-    'adjutorix:midia:listing','adjutorix:midia:read','adjutorix:midia:workItems'].sort());
+    'adjutorix:midia:listing','adjutorix:midia:read','adjutorix:midia:workItems',
+    'adjutorix:midia:portfolio'].sort());
   // IPC uses the fixed HOME in a real Electron process; no raw key method exists.
   assert.equal(handlers.has('adjutorix:midia:execute'),false);
   badMac=true;

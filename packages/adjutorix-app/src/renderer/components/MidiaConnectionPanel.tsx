@@ -9,6 +9,7 @@ type MidiaBridge = {
   listing: (viewId: string) => Promise<any>;
   read: (viewId: string, path: string) => Promise<any>;
   workItems: () => Promise<any>;
+  portfolio: (offset?: number, limit?: number) => Promise<any>;
 };
 const bridge = (): MidiaBridge | undefined =>
   (window as unknown as { adjutorixMidia?: MidiaBridge }).adjutorixMidia;
@@ -27,6 +28,10 @@ export default function MidiaConnectionPanel(): JSX.Element {
   const [output, setOutput] = useState("");
   const [pendingCount, setPendingCount] = useState(0);
   const [grants, setGrants] = useState<Array<{project:string;state:string}>>([]);
+  const [portfolio, setPortfolio] = useState<Array<{full_name:string;visibility:string;archived:boolean;midia_grant:string}>>([]);
+  const [portfolioTotal, setPortfolioTotal] = useState(0);
+  const [portfolioNext, setPortfolioNext] = useState<number | null>(null);
+  const [portfolioStatus, setPortfolioStatus] = useState("Catalog not loaded");
   const selectionToken = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -50,10 +55,22 @@ export default function MidiaConnectionPanel(): JSX.Element {
         : []);
       const work = await client.workItems();
       setPendingCount(work?.ok && Array.isArray(work.items) ? work.items.length : 0);
+      const inventory = await client.portfolio(0, 50);
+      if (inventory?.ok === true && inventory.catalogue_available === true &&
+          Array.isArray(inventory.repositories)) {
+        setPortfolio(inventory.repositories);
+        setPortfolioTotal(Number(inventory.repository_count) || 0);
+        setPortfolioNext(typeof inventory.next_offset === "number" ? inventory.next_offset : null);
+        setPortfolioStatus(inventory.catalog_complete ? "Inventoried metadata" : "Partial inventory — unavailable owners flagged");
+      } else {
+        setPortfolio([]); setPortfolioTotal(0); setPortfolioNext(null);
+        setPortfolioStatus("MIDIA-AI portfolio catalogue pending owner discovery / gateway upgrade");
+      }
     } catch (error) {
       setConnected(false);
       ++selectionToken.current;
       setGrants([]);
+      setPortfolio([]); setPortfolioTotal(0); setPortfolioNext(null);
       setPresented([]);
       setView("");
       setSelected("");
@@ -67,6 +84,26 @@ export default function MidiaConnectionPanel(): JSX.Element {
     const timer = window.setInterval(() => { void refresh(); }, 12000);
     return () => window.clearInterval(timer);
   }, [refresh]);
+
+  const loadMorePortfolio = useCallback(async () => {
+    if (portfolioNext === null) return;
+    const client = bridge();
+    if (!client) return;
+    try {
+      const result = await client.portfolio(portfolioNext, 50);
+      if (result?.ok !== true || result.catalogue_available !== true ||
+          !Array.isArray(result.repositories)) return;
+      setPortfolio(previous => {
+        const included = new Set(previous.map(entry => entry.full_name.toLowerCase()));
+        return [...previous, ...result.repositories.filter((entry: any) => {
+          if (typeof entry?.full_name !== 'string' || included.has(entry.full_name.toLowerCase())) return false;
+          included.add(entry.full_name.toLowerCase());
+          return true;
+        })].slice(0, 4096);
+      });
+      setPortfolioNext(typeof result.next_offset === 'number' ? result.next_offset : null);
+    } catch { /* Metadata-only listing failure does not invalidate the HMAC session. */ }
+  }, [portfolioNext]);
 
   const selectSession = useCallback(async (event: Presented) => {
     if (!SID.test(event.session_id)) return;
@@ -126,6 +163,19 @@ export default function MidiaConnectionPanel(): JSX.Element {
     {connected ? <p>Authorized grants: {grants.length
       ? grants.map(grant => `${grant.project} (${grant.state})`).join(", ")
       : "No available grant details"}</p> : null}
+    {connected ? <section aria-label="GitHub portfolio metadata only">
+      <h3>GitHub portfolio · {portfolioTotal} repositories</h3>
+      <small>{portfolioStatus}. Repository visibility does not grant MIDIA source access.</small>
+      <div style={{maxHeight: 200, overflow: 'auto'}}>
+        {portfolio.map(repo => <div key={repo.full_name}>
+          <strong>{repo.full_name}</strong> · {repo.visibility}
+          {repo.archived ? ' · archived' : ''} · {repo.midia_grant === 'SELECTED_SOURCE'
+            ? 'selected source grant' : 'metadata only'}
+        </div>)}
+      </div>
+      {portfolioNext !== null ? <button type="button" onClick={() => { void loadMorePortfolio(); }}>
+        Load more repositories</button> : null}
+    </section> : null}
     {connected && !presented.length ? <p>No ChatGPT-presented session is pending.
       Open the selected authorized project from MIDIA-AI in ChatGPT, then refresh here.</p> : null}
     {presented.length > 0 ? <p>Select the exact ChatGPT-presented project:</p> : null}

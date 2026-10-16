@@ -164,6 +164,37 @@ export class MidiaNativeClient {
     return {connected: true, service: 'MIDIA-AI', transport: result.transport,
       grants, native_chat_identity_attested: false, execution_authorized: false};
   }
+  async portfolio(offset = 0, limit = 50): Promise<JsonRecord> {
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset > 4096 ||
+        !Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      deny('MIDIA_PORTFOLIO_CURSOR_INVALID');
+    }
+    const result = await this.request('portfolio', {offset, limit});
+    if (!Array.isArray(result.repositories) || result.source_access !== 'METADATA_ONLY') {
+      deny('MIDIA_PORTFOLIO_CONTRACT_INVALID');
+    }
+    const repos = result.repositories.slice(0,100).map((v: unknown) => {
+      if (!isRecord(v) || typeof v.full_name !== 'string' ||
+          !/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(v.full_name) ||
+          (v.midia_grant !== 'CATALOG_METADATA_ONLY' && v.midia_grant !== 'SELECTED_SOURCE')) {
+        deny('MIDIA_PORTFOLIO_REPO_INVALID');
+      }
+      return {full_name: v.full_name, visibility: String(v.visibility || 'unknown'),
+        archived: v.archived === true, midia_grant: v.midia_grant,
+        source_read_authorized_by_catalog: false};
+    });
+    const count = result.total_catalogued;
+    return {catalogue_available: result.catalogue_available === true,
+      repository_count: typeof count === 'number' && Number.isSafeInteger(count) ? count : 0,
+      repositories: repos,
+      next_offset: typeof result.next_offset === 'number' && Number.isSafeInteger(result.next_offset)
+        ? result.next_offset : null,
+      catalog_complete: result.catalog_complete === true,
+      organizations: Array.isArray(result.organizations) ? result.organizations.slice(0,17)
+        .filter(isRecord).map(v => ({owner: String(v.owner || ''), state: String(v.state || ''),
+          count: Number.isSafeInteger(v.count) ? v.count : 0})) : [],
+      source_access: 'METADATA_ONLY', execution_authorized: false};
+  }
   async presentations(): Promise<JsonRecord> {
     const result = await this.request('presentations', {});
     const source = result.presentations;
@@ -220,6 +251,9 @@ export function registerMidiaNativeIpc(ipc: {handle: (name:string, callback:(eve
   }
   ipc.handle('adjutorix:midia:status', async () => wrap(() => link.status()));
   ipc.handle('adjutorix:midia:presentations', async () => wrap(() => link.presentations()));
+  ipc.handle('adjutorix:midia:portfolio', async (_event, input) => wrap(() => link.portfolio(
+    isRecord(input) ? input.offset as number : 0,
+    isRecord(input) ? input.limit as number : 50)));
   ipc.handle('adjutorix:midia:bind', async (_event, input) => wrap(() => link.bind(isRecord(input) ? input.session_id : null)));
   ipc.handle('adjutorix:midia:listing', async (_event, input) => wrap(() => link.listing(isRecord(input) ? input.view_id : null)));
   ipc.handle('adjutorix:midia:read', async (_event, input) => wrap(() => link.read(isRecord(input) ? input.view_id : null,
